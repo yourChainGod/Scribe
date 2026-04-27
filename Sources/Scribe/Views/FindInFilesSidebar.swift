@@ -40,12 +40,31 @@ struct FindInFilesSidebar: View {
                     .onSubmit { runSearch() }
             }
 
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.2.squarepath")
+                    .foregroundStyle(.secondary)
+                TextField("Replace", text: $find.replacement)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 12))
+                    // Enter in the replace field triggers Replace All.
+                    .onSubmit { confirmReplace() }
+                Button {
+                    confirmReplace()
+                } label: {
+                    Image(systemName: "rectangle.stack.badge.minus")
+                }
+                .help("Replace all matches")
+                .accessibilityLabel("Replace All")
+                .buttonStyle(.borderless)
+                .disabled(replaceDisabled)
+            }
+
             HStack(spacing: 4) {
                 optionToggle("Aa", help: "Match Case", binding: $find.matchCase)
                 optionToggle("ab\u{2009}|", help: "Whole Word", binding: $find.wholeWord)
                 optionToggle(".*", help: "Regular Expression", binding: $find.regex)
                 Spacer()
-                if find.isSearching {
+                if find.isSearching || find.isReplacing {
                     ProgressView()
                         .controlSize(.small)
                         .scaleEffect(0.7)
@@ -57,7 +76,8 @@ struct FindInFilesSidebar: View {
                 }
                 .buttonStyle(.borderless)
                 .help("Run search (Enter)")
-                .disabled(find.query.isEmpty || workspace.folderRoot == nil)
+                .disabled(find.query.isEmpty || workspace.folderRoot == nil
+                          || find.isReplacing)
             }
 
             HStack(spacing: 4) {
@@ -83,6 +103,15 @@ struct FindInFilesSidebar: View {
         .padding(10)
     }
 
+    /// Replace All is enabled only when there's something to replace,
+    /// a search has produced files, and no other engine pass is running.
+    private var replaceDisabled: Bool {
+        find.query.isEmpty
+            || find.results.isEmpty
+            || find.isReplacing
+            || find.isSearching
+    }
+
     // MARK: - Summary
 
     @ViewBuilder
@@ -91,6 +120,15 @@ struct FindInFilesSidebar: View {
             Text(err)
                 .font(.caption)
                 .foregroundStyle(.red)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+        } else if let replaceMsg = find.lastReplaceSummary {
+            // Replace summary takes precedence over the search totals
+            // immediately after a replace pass — it stays visible until
+            // the user runs another search.
+            Text(replaceMsg)
+                .font(.caption)
+                .foregroundStyle(Color.accentColor)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
         } else if find.totalMatches > 0 {
@@ -144,6 +182,78 @@ struct FindInFilesSidebar: View {
             excludeGlobs: split(find.excludeGlob)
         )
         engine.search(options: opts, root: root, into: find)
+    }
+
+    /// Confirm and execute a workspace-wide replace. Three guarantees we
+    /// surface to the user up front:
+    ///   1. We list how many files / matches will be touched.
+    ///   2. We point out any open buffer with unsaved edits that will
+    ///      get reloaded (and therefore lose those edits).
+    ///   3. The action is presented as destructive; default = Cancel.
+    private func confirmReplace() {
+        guard !replaceDisabled else { return }
+        let urls = find.results.map(\.url)
+        let dirtyOpen = workspace.documents.filter { doc in
+            doc.isDirty && doc.url != nil
+                && urls.contains(where: { $0.standardizedFileURL == doc.url!.standardizedFileURL })
+        }
+
+        let alert = NSAlert()
+        alert.messageText = "Replace \(find.totalMatches) match\(find.totalMatches == 1 ? "" : "es") in \(find.filesWithMatches) file\(find.filesWithMatches == 1 ? "" : "s")?"
+        var info = "“\(find.query)” → “\(find.replacement)”."
+        if !dirtyOpen.isEmpty {
+            let names = dirtyOpen.map(\.title).joined(separator: ", ")
+            info += "\n\nUnsaved changes in \(names) will be lost."
+        }
+        info += "\nThis cannot be undone from inside Scribe."
+        alert.informativeText = info
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Replace All")
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        let opts = FindInFilesOptions(
+            query: find.query,
+            matchCase: find.matchCase,
+            wholeWord: find.wholeWord,
+            regex: find.regex,
+            includeGlobs: split(find.includeGlob),
+            excludeGlobs: split(find.excludeGlob)
+        )
+        engine.replaceAll(options: opts,
+                          replacement: find.replacement,
+                          urls: urls,
+                          into: find) { [find, workspace] summary in
+            // Pull every still-open document forward so the buffer
+            // matches what's now on disk. Skipped errors stay in the
+            // open set untouched.
+            for doc in workspace.documents {
+                guard let docURL = doc.url?.standardizedFileURL else { continue }
+                if urls.contains(where: { $0.standardizedFileURL == docURL }) {
+                    workspace.reloadFromDisk(doc: doc)
+                }
+            }
+
+            // Build a human-readable summary string. Errors append a
+            // truncated "+ N more" tail when the list grows.
+            var msg = "Replaced \(summary.totalReplacements) in \(summary.filesChanged)/\(summary.filesScanned) files."
+            if !summary.errors.isEmpty {
+                let head = summary.errors.prefix(2)
+                    .map { "\($0.0.lastPathComponent): \($0.1)" }
+                    .joined(separator: "; ")
+                let tail = summary.errors.count > 2
+                    ? " + \(summary.errors.count - 2) more"
+                    : ""
+                msg += " Errors: \(head)\(tail)."
+            }
+            find.lastReplaceSummary = msg
+            // Stale results no longer reflect what's on disk; clear them
+            // and let the user re-run search to verify.
+            find.update(results: [],
+                        totalMatches: 0,
+                        filesScanned: 0,
+                        filesWithMatches: 0)
+        }
     }
 
     private func split(_ csv: String) -> [String] {

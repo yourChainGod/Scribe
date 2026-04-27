@@ -27,6 +27,16 @@ struct FindInFilesOptions: Sendable {
     let excludeGlobs: [String]
 }
 
+/// Outcome of a workspace-wide replace pass. `errors` carries
+/// per-file failure descriptions (read errors, encoding errors, write
+/// errors); the rest are aggregate counts for the post-replace summary.
+struct ReplaceSummary: Sendable {
+    var filesScanned: Int = 0
+    var filesChanged: Int = 0
+    var totalReplacements: Int = 0
+    var errors: [(URL, String)] = []
+}
+
 @MainActor
 final class FindInFilesEngine {
     /// 5 MB — Scintilla itself is fine with larger files but our
@@ -82,6 +92,100 @@ final class FindInFilesEngine {
                            regex: regex,
                            into: state)
         }
+    }
+
+    /// Walk the workspace and replace every `options.query` match with
+    /// `replacement`. Limited to the file set the most recent `search`
+    /// returned (passed in via `urls`) so the user only ever rewrites
+    /// files they could see in the result tree. Reports aggregate
+    /// counts via `completion` on the main actor.
+    ///
+    /// We deliberately re-read each file's current bytes (rather than
+    /// trust the in-memory snapshot search captured) — minutes can pass
+    /// between search and replace, and operating on stale text would
+    /// reintroduce the very bug atomic write is meant to avoid.
+    func replaceAll(options: FindInFilesOptions,
+                    replacement: String,
+                    urls: [URL],
+                    into state: FindInFilesState,
+                    completion: @escaping @MainActor (ReplaceSummary) -> Void) {
+        cancel()
+        guard !options.query.isEmpty else {
+            state.setReplacing(false)
+            completion(ReplaceSummary())
+            return
+        }
+        let regex: NSRegularExpression?
+        do {
+            regex = try buildRegex(options: options)
+        } catch {
+            state.error = "Invalid regex: \(error.localizedDescription)"
+            state.setReplacing(false)
+            completion(ReplaceSummary())
+            return
+        }
+        guard let regex else {
+            state.setReplacing(false)
+            completion(ReplaceSummary())
+            return
+        }
+
+        state.setReplacing(true)
+        // NSRegularExpression.replacementString accepts $1, $2, $0 etc.
+        // For literal-mode we still need to escape user-supplied $ / \
+        // so they don't accidentally form a backref.
+        let template = options.regex
+            ? replacement
+            : NSRegularExpression.escapedTemplate(for: replacement)
+
+        task = Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            let summary = await self.runReplace(urls: urls,
+                                                regex: regex,
+                                                template: template)
+            await MainActor.run {
+                state.setReplacing(false)
+                completion(summary)
+            }
+        }
+    }
+
+    private nonisolated func runReplace(urls: [URL],
+                                        regex: NSRegularExpression,
+                                        template: String) async -> ReplaceSummary {
+        var summary = ReplaceSummary()
+        for url in urls {
+            if Task.isCancelled { break }
+            summary.filesScanned += 1
+            do {
+                let original = try Data(contentsOf: url)
+                guard let text = String(data: original, encoding: .utf8) else {
+                    summary.errors.append((url, "Not valid UTF-8"))
+                    continue
+                }
+                let mutable = NSMutableString(string: text)
+                let range = NSRange(location: 0, length: mutable.length)
+                let count = regex.replaceMatches(in: mutable,
+                                                 options: [],
+                                                 range: range,
+                                                 withTemplate: template)
+                if count == 0 { continue }
+
+                let newText = mutable as String
+                guard let bytes = newText.data(using: .utf8) else {
+                    summary.errors.append((url, "Re-encoded text is not UTF-8"))
+                    continue
+                }
+                // .atomic = write to sibling temp file + rename, so a
+                // crash mid-write never leaves a partially-written file.
+                try bytes.write(to: url, options: .atomic)
+                summary.filesChanged += 1
+                summary.totalReplacements += count
+            } catch {
+                summary.errors.append((url, error.localizedDescription))
+            }
+        }
+        return summary
     }
 
     // MARK: - Implementation

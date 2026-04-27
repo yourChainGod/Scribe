@@ -175,6 +175,26 @@ final class Workspace: ObservableObject {
         doc.isDirty = false
     }
 
+    /// Silent re-read of `doc` from disk using its current encoding.
+    /// No confirmation prompt — callers (Find-in-Files Replace All,
+    /// FS-watcher reload, …) are responsible for surfacing whatever
+    /// confirmation UX is appropriate before invoking this.
+    /// Returns false if the file is gone or can't be decoded.
+    @discardableResult
+    func reloadFromDisk(doc: Document) -> Bool {
+        guard let url = doc.url else { return false }
+        guard let data = try? Data(contentsOf: url) else { return false }
+        let payload = TextFormatDetector.stripBOM(data, for: doc.encoding)
+        guard let raw = String(data: payload,
+                               encoding: doc.encoding.stringEncoding) else {
+            return false
+        }
+        doc.text = TextFormatDetector.normalize(raw)
+        doc.lineEnding = TextFormatDetector.detectLineEnding(in: raw)
+        doc.isDirty = false
+        return true
+    }
+
     /// Re-decode the document's source bytes using a different encoding.
     /// Discards unsaved changes after a confirmation prompt.
     func reopen(doc: Document, as encoding: TextEncoding) {

@@ -32,6 +32,21 @@ final class FindInFilesState: ObservableObject {
     @Published var wholeWord: Bool = false
     @Published var regex: Bool = false
 
+    /// Replace text. Empty ⇒ Replace-All button is disabled. The sidebar
+    /// also collapses the row into the search box when this is empty so
+    /// the UI doesn't grow vertically until the user actually wants to
+    /// replace.
+    @Published var replacement: String = ""
+
+    /// True while replaceAll is in flight. Locks out new searches and
+    /// shows a different progress indicator.
+    @Published private(set) var isReplacing: Bool = false
+
+    /// Plain-text summary of the most recent replace pass — populated
+    /// by FindInFilesSidebar after the engine reports back. Cleared
+    /// when a new search starts.
+    @Published var lastReplaceSummary: String? = nil
+
     /// Glob-style include / exclude patterns, comma-separated. Empty
     /// fields disable the filter.
     @Published var includeGlob: String = ""
@@ -69,11 +84,18 @@ final class FindInFilesState: ObservableObject {
         if value { hasRun = true }
     }
 
+    /// Engine-facing flag. The summary text is published separately
+    /// once the replace pass completes (see `lastReplaceSummary`).
+    func setReplacing(_ value: Bool) {
+        isReplacing = value
+    }
+
     func reset() {
         results = []
         totalMatches = 0
         filesScanned = 0
         filesWithMatches = 0
         error = nil
+        lastReplaceSummary = nil
     }
 }
