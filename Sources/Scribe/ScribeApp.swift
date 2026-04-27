@@ -12,6 +12,13 @@ struct ScribeApp: App {
     @StateObject private var workspace: Workspace
 
     init() {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["SCRIBE_DEBUG_LOG"] == "1" {
+            try? Data("ScribeApp.init: env SCRIBE_AUTO_OPEN=\(ProcessInfo.processInfo.environment["SCRIBE_AUTO_OPEN"] ?? "<nil>")\n".utf8)
+                .write(to: URL(fileURLWithPath: "/tmp/scribe_debug.log"))
+        }
+        #endif
+
         // SwiftPM-built executables default to background activation policy.
         // Force regular UI app so the window actually appears in Dock + foreground.
         NSApplication.shared.setActivationPolicy(.regular)
@@ -19,12 +26,38 @@ struct ScribeApp: App {
             NSApplication.shared.activate(ignoringOtherApps: true)
         }
 
-        // Build prefs first, then inject into Workspace. Both are reference
-        // types, so the Workspace keeps a stable reference even though
-        // SwiftUI may invoke this initializer repeatedly.
         let preferences = EditorPreferences()
+
+        // Files to auto-open at startup, expressed as a colon-separated path
+        // list in `SCRIBE_AUTO_OPEN`. We deliberately do NOT consume
+        // `CommandLine.arguments`: SwiftUI's WindowGroup interprets positional
+        // file arguments as an "open document" intent and refuses to
+        // materialize the main window until an NSDocument-based open event
+        // arrives — which never happens for SwiftPM-built unbundled
+        // executables.  See HANDOFF section 5.7 for the full diagnosis.
+        let autoOpen: [URL] = (ProcessInfo.processInfo.environment["SCRIBE_AUTO_OPEN"] ?? "")
+            .split(separator: ":")
+            .map(String.init)
+            .compactMap { path in
+                FileManager.default.fileExists(atPath: path) ? URL(fileURLWithPath: path) : nil
+            }
+
+        // Skip the default Untitled when SCRIBE_AUTO_OPEN already gave us
+        // something to load.
+        let ws = Workspace(prefs: preferences, openInitialUntitled: autoOpen.isEmpty)
+
+        // Defer auto-open to the next runloop turn so the WindowGroup gets
+        // its NSWindow materialized first. Eager mutation of @Published state
+        // here is observed to delay (or skip!) NSWindow creation on
+        // macOS 14+ / swift-tools 5.9.
+        DispatchQueue.main.async {
+            for url in autoOpen {
+                ws.openFile(at: url)
+            }
+        }
+
         _prefs = StateObject(wrappedValue: preferences)
-        _workspace = StateObject(wrappedValue: Workspace(prefs: preferences))
+        _workspace = StateObject(wrappedValue: ws)
     }
 
     var body: some Scene {
@@ -37,7 +70,6 @@ struct ScribeApp: App {
                     workspace.openFile(at: url)
                 }
         }
-        .handlesExternalEvents(matching: ["*"])
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unified(showsTitle: true))
         .commands {
@@ -60,14 +92,45 @@ struct ScribeApp: App {
                 Button("Actual Size") { prefs.resetFontSize() }
                     .keyboardShortcut("0", modifiers: .command)
             }
+            #if DEBUG
+            CommandGroup(after: .windowList) {
+                Divider()
+                ScintillaProbeMenuItem()
+            }
+            #endif
         }
 
         Settings {
             SettingsView()
                 .environmentObject(prefs)
         }
+
+        #if DEBUG
+        // Phase 1.7 — debug window for visually confirming ScintillaView
+        // renders. Open via Window > Show Scintilla Probe (⌘⇧⌥P) or remove
+        // along with ScintillaProbeMenuItem once CodeEditor is migrated.
+        Window("Scintilla Probe", id: ScintillaProbeMenuItem.windowID) {
+            ScintillaProbeView()
+                .frame(minWidth: 600, minHeight: 400)
+        }
+        #endif
     }
 }
+
+#if DEBUG
+/// Bridges `@Environment(\.openWindow)` (only available inside Views) into
+/// the `commands` block of `ScribeApp`. Removed alongside the probe scene.
+private struct ScintillaProbeMenuItem: View {
+    static let windowID = "scintilla-probe"
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("Show Scintilla Probe") {
+            openWindow(id: Self.windowID)
+        }
+        .keyboardShortcut("p", modifiers: [.command, .shift, .option])
+    }
+}
+#endif
 
 private struct RecentFilesMenu: View {
     @ObservedObject var prefs: EditorPreferences

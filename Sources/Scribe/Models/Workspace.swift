@@ -17,10 +17,14 @@ final class Workspace: ObservableObject {
 
     let prefs: EditorPreferences
 
-    init(prefs: EditorPreferences) {
+    init(prefs: EditorPreferences, openInitialUntitled: Bool = true) {
         self.prefs = prefs
         // Open one empty doc by default so the editor isn't blank on first run.
-        newDocument()
+        // Caller can suppress when it intends to seed `documents` itself
+        // (e.g. command-line file arguments).
+        if openInitialUntitled {
+            newDocument()
+        }
     }
 
     func openFolder() {
