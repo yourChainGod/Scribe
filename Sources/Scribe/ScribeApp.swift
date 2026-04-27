@@ -11,6 +11,7 @@ struct ScribeApp: App {
     @StateObject private var prefs: EditorPreferences
     @StateObject private var workspace: Workspace
     @StateObject private var commands = CommandRegistry()
+    @StateObject private var findState = FindState()
 
     init() {
         // SwiftPM-built executables default to background activation policy.
@@ -60,6 +61,7 @@ struct ScribeApp: App {
                 .environmentObject(workspace)
                 .environmentObject(prefs)
                 .environmentObject(commands)
+                .environmentObject(findState)
                 .frame(minWidth: 900, minHeight: 600)
                 .onAppear {
                     CommandRegistration.refresh(
@@ -111,6 +113,42 @@ struct ScribeApp: App {
                     PaletteWindowController.shared.toggle(registry: commands)
                 }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
+            }
+            CommandGroup(replacing: .textEditing) {
+                Button("Find…") {
+                    findState.show(replaceMode: false)
+                }
+                .keyboardShortcut("f", modifiers: .command)
+
+                Button("Replace…") {
+                    findState.show(replaceMode: true)
+                }
+                .keyboardShortcut("f", modifiers: [.command, .option])
+
+                Button("Find Next") {
+                    if !findState.isVisible { findState.show(replaceMode: false) }
+                    findState.commands.send(.findNext)
+                }
+                .keyboardShortcut("g", modifiers: .command)
+
+                Button("Find Previous") {
+                    if !findState.isVisible { findState.show(replaceMode: false) }
+                    findState.commands.send(.findPrev)
+                }
+                .keyboardShortcut("g", modifiers: [.command, .shift])
+
+                Button("Use Selection for Find") {
+                    findState.show(replaceMode: false)
+                    findState.commands.send(.useSelection)
+                }
+                .keyboardShortcut("e", modifiers: .command)
+
+                Divider()
+
+                Button("Hide Find Bar") {
+                    findState.hide()
+                }
+                .keyboardShortcut(.escape, modifiers: [])
             }
         }
 

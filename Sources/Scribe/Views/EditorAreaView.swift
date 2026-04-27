@@ -8,12 +8,18 @@ import SwiftUI
 struct EditorAreaView: View {
     @EnvironmentObject var workspace: Workspace
     @EnvironmentObject var prefs: EditorPreferences
+    @EnvironmentObject var findState: FindState
 
     var body: some View {
         if let doc = workspace.current {
-            ScintillaCodeEditor(doc: doc, prefs: prefs)
-                .id(doc.id)
-                .background(Color(nsColor: .textBackgroundColor))
+            VStack(spacing: 0) {
+                if findState.isVisible {
+                    FindBar(state: findState)
+                }
+                ScintillaCodeEditor(doc: doc, prefs: prefs, findState: findState)
+                    .id(doc.id)
+                    .background(Color(nsColor: .textBackgroundColor))
+            }
         } else {
             WelcomeView()
         }
