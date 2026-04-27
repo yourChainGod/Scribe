@@ -1,12 +1,12 @@
 //
 //  ScintillaBridgeTests.swift
-//  Phase 1.6 — Compile-time confirmation that the SwiftPM-vendored Scintilla
-//  module imports cleanly and exposes the headline ObjC types to Swift.
+//  Compile-time confirmation that the SwiftPM-vendored Scintilla module
+//  imports cleanly and exposes the headline ObjC types to Swift.
 //
 //  We do NOT instantiate ScintillaView from xctest: ScintillaView's -init
 //  reaches into NSCursor which segfaults under xctest's headless environment
-//  (no NSApp). Real instantiation is exercised by the in-app probe (see
-//  Sources/Scribe/Views/ScintillaProbe.swift) and by booting Scribe.app.
+//  (no NSApp). Real instantiation is exercised by booting Scribe.app and
+//  letting the EditorAreaView mount a ScintillaCodeEditor.
 //
 
 import XCTest
@@ -23,10 +23,9 @@ final class ScintillaBridgeTests: XCTestCase {
         XCTAssertEqual(NSStringFromClass(viewType), "ScintillaView")
     }
 
-    /// Sanity: ScintillaProbe entry point exists and is callable from Swift.
-    /// We don't actually invoke makeView() here for the reasons in the file
-    /// header — only check the metatype.
-    func testProbeFactoryIsExposed() {
-        XCTAssertEqual(String(describing: ScintillaProbe.self), "ScintillaProbe")
+    /// Confirms the SwiftUI bridge struct is reachable so refactors to the
+    /// view layer surface as compile errors here.
+    func testScintillaCodeEditorIsExposed() {
+        XCTAssertEqual(String(describing: ScintillaCodeEditor.self), "ScintillaCodeEditor")
     }
 }

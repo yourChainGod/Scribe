@@ -1,7 +1,6 @@
 //
 //  EditorAreaView.swift
-//  The big text canvas. Phase 0: SwiftUI TextEditor placeholder.
-//  Phase 1 will replace this with a Scintilla-backed NSViewRepresentable.
+//  The big text canvas. Backed by ScintillaCodeEditor since Phase 1.7c.
 //
 
 import SwiftUI
@@ -10,42 +9,14 @@ struct EditorAreaView: View {
     @EnvironmentObject var workspace: Workspace
     @EnvironmentObject var prefs: EditorPreferences
 
-    /// Phase 1.7 hatch: launch with `SCRIBE_USE_SCINTILLA=1 swift run Scribe`
-    /// to swap the legacy NSTextView-backed CodeEditor for the new
-    /// Scintilla-backed `ScintillaCodeEditor`. Production code path is
-    /// unaffected. Will be removed when the migration is complete.
-    private var useScintilla: Bool {
-        #if DEBUG
-        ProcessInfo.processInfo.environment["SCRIBE_USE_SCINTILLA"] == "1"
-        #else
-        false
-        #endif
-    }
-
     var body: some View {
         if let doc = workspace.current {
-            EditorTextView(doc: doc, prefs: prefs, useScintilla: useScintilla)
+            ScintillaCodeEditor(doc: doc, prefs: prefs)
                 .id(doc.id)
+                .background(Color(nsColor: .textBackgroundColor))
         } else {
             WelcomeView()
         }
-    }
-}
-
-private struct EditorTextView: View {
-    @ObservedObject var doc: Document
-    @ObservedObject var prefs: EditorPreferences
-    let useScintilla: Bool
-
-    var body: some View {
-        Group {
-            if useScintilla {
-                ScintillaCodeEditor(doc: doc, prefs: prefs)
-            } else {
-                CodeEditor(doc: doc, prefs: prefs)
-            }
-        }
-        .background(Color(nsColor: .textBackgroundColor))
     }
 }
 

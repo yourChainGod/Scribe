@@ -1,12 +1,15 @@
 //
 //  ScintillaCodeEditor.swift
-//  Phase 1.7b — Scintilla-backed editor view. Two-way sync via the
-//  ScintillaNotificationProtocol delegate. Soft tabs, line-number margin,
-//  and light/dark theming included.
+//  Default editor since Phase 1.7c. Wraps Scintilla's NSView-based
+//  ScintillaView in a SwiftUI NSViewRepresentable.
 //
-//  The legacy NSTextView-based `CodeEditor` lives alongside this file and
-//  remains the production path until 1.7c removes the SCRIBE_USE_SCINTILLA
-//  hatch and deletes the old bridge. See HANDOFF.md section 7.
+//  Coordinator implements ScintillaNotificationProtocol for two-way sync:
+//    SCN_MODIFIED  → view.string() is written back to doc.text + dirty flag
+//    SCN_UPDATEUI  → cursor row/col is pushed to doc.cursorLine/Column
+//  An isApplyingExternalUpdate guard breaks the doc → view → doc echo.
+//
+//  Themes track NSApp.effectiveAppearance via KVO; tab width / soft tabs
+//  follow EditorPreferences live.
 //
 
 import AppKit
