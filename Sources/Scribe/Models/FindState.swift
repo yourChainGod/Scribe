@@ -16,6 +16,15 @@ import Foundation
 
 @MainActor
 final class FindState: ObservableObject {
+    static let historyMax = 20
+
+    private enum Key {
+        static let queryHistory = "find.queryHistory"
+        static let replacementHistory = "find.replacementHistory"
+    }
+
+    private let defaults: UserDefaults
+
     /// Show/hide the find bar above the editor.
     @Published var isVisible: Bool = false
 
@@ -29,6 +38,12 @@ final class FindState: ObservableObject {
     @Published var matchCase: Bool = false
     @Published var wholeWord: Bool = false
     @Published var regex: Bool = false
+
+    /// MRU history of past queries / replacements. Persisted across
+    /// launches; surfaced through the bar's history popover so users
+    /// can re-run an earlier search without retyping.
+    @Published var queryHistory: [String] = []
+    @Published var replacementHistory: [String] = []
 
     /// 1-based ordinal of the currently selected match. `0` means "no
     /// active match". Driven by the editor coordinator after each search.
@@ -55,6 +70,12 @@ final class FindState: ObservableObject {
     }
     let commands = PassthroughSubject<Command, Never>()
 
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        self.queryHistory = defaults.stringArray(forKey: Key.queryHistory) ?? []
+        self.replacementHistory = defaults.stringArray(forKey: Key.replacementHistory) ?? []
+    }
+
     // MARK: - Convenience
 
     func show(replaceMode: Bool) {
@@ -65,5 +86,41 @@ final class FindState: ObservableObject {
     func hide() {
         isVisible = false
         status = ""
+    }
+
+    // MARK: - History
+
+    /// Push the current query onto the MRU stack. Idempotent — duplicates
+    /// move to the top. Called when the user explicitly commits the
+    /// search (Enter, ⌘G, dismiss with non-empty query).
+    func commitQueryToHistory() {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        queryHistory.removeAll { $0 == trimmed }
+        queryHistory.insert(trimmed, at: 0)
+        if queryHistory.count > Self.historyMax {
+            queryHistory = Array(queryHistory.prefix(Self.historyMax))
+        }
+        defaults.set(queryHistory, forKey: Key.queryHistory)
+    }
+
+    func commitReplacementToHistory() {
+        // Allow empty replacement — that's a valid "delete the matches"
+        // operation worth re-running. Skip only on whitespace-only entries.
+        let trimmed = replacement.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty || !replacement.isEmpty else { return }
+        replacementHistory.removeAll { $0 == replacement }
+        replacementHistory.insert(replacement, at: 0)
+        if replacementHistory.count > Self.historyMax {
+            replacementHistory = Array(replacementHistory.prefix(Self.historyMax))
+        }
+        defaults.set(replacementHistory, forKey: Key.replacementHistory)
+    }
+
+    func clearHistory() {
+        queryHistory = []
+        replacementHistory = []
+        defaults.removeObject(forKey: Key.queryHistory)
+        defaults.removeObject(forKey: Key.replacementHistory)
     }
 }

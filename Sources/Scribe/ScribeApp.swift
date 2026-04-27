@@ -12,6 +12,8 @@ struct ScribeApp: App {
     @StateObject private var workspace: Workspace
     @StateObject private var commands = CommandRegistry()
     @StateObject private var findState = FindState()
+    @StateObject private var findInFiles = FindInFilesState()
+    private let findInFilesEngine = FindInFilesEngine()
 
     init() {
         // SwiftPM-built executables default to background activation policy.
@@ -45,9 +47,16 @@ struct ScribeApp: App {
         // its NSWindow materialized first. Eager mutation of @Published state
         // here is observed to delay (or skip!) NSWindow creation on
         // macOS 14+ / swift-tools 5.9.
+        let autoFolder = (ProcessInfo.processInfo.environment["SCRIBE_AUTO_FOLDER"] ?? "")
         DispatchQueue.main.async {
             for url in autoOpen {
                 ws.openFile(at: url)
+            }
+            if !autoFolder.isEmpty {
+                let url = URL(fileURLWithPath: autoFolder)
+                if FileManager.default.fileExists(atPath: url.path) {
+                    ws.openFolder(at: url)
+                }
             }
         }
 
@@ -57,11 +66,12 @@ struct ScribeApp: App {
 
     var body: some Scene {
         WindowGroup {
-            MainWindow()
+            MainWindow(findInFilesEngine: findInFilesEngine)
                 .environmentObject(workspace)
                 .environmentObject(prefs)
                 .environmentObject(commands)
                 .environmentObject(findState)
+                .environmentObject(findInFiles)
                 .frame(minWidth: 900, minHeight: 600)
                 .onAppear {
                     CommandRegistration.refresh(
@@ -142,6 +152,14 @@ struct ScribeApp: App {
                     findState.commands.send(.useSelection)
                 }
                 .keyboardShortcut("e", modifiers: .command)
+
+                Divider()
+
+                Button("Find in Files…") {
+                    workspace.sidebarVisible = true
+                    workspace.sidebarMode = .search
+                }
+                .keyboardShortcut("f", modifiers: [.command, .shift])
 
                 Divider()
 

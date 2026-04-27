@@ -20,6 +20,10 @@ final class Document: ObservableObject, Identifiable {
     /// User-chosen Lexilla lexer name. When set, takes precedence over the
     /// extension-based detection in `LexerCatalog`. `nil` ⇒ auto.
     @Published var lexerOverride: String?
+    /// 1-based line the editor should scroll/select on next presentation.
+    /// Set by Workspace.openFile(at:line:) — read by ScintillaCodeEditor
+    /// during makeNSView / updateNSView and cleared after consumption.
+    @Published var pendingScrollLine: Int? = nil
 
     init(title: String = "Untitled", text: String = "", url: URL? = nil) {
         self.title = title

@@ -9,12 +9,13 @@ import UniformTypeIdentifiers
 struct MainWindow: View {
     @EnvironmentObject var workspace: Workspace
     @EnvironmentObject var prefs: EditorPreferences
+    let findInFilesEngine: FindInFilesEngine
     @State private var dragOver = false
 
     var body: some View {
         NavigationSplitView {
-            SidebarView()
-                .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 320)
+            SidebarView(findInFiles: findInFilesEngine)
+                .navigationSplitViewColumnWidth(min: 200, ideal: 260, max: 380)
         } detail: {
             VStack(spacing: 0) {
                 TabBarView()

@@ -47,16 +47,22 @@ struct FindBar: View {
             .buttonStyle(.borderless)
             .help("Toggle Replace")
 
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-                .frame(width: 14)
+            historyMenu(
+                history: state.queryHistory,
+                empty: "No recent searches",
+                onPick: { state.query = $0 },
+                onClear: { state.clearHistory() }
+            )
 
             TextField("Find", text: $state.query)
                 .textFieldStyle(.roundedBorder)
                 .focused($queryFocused)
                 .font(.system(size: 12))
                 .frame(maxWidth: 280)
-                .onSubmit { state.commands.send(.findNext) }
+                .onSubmit {
+                    state.commitQueryToHistory()
+                    state.commands.send(.findNext)
+                }
                 .onChange(of: state.query) { _, _ in
                     // Live-search like VSCode: every keystroke confirms
                     // the current hit (or moves to the next one) and
@@ -126,18 +132,27 @@ struct FindBar: View {
             // Spacer to align under the disclosure toggle in findRow.
             Color.clear.frame(width: 22)
 
-            Image(systemName: "arrow.2.squarepath")
-                .foregroundStyle(.secondary)
-                .frame(width: 14)
+            historyMenu(
+                history: state.replacementHistory,
+                empty: "No recent replacements",
+                onPick: { state.replacement = $0 },
+                onClear: { state.replacementHistory = [] }
+            )
 
             TextField("Replace", text: $state.replacement)
                 .textFieldStyle(.roundedBorder)
                 .focused($replaceFocused)
                 .font(.system(size: 12))
                 .frame(maxWidth: 280)
-                .onSubmit { state.commands.send(.replaceCurrent) }
+                .onSubmit {
+                    state.commitQueryToHistory()
+                    state.commitReplacementToHistory()
+                    state.commands.send(.replaceCurrent)
+                }
 
             Button("Replace") {
+                state.commitQueryToHistory()
+                state.commitReplacementToHistory()
                 state.commands.send(.replaceCurrent)
             }
             .buttonStyle(.bordered)
@@ -145,6 +160,8 @@ struct FindBar: View {
             .disabled(state.query.isEmpty)
 
             Button("Replace All") {
+                state.commitQueryToHistory()
+                state.commitReplacementToHistory()
                 state.commands.send(.replaceAll)
             }
             .buttonStyle(.bordered)
@@ -155,6 +172,34 @@ struct FindBar: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
+    }
+
+    // MARK: - History menu
+
+    @ViewBuilder
+    private func historyMenu(history: [String],
+                             empty: String,
+                             onPick: @escaping (String) -> Void,
+                             onClear: @escaping () -> Void) -> some View {
+        Menu {
+            if history.isEmpty {
+                Text(empty).foregroundStyle(.secondary)
+            } else {
+                ForEach(history, id: \.self) { item in
+                    Button(item) { onPick(item) }
+                }
+                Divider()
+                Button("Clear History", role: .destructive) { onClear() }
+            }
+        } label: {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .font(.system(size: 11))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .frame(width: 18)
+        .help("Recent — click to reuse")
     }
 
     // MARK: - Pieces

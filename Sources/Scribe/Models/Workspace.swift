@@ -8,11 +8,19 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
+/// Which mode the side panel is in: project tree or find-in-files
+/// results. Mirrors the VSCode primary side bar tabs.
+enum SidebarMode: String {
+    case files
+    case search
+}
+
 @MainActor
 final class Workspace: ObservableObject {
     @Published var documents: [Document] = []
     @Published var selectedID: UUID?
     @Published var sidebarVisible: Bool = true
+    @Published var sidebarMode: SidebarMode = .files
     @Published var folderRoot: FileNode?
 
     let prefs: EditorPreferences
@@ -86,11 +94,12 @@ final class Workspace: ObservableObject {
         }
     }
 
-    func openFile(at url: URL) {
+    func openFile(at url: URL, line: Int? = nil) {
         let normalized = url.standardizedFileURL
         // Reuse if already open.
         if let existing = documents.first(where: { $0.url?.standardizedFileURL == normalized }) {
             selectedID = existing.id
+            if let line { existing.pendingScrollLine = line }
             prefs.addRecent(normalized)
             return
         }
@@ -102,6 +111,7 @@ final class Workspace: ObservableObject {
                                url: normalized)
             doc.encoding = format.encoding
             doc.lineEnding = format.lineEnding
+            if let line { doc.pendingScrollLine = line }
             documents.append(doc)
             selectedID = doc.id
             prefs.addRecent(normalized)

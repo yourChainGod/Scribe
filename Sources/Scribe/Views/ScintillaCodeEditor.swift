@@ -32,6 +32,9 @@ private enum SCI {
     static let GETSELECTIONSTART:UInt32 = 2143
     static let GETSELECTIONEND:  UInt32 = 2145
     static let GETSELTEXT:       UInt32 = 2161
+    static let POSITIONFROMLINE: UInt32 = 2167
+    static let GETLINEENDPOSITION: UInt32 = 2136
+    static let GOTOLINE:         UInt32 = 2024
     // Tabs
     static let SETTABWIDTH:      UInt32 = 2036
     static let SETUSETABS:       UInt32 = 2124
@@ -183,6 +186,7 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         context.coordinator.applyTabs(prefs: prefs, to: view)
         context.coordinator.applyTheme(to: view)
         context.coordinator.refreshHighlightsIfNeeded()
+        context.coordinator.consumePendingScroll(in: view)
     }
 
     // MARK: - Coordinator (Scintilla delegate)
@@ -371,6 +375,24 @@ struct ScintillaCodeEditor: NSViewRepresentable {
             return (b << 16) | (g << 8) | r
         }
 
+        // MARK: - Pending scroll (cross-file find jump)
+
+        /// If `doc.pendingScrollLine` is set, scroll there + select the
+        /// whole line, then clear the pending value. Idempotent.
+        func consumePendingScroll(in view: ScintillaView) {
+            guard let line = doc.pendingScrollLine else { return }
+            doc.pendingScrollLine = nil
+            // Scintilla line index is 0-based; our pending value is 1-based.
+            let line0 = max(0, line - 1)
+            view.message(SCI.GOTOLINE, wParam: UInt(line0))
+            let lineStart = view.message(SCI.POSITIONFROMLINE, wParam: UInt(line0))
+            let lineEnd   = view.message(SCI.GETLINEENDPOSITION, wParam: UInt(line0))
+            view.message(SCI.SETSEL,
+                         wParam: UInt(bitPattern: Int(lineStart)),
+                         lParam: Int(lineEnd))
+            view.message(SCI.SCROLLCARET)
+        }
+
         // MARK: - Find / Replace
 
         /// One-time setup of indicator 0 — translucent rounded box used
@@ -448,6 +470,7 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         func findNext(in view: ScintillaView) {
             let pattern = findState.query
             guard !pattern.isEmpty else { return }
+            findState.commitQueryToHistory()
             // Scan forward from the end of the current selection (or
             // caret) so repeated ⌘G actually advances.
             let from = Int(view.message(SCI.GETSELECTIONEND))
@@ -457,6 +480,7 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         func findPrev(in view: ScintillaView) {
             let pattern = findState.query
             guard !pattern.isEmpty else { return }
+            findState.commitQueryToHistory()
             let from = Int(view.message(SCI.GETSELECTIONSTART))
             performFind(in: view, from: from, forward: false, pattern: pattern)
         }

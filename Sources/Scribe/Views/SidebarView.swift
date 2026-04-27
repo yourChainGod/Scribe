@@ -7,11 +7,59 @@ import SwiftUI
 
 struct SidebarView: View {
     @EnvironmentObject var workspace: Workspace
+    let findInFiles: FindInFilesEngine
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
+            modeSwitcher
+            Divider()
+            switch workspace.sidebarMode {
+            case .files: filesPane
+            case .search: FindInFilesSidebar(engine: findInFiles)
+            }
+        }
+        .background(Color(nsColor: .controlBackgroundColor))
+    }
+
+    // MARK: - Mode switcher
+
+    private var modeSwitcher: some View {
+        HStack(spacing: 0) {
+            modeButton(.files, system: "folder", title: "Files")
+            modeButton(.search, system: "magnifyingglass", title: "Search")
+            Spacer()
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+    }
+
+    private func modeButton(_ mode: SidebarMode, system: String, title: String) -> some View {
+        let isActive = workspace.sidebarMode == mode
+        return Button {
+            workspace.sidebarMode = mode
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: system)
+                    .font(.system(size: 11))
+                Text(title)
+                    .font(.system(size: 11, weight: isActive ? .semibold : .regular))
+            }
+            .foregroundStyle(isActive ? Color.primary : Color.secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(isActive ? Color.accentColor.opacity(0.18) : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Files pane
+
+    private var filesPane: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
                     // OPEN section
                     SectionHeader(title: "OPEN", systemImage: "doc.text")
                     ForEach(workspace.documents) { doc in
@@ -67,10 +115,8 @@ struct SidebarView: View {
                     }
 
                     Spacer(minLength: 16)
-                }
             }
         }
-        .background(Color(nsColor: .controlBackgroundColor))
     }
 }
 
