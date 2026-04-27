@@ -35,8 +35,7 @@ private struct DocumentStatusItems: View {
     @EnvironmentObject var workspace: Workspace
 
     var body: some View {
-        Label(LexerCatalog.descriptor(for: doc).display,
-              systemImage: "chevron.left.forwardslash.chevron.right")
+        languageMenu
         Divider().frame(height: 12)
         encodingMenu
         Divider().frame(height: 12)
@@ -46,6 +45,37 @@ private struct DocumentStatusItems: View {
             .monospacedDigit()
         Divider().frame(height: 12)
         Text("\(doc.text.count) chars")
+    }
+
+    private var languageMenu: some View {
+        Menu {
+            Section("Syntax Highlighting") {
+                ForEach(LexerCatalog.all, id: \.lexillaName) { lex in
+                    Button {
+                        // nil ⇒ auto by extension; otherwise pin a specific lexer.
+                        doc.lexerOverride = lex.lexillaName == LexerCatalog.descriptor(forExtension: doc.url?.pathExtension ?? "").lexillaName
+                            ? nil
+                            : lex.lexillaName
+                    } label: {
+                        if LexerCatalog.descriptor(for: doc).lexillaName == lex.lexillaName {
+                            Label(lex.display, systemImage: "checkmark")
+                        } else {
+                            Text(lex.display)
+                        }
+                    }
+                }
+            }
+            if doc.lexerOverride != nil {
+                Divider()
+                Button("Reset to Auto Detect") { doc.lexerOverride = nil }
+            }
+        } label: {
+            Label(LexerCatalog.descriptor(for: doc).display,
+                  systemImage: "chevron.left.forwardslash.chevron.right")
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
     }
 
     private var encodingMenu: some View {

@@ -71,7 +71,10 @@ struct ScribeApp: App {
                     .keyboardShortcut("n")
                 Button("Open…") { workspace.openDocument() }
                     .keyboardShortcut("o")
+                Button("Open Folder…") { workspace.openFolder() }
+                    .keyboardShortcut("o", modifiers: [.command, .shift])
                 RecentFilesMenu(prefs: prefs, workspace: workspace)
+                RecentFoldersMenu(prefs: prefs, workspace: workspace)
             }
             CommandGroup(after: .saveItem) {
                 Button("Save") { workspace.saveCurrent() }
@@ -111,6 +114,28 @@ private struct RecentFilesMenu: View {
                 }
                 Divider()
                 Button("Clear Menu") { prefs.clearRecent() }
+            }
+        }
+    }
+}
+
+private struct RecentFoldersMenu: View {
+    @ObservedObject var prefs: EditorPreferences
+    let workspace: Workspace
+
+    var body: some View {
+        Menu("Open Recent Folder") {
+            if prefs.recentFolders.isEmpty {
+                Text("No Recent Folders")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(prefs.recentFolders, id: \.self) { url in
+                    Button(url.lastPathComponent) {
+                        workspace.openFolder(at: url)
+                    }
+                }
+                Divider()
+                Button("Clear Menu") { prefs.clearRecentFolders() }
             }
         }
     }

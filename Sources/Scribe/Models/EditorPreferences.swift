@@ -25,6 +25,7 @@ final class EditorPreferences: ObservableObject {
         static let tabWidth = "editor.tabWidth"
         static let softTabs = "editor.softTabs"
         static let recentFiles = "editor.recentFiles"
+        static let recentFolders = "editor.recentFolders"
     }
 
     private let defaults: UserDefaults
@@ -51,6 +52,10 @@ final class EditorPreferences: ObservableObject {
         didSet { defaults.set(recentFiles.map(\.path), forKey: Key.recentFiles) }
     }
 
+    @Published var recentFolders: [URL] {
+        didSet { defaults.set(recentFolders.map(\.path), forKey: Key.recentFolders) }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
 
@@ -66,6 +71,10 @@ final class EditorPreferences: ObservableObject {
 
         let paths = defaults.stringArray(forKey: Key.recentFiles) ?? []
         self.recentFiles = paths
+            .map { URL(fileURLWithPath: $0).standardizedFileURL }
+
+        let folderPaths = defaults.stringArray(forKey: Key.recentFolders) ?? []
+        self.recentFolders = folderPaths
             .map { URL(fileURLWithPath: $0).standardizedFileURL }
     }
 
@@ -105,6 +114,23 @@ final class EditorPreferences: ObservableObject {
 
     func clearRecent() {
         recentFiles = []
+    }
+
+    // MARK: - Recent folders
+
+    func addRecentFolder(_ url: URL) {
+        let normalized = url.standardizedFileURL
+        var list = recentFolders
+        list.removeAll { $0 == normalized }
+        list.insert(normalized, at: 0)
+        if list.count > Self.recentFilesMax {
+            list = Array(list.prefix(Self.recentFilesMax))
+        }
+        recentFolders = list
+    }
+
+    func clearRecentFolders() {
+        recentFolders = []
     }
 
     // MARK: - Helpers

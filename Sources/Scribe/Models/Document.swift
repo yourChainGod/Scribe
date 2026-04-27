@@ -17,6 +17,9 @@ final class Document: ObservableObject, Identifiable {
     @Published var isDirty: Bool = false
     @Published var cursorLine: Int = 1
     @Published var cursorColumn: Int = 1
+    /// User-chosen Lexilla lexer name. When set, takes precedence over the
+    /// extension-based detection in `LexerCatalog`. `nil` ⇒ auto.
+    @Published var lexerOverride: String?
 
     init(title: String = "Untitled", text: String = "", url: URL? = nil) {
         self.title = title

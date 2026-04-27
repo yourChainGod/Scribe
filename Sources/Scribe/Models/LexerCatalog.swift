@@ -82,6 +82,18 @@ enum LexerCatalog {
 
     static let plain = LexerDescriptor(display: "Plain Text", lexillaName: "", keywords: [])
 
+    /// Catalog shown in the status-bar language menu. Add a new entry here
+    /// to make it user-selectable.
+    static let all: [LexerDescriptor] = [
+        plain, cpp, swift, python, javascript, json, markdown, shell, xml, html
+    ]
+
+    /// Find a descriptor by Lexilla lexer name (`""` ⇒ plain). Used when
+    /// applying an explicit user override stored on `Document`.
+    static func descriptor(forLexillaName name: String) -> LexerDescriptor {
+        all.first { $0.lexillaName == name } ?? plain
+    }
+
     /// Lookup by lower-case file extension (no leading dot). Falls back to
     /// `plain` when nothing matches.
     static func descriptor(forExtension ext: String) -> LexerDescriptor {
@@ -109,10 +121,14 @@ enum LexerCatalog {
         }
     }
 
-    /// Convenience — pull the descriptor straight off a `Document`'s URL.
-    /// Marked `@MainActor` because `Document.url` is main-actor isolated.
+    /// Convenience — pull the descriptor straight off a `Document`. Honors
+    /// `doc.lexerOverride` first, then falls back to extension detection.
+    /// Marked `@MainActor` because `Document` is main-actor isolated.
     @MainActor
     static func descriptor(for doc: Document) -> LexerDescriptor {
+        if let override = doc.lexerOverride {
+            return descriptor(forLexillaName: override)
+        }
         guard let ext = doc.url?.pathExtension, !ext.isEmpty else { return plain }
         return descriptor(forExtension: ext)
     }

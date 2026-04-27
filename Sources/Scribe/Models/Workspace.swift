@@ -17,6 +17,11 @@ final class Workspace: ObservableObject {
 
     let prefs: EditorPreferences
 
+    /// One file-system watcher per open document with a URL. Removed when
+    /// the document closes or its URL changes. Keyed by Document.id so we
+    /// can prune by identity even if the underlying URL is reassigned.
+    private var watchers: [UUID: FileWatcher] = [:]
+
     init(prefs: EditorPreferences, openInitialUntitled: Bool = true) {
         self.prefs = prefs
         // Open one empty doc by default so the editor isn't blank on first run.
@@ -33,11 +38,21 @@ final class Workspace: ObservableObject {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         if panel.runModal() == .OK, let url = panel.url {
-            let root = FileNode(url: url)
-            root.isExpanded = true
-            root.loadChildren()
-            self.folderRoot = root
+            openFolder(at: url)
         }
+    }
+
+    /// Programmatic counterpart used by the Recent Folders menu.
+    func openFolder(at url: URL) {
+        let normalized = url.standardizedFileURL
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: normalized.path, isDirectory: &isDir),
+              isDir.boolValue else { return }
+        let root = FileNode(url: normalized)
+        root.isExpanded = true
+        root.loadChildren()
+        self.folderRoot = root
+        prefs.addRecentFolder(normalized)
     }
 
     func closeFolder() {
@@ -90,9 +105,59 @@ final class Workspace: ObservableObject {
             documents.append(doc)
             selectedID = doc.id
             prefs.addRecent(normalized)
+            startWatching(doc)
         } catch {
             NSAlert(error: error).runModal()
         }
+    }
+
+    // MARK: - File-system watching
+
+    /// (Re)attach a watcher to this document's URL. Safe to call multiple
+    /// times — earlier watchers are torn down first.
+    private func startWatching(_ doc: Document) {
+        watchers[doc.id] = nil
+        guard let url = doc.url else { return }
+        watchers[doc.id] = FileWatcher(url: url) { [weak self, weak doc] in
+            guard let self, let doc else { return }
+            self.handleExternalChange(of: doc)
+        }
+    }
+
+    private func stopWatching(_ doc: Document) {
+        watchers[doc.id] = nil
+    }
+
+    /// Called when the OS reports our document's file changed on disk.
+    /// Re-reads the bytes and either silently refreshes the editor (clean
+    /// document) or asks the user how to proceed (dirty document).
+    private func handleExternalChange(of doc: Document) {
+        guard let url = doc.url else { return }
+        // The file may have been deleted or renamed; if we can't read it,
+        // surface the situation but leave doc.text alone so the user can
+        // re-save.
+        guard let data = try? Data(contentsOf: url) else {
+            doc.isDirty = true   // mark as needing user action
+            return
+        }
+        let decoded = TextFormatDetector.decode(data: data)
+        // Echo from our own write — bytes match what we already have.
+        if decoded.text == doc.text { return }
+
+        if doc.isDirty {
+            let alert = NSAlert()
+            alert.messageText = "“\(doc.title)” has changed on disk."
+            alert.informativeText = "You have unsaved changes. Reload from disk and lose them, or keep your edits?"
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "Reload")
+            alert.addButton(withTitle: "Keep My Changes")
+            if alert.runModal() != .alertFirstButtonReturn { return }
+        }
+        // Silent refresh for clean documents (and confirmed-reload dirty ones).
+        doc.text = decoded.text
+        doc.encoding = decoded.encoding
+        doc.lineEnding = decoded.lineEnding
+        doc.isDirty = false
     }
 
     /// Re-decode the document's source bytes using a different encoding.
@@ -160,6 +225,7 @@ final class Workspace: ObservableObject {
             doc.url = normalized
             doc.title = normalized.lastPathComponent
             prefs.addRecent(normalized)
+            startWatching(doc)   // URL just changed — rewatch the new location
         }
     }
 
@@ -212,6 +278,7 @@ final class Workspace: ObservableObject {
             }
         }
 
+        stopWatching(doc)
         documents.remove(at: idx)
         if selectedID == documentID {
             selectedID = documents.last?.id
