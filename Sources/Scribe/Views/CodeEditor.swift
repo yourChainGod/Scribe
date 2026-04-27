@@ -9,7 +9,7 @@ import AppKit
 
 struct CodeEditor: NSViewRepresentable {
     @ObservedObject var doc: Document
-    var fontSize: CGFloat = 13
+    @ObservedObject var prefs: EditorPreferences
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -22,12 +22,16 @@ struct CodeEditor: NSViewRepresentable {
         scroll.drawsBackground = false
 
         let tv = scroll.documentView as! NSTextView
+        context.coordinator.attach(textView: tv)
         configure(tv, context: context)
 
         // Line-number ruler
         scroll.verticalRulerView = LineNumberRuler(textView: tv)
         scroll.hasVerticalRuler = true
         scroll.rulersVisible = true
+
+        // Initial cursor sync
+        context.coordinator.syncCursorPosition(tv)
 
         return scroll
     }
@@ -39,10 +43,16 @@ struct CodeEditor: NSViewRepresentable {
             let selected = tv.selectedRange()
             tv.string = doc.text
             tv.setSelectedRange(NSRange(location: min(selected.location, doc.text.utf16.count), length: 0))
+            context.coordinator.syncCursorPosition(tv)
         }
-        let font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
-        if tv.font != font { tv.font = font }
-        (scroll.verticalRulerView as? LineNumberRuler)?.fontSize = fontSize
+        let font = prefs.resolvedFont()
+        if tv.font != font {
+            tv.font = font
+            tv.typingAttributes = Self.typingAttributes(font: font, tabWidth: prefs.tabWidth)
+            tv.defaultParagraphStyle = Self.paragraphStyle(font: font, tabWidth: prefs.tabWidth)
+            applyParagraphStyleToWholeDocument(tv, font: font, tabWidth: prefs.tabWidth)
+        }
+        (scroll.verticalRulerView as? LineNumberRuler)?.fontSize = prefs.fontSize
     }
 
     private func configure(_ tv: NSTextView, context: Context) {
@@ -61,19 +71,66 @@ struct CodeEditor: NSViewRepresentable {
         tv.usesFindBar = true
         tv.isIncrementalSearchingEnabled = true
 
-        tv.font = NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        let font = prefs.resolvedFont()
+        tv.font = font
         tv.string = doc.text
         tv.textContainerInset = NSSize(width: 6, height: 8)
         tv.drawsBackground = true
         tv.backgroundColor = NSColor.textBackgroundColor
-
-        // Current-line subtle highlight via paragraph layer.
         tv.usesAdaptiveColorMappingForDarkAppearance = true
+
+        let style = Self.paragraphStyle(font: font, tabWidth: prefs.tabWidth)
+        tv.defaultParagraphStyle = style
+        tv.typingAttributes = Self.typingAttributes(font: font, tabWidth: prefs.tabWidth)
+        applyParagraphStyleToWholeDocument(tv, font: font, tabWidth: prefs.tabWidth)
     }
+
+    // MARK: - Paragraph / typing attributes
+
+    private static func paragraphStyle(font: NSFont, tabWidth: Int) -> NSMutableParagraphStyle {
+        let style = NSMutableParagraphStyle()
+        style.tabStops = []
+        style.defaultTabInterval = tabAdvance(font: font, tabWidth: tabWidth)
+        return style
+    }
+
+    private static func typingAttributes(font: NSFont, tabWidth: Int) -> [NSAttributedString.Key: Any] {
+        [
+            .font: font,
+            .foregroundColor: NSColor.textColor,
+            .paragraphStyle: paragraphStyle(font: font, tabWidth: tabWidth)
+        ]
+    }
+
+    private static func tabAdvance(font: NSFont, tabWidth: Int) -> CGFloat {
+        let sample = " " as NSString
+        let width = sample.size(withAttributes: [.font: font]).width
+        return width * CGFloat(tabWidth)
+    }
+
+    private func applyParagraphStyleToWholeDocument(_ tv: NSTextView,
+                                                    font: NSFont,
+                                                    tabWidth: Int) {
+        guard let storage = tv.textStorage else { return }
+        let range = NSRange(location: 0, length: storage.length)
+        let style = Self.paragraphStyle(font: font, tabWidth: tabWidth)
+        storage.beginEditing()
+        storage.addAttribute(.paragraphStyle, value: style, range: range)
+        storage.addAttribute(.font, value: font, range: range)
+        storage.endEditing()
+    }
+
+    // MARK: - Coordinator
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: CodeEditor
+        weak var textView: NSTextView?
+
         init(_ p: CodeEditor) { self.parent = p }
+
+        func attach(textView: NSTextView) {
+            self.textView = textView
+        }
 
         func textDidChange(_ notification: Notification) {
             guard let tv = notification.object as? NSTextView else { return }
@@ -82,6 +139,52 @@ struct CodeEditor: NSViewRepresentable {
                 parent.doc.text = newText
                 parent.doc.isDirty = true
             }
+            syncCursorPosition(tv)
+        }
+
+        func textViewDidChangeSelection(_ notification: Notification) {
+            guard let tv = notification.object as? NSTextView else { return }
+            syncCursorPosition(tv)
+        }
+
+        // Soft-tab: replace the Tab key with N spaces when prefs.softTabs is on.
+        func textView(_ textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+            if selector == #selector(NSResponder.insertTab(_:)) && parent.prefs.softTabs {
+                let spaces = String(repeating: " ", count: parent.prefs.tabWidth)
+                if textView.shouldChangeText(in: textView.selectedRange(),
+                                             replacementString: spaces) {
+                    textView.replaceCharacters(in: textView.selectedRange(),
+                                               with: spaces)
+                    textView.didChangeText()
+                }
+                return true
+            }
+            return false
+        }
+
+        @MainActor
+        func syncCursorPosition(_ tv: NSTextView) {
+            let (line, col) = Self.lineColumn(in: tv.string, location: tv.selectedRange().location)
+            if parent.doc.cursorLine != line { parent.doc.cursorLine = line }
+            if parent.doc.cursorColumn != col { parent.doc.cursorColumn = col }
+        }
+
+        /// 1-indexed line and column from a UTF-16 offset.
+        static func lineColumn(in text: String, location: Int) -> (Int, Int) {
+            let nsText = text as NSString
+            let clamped = max(0, min(location, nsText.length))
+            var line = 1
+            var lineStart = 0
+            var i = 0
+            while i < clamped {
+                if nsText.character(at: i) == 0x0A { // '\n'
+                    line += 1
+                    lineStart = i + 1
+                }
+                i += 1
+            }
+            let column = clamped - lineStart + 1
+            return (line, column)
         }
     }
 }

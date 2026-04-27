@@ -11,14 +11,7 @@ struct StatusBarView: View {
     var body: some View {
         HStack(spacing: 12) {
             if let doc = workspace.current {
-                Label(doc.languageGuess.uppercased(),
-                      systemImage: "chevron.left.forwardslash.chevron.right")
-                Divider().frame(height: 12)
-                Text(encodingDescription(doc.encoding))
-                Divider().frame(height: 12)
-                Text(doc.lineEnding.short)
-                Divider().frame(height: 12)
-                Text("\(doc.text.count) chars")
+                DocumentStatusItems(doc: doc)
             } else {
                 Text("Ready")
             }
@@ -33,6 +26,25 @@ struct StatusBarView: View {
         .padding(.horizontal, 12)
         .frame(height: 24)
         .background(.bar)
+    }
+
+}
+
+private struct DocumentStatusItems: View {
+    @ObservedObject var doc: Document
+
+    var body: some View {
+        Label(doc.languageGuess.uppercased(),
+              systemImage: "chevron.left.forwardslash.chevron.right")
+        Divider().frame(height: 12)
+        Text(encodingDescription(doc.encoding))
+        Divider().frame(height: 12)
+        Text(doc.lineEnding.short)
+        Divider().frame(height: 12)
+        Text("Ln \(doc.cursorLine), Col \(doc.cursorColumn)")
+            .monospacedDigit()
+        Divider().frame(height: 12)
+        Text("\(doc.text.count) chars")
     }
 
     private func encodingDescription(_ enc: String.Encoding) -> String {

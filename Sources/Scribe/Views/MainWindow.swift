@@ -8,6 +8,7 @@ import UniformTypeIdentifiers
 
 struct MainWindow: View {
     @EnvironmentObject var workspace: Workspace
+    @EnvironmentObject var prefs: EditorPreferences
     @State private var dragOver = false
 
     var body: some View {
@@ -50,6 +51,24 @@ struct MainWindow: View {
                 .help("Save (⌘S)")
 
                 Spacer()
+
+                Button { prefs.zoomOut() } label: {
+                    Image(systemName: "textformat.size.smaller")
+                }
+                .help("Zoom Out (⌘-)")
+                .disabled(prefs.fontSize <= EditorPreferences.fontSizeMin)
+
+                Text("\(Int(prefs.fontSize))")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .frame(minWidth: 22)
+                    .help("Editor font size")
+
+                Button { prefs.zoomIn() } label: {
+                    Image(systemName: "textformat.size.larger")
+                }
+                .help("Zoom In (⌘+)")
+                .disabled(prefs.fontSize >= EditorPreferences.fontSizeMax)
 
                 Button {} label: {
                     Image(systemName: "magnifyingglass")

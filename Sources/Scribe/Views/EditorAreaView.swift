@@ -8,10 +8,11 @@ import SwiftUI
 
 struct EditorAreaView: View {
     @EnvironmentObject var workspace: Workspace
+    @EnvironmentObject var prefs: EditorPreferences
 
     var body: some View {
         if let doc = workspace.current {
-            EditorTextView(doc: doc)
+            EditorTextView(doc: doc, prefs: prefs)
                 .id(doc.id)
         } else {
             WelcomeView()
@@ -21,9 +22,10 @@ struct EditorAreaView: View {
 
 private struct EditorTextView: View {
     @ObservedObject var doc: Document
+    @ObservedObject var prefs: EditorPreferences
 
     var body: some View {
-        CodeEditor(doc: doc)
+        CodeEditor(doc: doc, prefs: prefs)
             .background(Color(nsColor: .textBackgroundColor))
     }
 }

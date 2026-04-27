@@ -15,6 +15,8 @@ final class Document: ObservableObject, Identifiable {
     @Published var encoding: String.Encoding = .utf8
     @Published var lineEnding: LineEnding = .lf
     @Published var isDirty: Bool = false
+    @Published var cursorLine: Int = 1
+    @Published var cursorColumn: Int = 1
 
     init(title: String = "Untitled", text: String = "", url: URL? = nil) {
         self.title = title

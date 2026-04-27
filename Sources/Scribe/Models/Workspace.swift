@@ -15,7 +15,10 @@ final class Workspace: ObservableObject {
     @Published var sidebarVisible: Bool = true
     @Published var folderRoot: FileNode?
 
-    init() {
+    let prefs: EditorPreferences
+
+    init(prefs: EditorPreferences) {
+        self.prefs = prefs
         // Open one empty doc by default so the editor isn't blank on first run.
         newDocument()
     }
@@ -65,16 +68,19 @@ final class Workspace: ObservableObject {
     }
 
     func openFile(at url: URL) {
+        let normalized = url.standardizedFileURL
         // Reuse if already open.
-        if let existing = documents.first(where: { $0.url == url }) {
+        if let existing = documents.first(where: { $0.url?.standardizedFileURL == normalized }) {
             selectedID = existing.id
+            prefs.addRecent(normalized)
             return
         }
         do {
-            let text = try String(contentsOf: url, encoding: .utf8)
-            let doc = Document(title: url.lastPathComponent, text: text, url: url)
+            let text = try String(contentsOf: normalized, encoding: .utf8)
+            let doc = Document(title: normalized.lastPathComponent, text: text, url: normalized)
             documents.append(doc)
             selectedID = doc.id
+            prefs.addRecent(normalized)
         } catch {
             NSAlert(error: error).runModal()
         }
@@ -93,9 +99,11 @@ final class Workspace: ObservableObject {
         let panel = NSSavePanel()
         panel.nameFieldStringValue = doc.title
         if panel.runModal() == .OK, let url = panel.url {
-            write(doc: doc, to: url)
-            doc.url = url
-            doc.title = url.lastPathComponent
+            let normalized = url.standardizedFileURL
+            write(doc: doc, to: normalized)
+            doc.url = normalized
+            doc.title = normalized.lastPathComponent
+            prefs.addRecent(normalized)
         }
     }
 
