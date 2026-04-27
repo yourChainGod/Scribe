@@ -15,6 +15,16 @@ final class DiffSession: ObservableObject {
     @Published var rightURL: URL?
     @Published var leftText: String = ""
     @Published var rightText: String = ""
+    /// Optional pane-header overrides. When nil the view falls back to
+    /// the URL's lastPathComponent. Git-diff loads use these to surface
+    /// "HEAD: foo.swift" instead of the working-tree file name on the
+    /// left side.
+    @Published var leftLabel: String?
+    @Published var rightLabel: String?
+    /// Optional header subtitle (greyed-out text under the title). Git
+    /// diff uses it for the short SHA + revision marker.
+    @Published var leftSubtitle: String?
+    @Published var rightSubtitle: String?
     @Published var result: DiffResult?
     @Published var error: String?
 
@@ -77,12 +87,52 @@ final class DiffSession: ObservableObject {
             let rightDecoded = TextFormatDetector.decode(data: rightData)
             leftURL = left
             rightURL = right
+            leftLabel = nil
+            rightLabel = nil
+            leftSubtitle = nil
+            rightSubtitle = nil
             leftText = leftDecoded.text
             rightText = rightDecoded.text
             error = nil
             Task { await recompute() }
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+
+    /// Diff a working-tree file against its HEAD blob. Left = HEAD,
+    /// right = working tree (so additions show up as green on the
+    /// right, the convention every other diff tool uses).
+    /// Errors set `self.error` and leave the panes empty.
+    func loadGitHEAD(file: URL) {
+        let result = GitClient.headBlob(of: file)
+        switch result {
+        case .untracked:
+            self.error = "“\(file.lastPathComponent)” is not tracked by git."
+            return
+        case .notInRepo:
+            self.error = "“\(file.lastPathComponent)” is not inside a git repository."
+            return
+        case .error(let message):
+            self.error = "git: \(message)"
+            return
+        case .success(let blob, let shortSHA):
+            do {
+                let workingData = try Data(contentsOf: file)
+                let workingDecoded = TextFormatDetector.decode(data: workingData)
+                leftURL = nil
+                rightURL = file
+                leftLabel = file.lastPathComponent
+                rightLabel = nil
+                leftSubtitle = "HEAD@\(shortSHA)"
+                rightSubtitle = "Working tree"
+                leftText = blob
+                rightText = workingDecoded.text
+                error = nil
+                Task { await recompute() }
+            } catch {
+                self.error = "Couldn't read working file: \(error.localizedDescription)"
+            }
         }
     }
 

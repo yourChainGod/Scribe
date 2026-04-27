@@ -183,6 +183,18 @@ struct ScribeApp: App {
                     }
                 }
                 .keyboardShortcut("d", modifiers: [.command, .option])
+
+                Button("Compare with HEAD") {
+                    guard let url = workspace.current?.url else { return }
+                    let session = DiffSession()
+                    session.loadGitHEAD(file: url)
+                    // Surface the session whether or not the load
+                    // succeeded — the panel renders the error message
+                    // when there's no result.
+                    workspace.compareSession = session
+                }
+                .keyboardShortcut("d", modifiers: [.command, .shift])
+                .disabled(workspace.current?.url == nil)
             }
             CommandGroup(replacing: .textEditing) {
                 Button("Find…") {

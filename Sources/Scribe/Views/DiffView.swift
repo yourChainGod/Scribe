@@ -107,8 +107,12 @@ struct DiffView: View {
     private func splitPanes(result: DiffResult) -> some View {
         HSplitView {
             VStack(spacing: 0) {
-                paneHeader(title: session.leftURL?.lastPathComponent ?? "Left",
-                           path: session.leftURL?.deletingLastPathComponent().path ?? "")
+                paneHeader(title: session.leftLabel
+                            ?? session.leftURL?.lastPathComponent
+                            ?? "Left",
+                           path: session.leftSubtitle
+                            ?? session.leftURL?.deletingLastPathComponent().path
+                            ?? "")
                 Divider()
                 DiffEditorPane(
                     text: session.leftText,
@@ -120,8 +124,12 @@ struct DiffView: View {
                 )
             }
             VStack(spacing: 0) {
-                paneHeader(title: session.rightURL?.lastPathComponent ?? "Right",
-                           path: session.rightURL?.deletingLastPathComponent().path ?? "")
+                paneHeader(title: session.rightLabel
+                            ?? session.rightURL?.lastPathComponent
+                            ?? "Right",
+                           path: session.rightSubtitle
+                            ?? session.rightURL?.deletingLastPathComponent().path
+                            ?? "")
                 Divider()
                 DiffEditorPane(
                     text: session.rightText,
@@ -182,13 +190,17 @@ struct DiffView: View {
     // MARK: - Actions
 
     private func swap() {
-        guard let l = session.leftURL, let r = session.rightURL else { return }
-        let lt = session.leftText
-        let rt = session.rightText
-        session.leftURL = r
-        session.rightURL = l
-        session.leftText = rt
-        session.rightText = lt
+        // Symmetric swap: every left↔right slot moves together so a
+        // git-diff pane (left=HEAD, right=Working) flips to (left=
+        // Working, right=HEAD) with all its labels intact.
+        let lu = session.leftURL,    ru = session.rightURL
+        let lt = session.leftText,   rt = session.rightText
+        let ll = session.leftLabel,  rl = session.rightLabel
+        let ls = session.leftSubtitle, rs = session.rightSubtitle
+        session.leftURL = ru;       session.rightURL = lu
+        session.leftText = rt;      session.rightText = lt
+        session.leftLabel = rl;     session.rightLabel = ll
+        session.leftSubtitle = rs;  session.rightSubtitle = ls
         Task { await session.recompute() }
     }
 }
