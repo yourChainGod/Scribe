@@ -1,19 +1,20 @@
 # Scribe 交接文档
 
-> **Last session**: 2026-04-28（接力第二夜）
-> **Phase reached**: 0.3 (UI 骨架 + 偏好持久化 + 编码/行尾检测)
-> **Status**: ✅ 可双击运行 · ✅ 能打开/编辑/保存 · ✅ GBK/UTF-16/BOM 全支持 · 待决策 Phase 1 编辑器内核
+> **Last session**: 2026-04-28（接力第二夜，Phase 1 起手）
+> **Phase reached**: 1.0 (SwiftPM 已接通 Scintilla 5.6.1，runtime 待下次)
+> **Status**: ✅ 可双击运行 · ✅ 编码/行尾全支持 · ✅ Scintilla link OK · 🔜 下次接 ScintillaView 进 CodeEditor
 
 ## 0. 这一夜的接力记录（2026-04-28）
 
-四件事一气干完：
+五件事一气干完：
 
 | 阶段 | 提交 | 内容 |
 |------|------|------|
 | **D · 杂事清理** | `971f1fc` | git init 打基线（首次 commit） + LICENSE 拷自 ndd（GPL-3.0）+ README 写明 License + .gitignore 加 build/ |
 | **B · Phase 0.2 细节** | `19f524c` | 新增 `EditorPreferences`（持久化）· 字号 ⌘+/⌘-/⌘0 · 工具栏字号读数 · 最近文件菜单（10 项）· 软 Tab + Tab 宽度 · 状态栏 `Ln/Col` 实时回填 · 设置面板真正可用（字体/字号/Tab/清除最近） |
 | **C · Phase 0.3 编码与行尾** | `aef0b34` | 新增 `TextFormat.swift` 启发式检测器（BOM → 严格 UTF-8 → GB18030 → Big5 → Shift-JIS）· 状态栏编码/行尾改 Menu（`Reopen with…` / `Save with…`）· `Workspace.reopen(doc:as:)` · ScribeTests target + 15 个单测全绿 |
-| **D3 / A** | — | librsvg 图标重烘 + Scintilla 集成留待魔尊拍板（见第 8 节 ADR-003） |
+| **文档** | `d331157` | HANDOFF + ROADMAP 全面刷新，加 ADR-003 |
+| **A · Phase 1.0 Scintilla 接通** | `cc283b4` | 拉 Scintilla 5.6.1 到 Vendor/ · 自添 `include/module.modulemap` + `ScribeScintillaUmbrella.h` · Package.swift 加 cxx17 target · `swift build` 全过 · `swift test` 17/17（含 2 个 bridge 测）· Scribe 启动不崩 · runtime GUI 嵌入留下次 |
 
 **License 锁定**：GPL-3.0。原因不可逆——ROADMAP ADR-002 要求 Phase 2+ 移植 ndd C++ 核心 (`Encode.cpp` / `CmpareMode.cpp` / HEX)，这些是 GPL-3.0，传染性使 Scribe 必须同 license。MIT/Apache 已无可能。
 
@@ -230,32 +231,46 @@ Swift 把 `"\r\n"` 当作**单个 Character**（扩展字形簇 grapheme cluster
 
 ## 7. 下一会话起手清单
 
-### 头号事项 · Phase 1 编辑器内核决策（必须先于动手）
+### 头号事项 · Phase 1.7 把 Scintilla 接进 CodeEditor
 
-**ROADMAP 已加 ADR-003**（见该文件底部）。两条路：
+Phase 1.0 已 commit (`cc283b4`)：编译期、链接期、模块解析全通，Swift 端 `import Scintilla` 可见 `ScintillaView` 类型。但**还没在真实 GUI 里见过它**。下次会话第一件事就是**真正把 ScintillaView 渲染出来**。
 
-| 路线 | 工程量 | 收益 | 风险 |
-|------|--------|------|------|
-| **A1 · ScintillaCocoa**（推荐） | 6-10h 接通 + 4-8h lexer 配置 | 成熟 25 年，自带 200+ lexer / 折叠 / 大文件分页 | C++/ObjC++ 桥层，SwiftPM `cxx interop` 边角问题 |
-| **A2 · NSTextView 自写高亮** | 同样 1 周级，但分摊到很多 phase | 纯 Swift，零 C++ 依赖 | 重新发明 lexer 框架；折叠/列编辑/大文件需自己写 |
+**起手步骤（建议按序）**：
 
-**已查证情报**（避免下次再查）：
-- Scintilla **5.6.1**（2025-02 发布），tarball 1.8 MB，license HPND/类 BSD（GPL 兼容）
-- 作者 Neil Hodgson 写过 [`swiftee`](https://bitbucket.org/nyamatongwe/swiftee) 示例并向主线提交了 `module.modulemap` 补丁
-- 集成路径：Vendor/Scintilla/{src,include,cocoa,lexilla} → SwiftPM cxxTarget → 极简 ObjC 头 shim → `NSViewRepresentable` 包 ScintillaView
-- 公开 mirror：`https://github.com/mirror/scintilla`
+1. **GUI 端 runtime 验证**：在 ScribeApp 加一个隐藏 Window scene 或临时把 `ScintillaProbeView` 接进 `EditorAreaView` 的 Welcome 分支，跑起来肉眼看 ScintillaView 是否出现。**这一步不通过下面的步骤都不要做**——可能要踩一些 NSCursor / NSWindow / first responder 的坑。
 
-### 头号事项之后 · 任选其一推进
+2. **替换 CodeEditor 内层**：`Sources/Scribe/Views/CodeEditor.swift` 的 NSTextView 改成 ScintillaView。保持 `NSViewRepresentable` 外壳不变。重做这些桥接：
+   - `doc.text ↔ ScintillaView.string` 双向同步
+   - 字号通过 `setFontName:size:bold:italic:`
+   - 软 Tab：用 `SCI_SETTABWIDTH` + `SCI_SETUSETABS`
+   - 光标行/列：监听 `SCEN_CHANGE` / `SCN_UPDATEUI` notification，从 `SCI_GETCURRENTPOS` + `SCI_LINEFROMPOSITION` 计算
+   - 行号 ruler：`SCI_SETMARGINWIDTHN` + line-number margin
+   - 暗色：`SCI_STYLESETBACK` + `SCI_STYLESETFORE`，订阅 NSAppearanceDidChangeNotification
+
+3. **删除现有 LineNumberRuler**（被 Scintilla 内置取代）。
+
+4. **配置默认 lexer**：先 `SCLEX_NULL`（plain text）让所有现有功能 work；语法高亮留到 Phase 1.8（需要 Lexilla 包）。
+
+5. **跑回归**：所有 `swift test` 通过 + 手测 Phase 0.2/0.3 验收清单（见第 10 节）。
+
+**关键文件参考**：
+- `@/Users/zhangshijie/Documents/Project/Scribe/Vendor/scintilla/cocoa/ScintillaView.h` — 公共 ObjC API
+- `@/Users/zhangshijie/Documents/Project/Scribe/Vendor/scintilla/include/Scintilla.h` — `SCI_*` 消息常量
+- `@/Users/zhangshijie/Documents/Project/Scribe/Sources/Scribe/Views/ScintillaProbe.swift` — 当前最小烟测
+- `@/Users/zhangshijie/Documents/Project/Scribe/Vendor/README.md` — 升级与 patch 记录
+
+### 头号事项之后
+
+#### Phase 1.8 · Lexilla（语法高亮）
+拉 Lexilla 5.4.4，作为第二个 SwiftPM target，链接到 Scintilla。
+配置 cpp/swift/python lexer。
 
 #### B5（推后项）· 自定义查找面板
-推到 Phase 1 内核换完后一起重做。当前 NSTextView 自带 Find Bar 触发 ⌘F 已可用。
+NSTextView 自带 Find Bar 当下 ⌘F 已可用。Scintilla 接入后用 `SCI_SEARCH*` API 重做。
 
 #### Phase 4 · 文件比较（ndd 招牌）
 源算法 `/Users/zhangshijie/Documents/Project/notpad--/notepad--/src/CmpareMode.cpp`，
-去 Qt 化后用 SwiftUI 双栏视图。
-
-#### Phase 5 · HEX 模式
-ndd 大文件 HEX 视图移植。
+去 Qt 化后用 SwiftUI 双栏视图 + Scintilla marker/annotation API。
 
 #### D3（待办）· 图标重烘
 ```bash
@@ -269,8 +284,8 @@ brew install librsvg
 
 - [x] ~~Scribe 项目是否 `git init`？~~ → 已 init，基线 `971f1fc`
 - [x] ~~License 选 GPL-3.0 还是 MIT？~~ → **GPL-3.0**（ROADMAP ADR-002 锁死，传染性使然）
+- [x] ~~Phase 1 选 ScintillaCocoa 还是 NSTextView 自写高亮？~~ → **A1 ScintillaCocoa**（cc283b4 已落地接通）
 - [ ] 应用图标"S"造型是否定稿？（魔尊未明确点头）
-- [ ] **Phase 1 选 ScintillaCocoa（A1）还是 NSTextView 自写高亮（A2）？** → ROADMAP ADR-003 见详情
 - [ ] D3：是否装 librsvg 重烘图标？（10 分钟工作量）
 
 ---
@@ -283,9 +298,14 @@ cd /Users/zhangshijie/Documents/Project/Scribe
 # 看当前进度
 git log --oneline
 # 期望看到（HEAD 在最上面）：
+#   cc283b4 Phase 1.0: SwiftPM bridge to Scintilla 5.6.1 — link OK, runtime pending
+#   d331157 Refresh HANDOFF + ROADMAP after Phase 0.2/0.3
 #   aef0b34 Phase 0.3 (C): encoding + line-ending detection and conversion
 #   19f524c Phase 0.2: editor preferences, recent files, live cursor
 #   971f1fc Phase 0.1 baseline: SwiftUI shell with NSTextView bridge
+
+# 回到 Phase 0.3（撤掉 Scintilla 接通）
+git reset --hard aef0b34
 
 # 回到 Phase 0.2（撤掉编码检测）
 git reset --hard 19f524c
@@ -320,13 +340,14 @@ Phase 0.2/0.3 暂未截图。
 ## 11. 一句话总结
 
 ```
-Scribe 已从 0 长到 Phase 0.3 ——
+Scribe 已从 0 长到 Phase 1.0 ——
 有窗、有标签、有侧栏、有行号、有暗色、有 .app、有持久化偏好、
-有最近文件、有实时光标、有真正的编码检测（GBK/Big5/UTF-16/BOM 全见）、
-有行尾感知、有 15 个单测保住核心。
-就差一个真正的代码编辑器内核（Phase 1）。
+有最近文件、有实时光标、有真正的编码检测、有行尾感知、
+有 17 个单测保住核心、Scintilla 5.6.1 已经接进 SwiftPM target，
+Swift 端能 import，编译过、链接过，但还没在 GUI 上现身。
 
-下次开工先看本文件第 7 节，挑一条路走。
+下次开工先看本文件第 7 节"头号事项"——
+跑通 ScintillaProbeView，再把 CodeEditor 的 NSTextView 换掉。
 ```
 
 ---

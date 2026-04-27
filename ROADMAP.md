@@ -27,15 +27,20 @@
 - [x] `Workspace.reopen(doc:as:)` 含脏文档确认
 - [x] ScribeTests target，15 单测全绿
 
-## Phase 1 · 编辑器内核 (1 周, 待 ADR-003 决策)
+## Phase 1 · 编辑器内核（进行中，ADR-003 已选 ScintillaCocoa）
 
-**目标**：替换占位 TextEditor 为生产级编辑器。
+**目标**：替换占位 NSTextView 为生产级编辑器（Scintilla）。
 
-- [ ] 引入 ScintillaCocoa（Scintilla 官方 Cocoa 端口）
-- [ ] Swift `NSViewRepresentable` 包装 `ScintillaView`
-- [ ] 行号、代码折叠、缩进引导
-- [ ] 基础语法高亮（Lexer 选择）
-- [ ] 与 SwiftUI 状态绑定（光标、选区、修改标记）
+- [x] **1.0** SwiftPM 接通 Scintilla 5.6.1（commit `cc283b4`）
+  - Vendor/scintilla 拉取 + 添 module.modulemap + umbrella header
+  - Swift `import Scintilla` 编译 / 链接 / 模块解析全通
+  - 17/17 测试 + Scribe 启动不崩
+- [ ] **1.7** 把 ScintillaView 渲染到 GUI（runtime 验证）
+- [ ] **1.7** 替换 CodeEditor 内层（NSTextView → ScintillaView）
+  - 双向同步 doc.text、字号、Tab 宽、软 Tab、光标行/列、暗色
+  - 删除 LineNumberRuler（被 Scintilla 内置取代）
+- [ ] **1.7** 默认 lexer 设为 SCLEX_NULL，所有现有功能回归
+- [ ] **1.8** 接 Lexilla 5.4.4（语法高亮）+ cpp/swift/python lexer
 
 **验收**：能打开 ndd 的 9985 行 ccnotepad.cpp，丝滑滚动 + 高亮。
 
@@ -106,21 +111,14 @@ ndd 的看家本领。
 **代价**：每个模块需手工剥离 QString / QFile / QRegExp 等 Qt 依赖。  
 **首次落地**：Phase 0.3 的 `TextFormat.swift` 借鉴 ndd `Encode.cpp` 的 BOM→UTF-8→GBK 判定顺序，Swift 重写而非 import。GPL-3.0 由此锁定。
 
-### ADR-003 · 编辑器内核选择（待决策）
+### ADR-003 · 编辑器内核：Scintilla
 **日期**：2026-04-28  
-**状态**：⏸ 待魔尊拍板  
-**待选**：
-- **A1 · ScintillaCocoa**（推荐）  
-  · 官方 Cocoa 端口，作者本人有 Swift 集成示例 [`swiftee`](https://bitbucket.org/nyamatongwe/swiftee) 并向主线提交 modulemap 补丁  
-  · License HPND（GPL 兼容），tarball 1.8 MB  
-  · 自带 200+ lexer、折叠、缩进引导、大文件分页（vista 滚动）  
-  · 工程量：6-10h SwiftPM 接通（cTarget + cxx + ObjC++ shim + NSViewRepresentable）→ 4-8h 配 lexer + 主题  
-  · 风险：Swift 6 cxx interop 边角问题；ScintillaView.h 暴露 C++ 类型，需 ObjC 头 shim 隔离
+**状态**：✅ 决定——选 **A1 · ScintillaCocoa**，commit `cc283b4` 已落地最小骨架。  
+**实际工程量**（vs 预估）：
+- 接通 SwiftPM target：~1.5h（预估 6-10h，因 Scintilla 已自带 modulemap 减半）  
+- 关键坑：原 modulemap 是 framework-style 不能用，且 ScintillaView.h `#import "Scintilla.h"` 是同目录引用——必须把新 modulemap 放到 `include/`（与 Scintilla.h 同目录）才能让 clang 模块构建期间 resolve 成功。`cSettings.headerSearchPath` 仅作用于 target 自身编译，不影响模块解析。  
+- 落实剩余工作：~6-10h（GUI 嵌入 + CodeEditor 替换 + lexer 配置 + 暗色主题）
 
-- **A2 · NSTextView 自写高亮**  
-  · 留在纯 Swift 生态，无 C++ 依赖  
-  · 工程量大概率超 1 周——重新发明 lexer 框架；折叠 / 列编辑 / 大文件分页全部自己写  
-  · 风险：1 个人 fork 一份 VSCode 内核体量
-
-**决策需要的输入**：魔尊对"是否接受 C++/ObjC++ 桥层"的容忍度；以及对 Phase 4（文件比较）质量的优先级——后者高度受益于 Scintilla 的 marker / annotation API。  
-**临时约束**：在 ADR-003 解决前不动 `Vendor/Scintilla`，避免单向决策被回滚污染。
+**结果**：
+- Vendor 净增 ~2.3 MB / 135 文件（含 src/cocoa/include/bin/call/license/readme，跳过 doc/test/win32/gtk/qt/scripts 经 .gitignore）  
+- Patch 仅两个新增文件（不动 Scintilla 上游源码），升级流程见 `Vendor/README.md`。
