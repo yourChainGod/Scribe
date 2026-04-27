@@ -104,10 +104,12 @@ struct FindInFilesSidebar: View {
     }
 
     /// Replace All is enabled only when there's something to replace,
-    /// a search has produced files, and no other engine pass is running.
+    /// a search has produced files, at least one file is selected, and
+    /// no other engine pass is running.
     private var replaceDisabled: Bool {
         find.query.isEmpty
             || find.results.isEmpty
+            || find.selectedURLs.isEmpty
             || find.isReplacing
             || find.isSearching
     }
@@ -132,11 +134,22 @@ struct FindInFilesSidebar: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
         } else if find.totalMatches > 0 {
-            Text("\(find.totalMatches) results in \(find.filesWithMatches) files (\(find.filesScanned) scanned)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(find.totalMatches) results in \(find.filesWithMatches) files (\(find.filesScanned) scanned)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                // Phase 16: surface the selected slice when the user
+                // has deselected at least one file. Otherwise the
+                // summary stays a single line — no UI churn for the
+                // common "replace everything" case.
+                if !find.excludedURLs.isEmpty {
+                    Text("Replace will touch \(find.selectedMatchCount) match\(find.selectedMatchCount == 1 ? "" : "es") in \(find.selectedURLs.count) file\(find.selectedURLs.count == 1 ? "" : "s").")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
         } else if find.hasRun && !find.isSearching {
             Text("No results.")
                 .font(.caption)
@@ -157,7 +170,9 @@ struct FindInFilesSidebar: View {
                     FileGroup(
                         file: file,
                         expanded: find.expanded.contains(file.url) || find.expanded.isEmpty,
+                        isSelected: find.isSelected(file.url),
                         toggleExpanded: { toggle(file.url) },
+                        toggleSelection: { find.toggleSelection(file.url) },
                         onPick: { match in jump(to: file.url, line: match.lineNumber) }
                     )
                 }
@@ -192,15 +207,26 @@ struct FindInFilesSidebar: View {
     ///   3. The action is presented as destructive; default = Cancel.
     private func confirmReplace() {
         guard !replaceDisabled else { return }
-        let urls = find.results.map(\.url)
+        // Phase 16: only operate on the currently-selected files. The
+        // dirty-buffer warning + post-replace reload mirror the same
+        // filtered set so we don't claim to have touched files that
+        // were skipped.
+        let urls = find.selectedURLs
+        guard !urls.isEmpty else { return }
+        let selectedMatches = find.selectedMatchCount
         let dirtyOpen = workspace.documents.filter { doc in
             doc.isDirty && doc.url != nil
                 && urls.contains(where: { $0.standardizedFileURL == doc.url!.standardizedFileURL })
         }
 
         let alert = NSAlert()
-        alert.messageText = "Replace \(find.totalMatches) match\(find.totalMatches == 1 ? "" : "es") in \(find.filesWithMatches) file\(find.filesWithMatches == 1 ? "" : "s")?"
+        let totalFiles = find.results.count
+        let skipped = totalFiles - urls.count
+        alert.messageText = "Replace \(selectedMatches) match\(selectedMatches == 1 ? "" : "es") in \(urls.count) file\(urls.count == 1 ? "" : "s")?"
         var info = "“\(find.query)” → “\(find.replacement)”."
+        if skipped > 0 {
+            info += "\n\(skipped) file\(skipped == 1 ? "" : "s") deselected and will be skipped."
+        }
         if !dirtyOpen.isEmpty {
             let names = dirtyOpen.map(\.title).joined(separator: ", ")
             info += "\n\nUnsaved changes in \(names) will be lost."
@@ -208,7 +234,7 @@ struct FindInFilesSidebar: View {
         info += "\nThis cannot be undone from inside Scribe."
         alert.informativeText = info
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "Replace All")
+        alert.addButton(withTitle: "Replace")
         alert.addButton(withTitle: "Cancel")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
 
@@ -280,41 +306,67 @@ struct FindInFilesSidebar: View {
 private struct FileGroup: View {
     let file: FileResult
     let expanded: Bool
+    let isSelected: Bool
     let toggleExpanded: () -> Void
+    let toggleSelection: () -> Void
     let onPick: (LineMatch) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button(action: toggleExpanded) {
-                HStack(spacing: 4) {
-                    Image(systemName: expanded ? "chevron.down" : "chevron.right")
-                        .foregroundStyle(.secondary)
-                        .font(.system(size: 9, weight: .semibold))
-                        .frame(width: 10)
-                    Image(systemName: "doc.text")
-                        .foregroundStyle(.secondary)
-                        .font(.system(size: 11))
-                    Text(file.url.lastPathComponent)
-                        .font(.system(size: 12, weight: .semibold))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Text(file.url.deletingLastPathComponent().lastPathComponent)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                    Spacer()
-                    Text("\(file.matches.count)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(Capsule().fill(Color.secondary.opacity(0.15)))
+            HStack(spacing: 4) {
+                // Phase 16: per-file inclusion toggle. Sits at the
+                // start of the row so a quick eye-scan tells you which
+                // files Replace All will touch. Click is independent
+                // of the disclosure chevron so users can deselect a
+                // collapsed file without expanding it first.
+                Toggle(isOn: Binding(
+                    get: { isSelected },
+                    set: { _ in toggleSelection() }
+                )) { EmptyView() }
+                .toggleStyle(.checkbox)
+                .help(isSelected
+                      ? "Include in Replace All"
+                      : "Skip during Replace All")
+                .accessibilityLabel(isSelected
+                                    ? "Selected for replace: \(file.url.lastPathComponent)"
+                                    : "Excluded from replace: \(file.url.lastPathComponent)")
+
+                // Disclosure chevron + filename make up the rest of
+                // the row; tapping anywhere here toggles expansion.
+                Button(action: toggleExpanded) {
+                    HStack(spacing: 4) {
+                        Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                            .foregroundStyle(.secondary)
+                            .font(.system(size: 9, weight: .semibold))
+                            .frame(width: 10)
+                        Image(systemName: "doc.text")
+                            .foregroundStyle(.secondary)
+                            .font(.system(size: 11))
+                        Text(file.url.lastPathComponent)
+                            .font(.system(size: 12, weight: .semibold))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            // Greyed-out title gives a second visual
+                            // cue that this file won't be touched.
+                            .foregroundStyle(isSelected ? .primary : .secondary)
+                        Text(file.url.deletingLastPathComponent().lastPathComponent)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                        Spacer()
+                        Text("\(file.matches.count)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(Color.secondary.opacity(0.15)))
+                    }
+                    .contentShape(Rectangle())
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
 
             if expanded {
                 ForEach(file.matches) { match in

@@ -135,6 +135,52 @@ struct ScribeApp: App {
                             )
                         }
                     }
+                    // Phase 16 verification hook: run Find-in-Files
+                    // against the seeded folder. Lets the screenshot
+                    // workflow exercise the result tree without
+                    // depending on flaky keystroke synthesis through
+                    // the borderless Find sidebar.
+                    if let q = ProcessInfo.processInfo.environment["SCRIBE_TEST_FIND_QUERY"],
+                       !q.isEmpty {
+                        // folderRoot is opened by SCRIBE_AUTO_FOLDER in
+                        // ScribeApp.init's 0.05 s delay, so we resolve
+                        // the root inside the closure rather than at
+                        // onAppear time when it's still nil.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                            guard let root = workspace.folderRoot?.url else { return }
+                            workspace.sidebarMode = .search
+                            workspace.sidebarVisible = true
+                            findInFiles.query = q
+                            let opts = FindInFilesOptions(
+                                query: q,
+                                matchCase: false,
+                                wholeWord: false,
+                                regex: false,
+                                includeGlobs: [],
+                                excludeGlobs: []
+                            )
+                            findInFilesEngine.search(options: opts,
+                                                     root: root,
+                                                     into: findInFiles)
+                            // Optional: SCRIBE_TEST_FIND_DESELECT is a
+                            // comma-separated list of filenames whose
+                            // checkbox should be unticked once results
+                            // arrive. Lets the screenshot script
+                            // demonstrate the partial-replace summary
+                            // without simulating clicks on a checkbox.
+                            if let deselect = ProcessInfo.processInfo.environment["SCRIBE_TEST_FIND_DESELECT"],
+                               !deselect.isEmpty {
+                                let names = deselect.split(separator: ",")
+                                    .map { String($0).trimmingCharacters(in: .whitespaces) }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                                    for r in findInFiles.results
+                                        where names.contains(r.url.lastPathComponent) {
+                                        findInFiles.toggleSelection(r.url)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 .onChange(of: workspace.documents.map(\.id)) { _, _ in
                     CommandRegistration.refresh(registry: commands, workspace: workspace, prefs: prefs)

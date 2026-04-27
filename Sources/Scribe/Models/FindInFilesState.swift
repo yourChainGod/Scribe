@@ -67,6 +67,52 @@ final class FindInFilesState: ObservableObject {
     /// users can collapse a noisy file from the disclosure header.
     @Published var expanded: Set<URL> = []
 
+    /// Phase 16 — files the user has explicitly opted OUT of replace.
+    /// Default is "everything is selected": empty set ⇒ Replace acts on
+    /// every result. Storing the *negation* keeps a fresh search from
+    /// silently leaving every result unselected — newly-discovered
+    /// files are included by default, which matches what users expect
+    /// from the Code/Sublime equivalents.
+    @Published var excludedURLs: Set<URL> = []
+
+    /// True if `url` is currently included in a Replace All pass.
+    func isSelected(_ url: URL) -> Bool {
+        !excludedURLs.contains(url)
+    }
+
+    /// Toggle a single file's inclusion.
+    func toggleSelection(_ url: URL) {
+        if excludedURLs.contains(url) {
+            excludedURLs.remove(url)
+        } else {
+            excludedURLs.insert(url)
+        }
+    }
+
+    /// Mark every current result as selected.
+    func selectAll() {
+        excludedURLs = []
+    }
+
+    /// Mark every current result as deselected.
+    func deselectAll() {
+        excludedURLs = Set(results.map(\.url))
+    }
+
+    /// URLs that will actually be touched by a Replace All right now.
+    /// Drops the order from `results` so callers don't have to.
+    var selectedURLs: [URL] {
+        results.map(\.url).filter { !excludedURLs.contains($0) }
+    }
+
+    /// Aggregate match count across the currently-selected files only.
+    /// Drives the "Replace N matches in M files" hint.
+    var selectedMatchCount: Int {
+        results.reduce(0) {
+            excludedURLs.contains($1.url) ? $0 : $0 + $1.matches.count
+        }
+    }
+
     /// Set by the engine while it streams results in. The state object
     /// just owns the storage so the engine can be a plain actor.
     func update(results: [FileResult],
@@ -77,6 +123,14 @@ final class FindInFilesState: ObservableObject {
         self.totalMatches = totalMatches
         self.filesScanned = filesScanned
         self.filesWithMatches = filesWithMatches
+        // A fresh result set invalidates the previous selection. Drop
+        // any excluded URLs that aren't represented in the new tree
+        // so an unrelated file from a prior search doesn't quietly
+        // "re-include itself" if it shows up again later.
+        if !excludedURLs.isEmpty {
+            let newURLs = Set(results.map(\.url))
+            excludedURLs.formIntersection(newURLs)
+        }
     }
 
     func setSearching(_ value: Bool) {
@@ -97,5 +151,6 @@ final class FindInFilesState: ObservableObject {
         filesWithMatches = 0
         error = nil
         lastReplaceSummary = nil
+        excludedURLs = []
     }
 }
