@@ -136,6 +136,58 @@ final class DiffEngineTests: XCTestCase {
         XCTAssertEqual(r.mapRightToLeft(99), r.leftLines.count)
     }
 
+    // MARK: - Word-level diff (Phase 5b-2)
+
+    func test_wordDiff_emptyForEqualText() {
+        let wd = DiffEngine.wordDiff(left: "hello world", right: "hello world")
+        XCTAssertTrue(wd.leftAddedRanges.isEmpty)
+        XCTAssertTrue(wd.rightAddedRanges.isEmpty)
+    }
+
+    func test_wordDiff_isolatesChangedToken() {
+        // "hello world" vs "hello brave world" — single insertion of
+        // "brave" + a separating space. Equality on either side of the
+        // change should remain untouched.
+        let wd = DiffEngine.wordDiff(left: "hello world",
+                                     right: "hello brave world")
+        XCTAssertTrue(wd.leftAddedRanges.isEmpty)
+        XCTAssertEqual(wd.rightAddedRanges.count, 1)
+        let r = wd.rightAddedRanges[0]
+        let added = String(("hello brave world" as NSString)
+                            .substring(with: NSRange(location: r.lowerBound,
+                                                     length: r.upperBound - r.lowerBound)))
+        XCTAssertTrue(added.contains("brave"))
+    }
+
+    func test_wordDiff_replacementAffectsBothSides() {
+        let wd = DiffEngine.wordDiff(left: "let x = 1",
+                                     right: "let x = 2")
+        XCTAssertEqual(wd.leftAddedRanges.count, 1)
+        XCTAssertEqual(wd.rightAddedRanges.count, 1)
+        // The change is the single digit '1' / '2'.
+        XCTAssertEqual(wd.leftAddedRanges[0].count, 1)
+        XCTAssertEqual(wd.rightAddedRanges[0].count, 1)
+    }
+
+    func test_wordDiff_keepsPunctuationAsItsOwnToken() {
+        // Removing a trailing semicolon should highlight ONLY the ';'.
+        let wd = DiffEngine.wordDiff(left: "return;", right: "return")
+        XCTAssertEqual(wd.leftAddedRanges.count, 1)
+        XCTAssertEqual(wd.leftAddedRanges[0], 6..<7) // index of ';'
+        XCTAssertTrue(wd.rightAddedRanges.isEmpty)
+    }
+
+    func test_wordDiff_forReplaceOpOnDiffResult() {
+        let r = DiffEngine.compare("alpha\nlet x = 1;\nbeta",
+                                   "alpha\nlet x = 2;\nbeta")
+        let replaceOp = r.ops.first { $0.kind == .replace }
+        XCTAssertNotNil(replaceOp)
+        let wd = r.wordDiff(for: replaceOp!)
+        XCTAssertNotNil(wd)
+        XCTAssertEqual(wd!.leftAddedRanges.count, 1)
+        XCTAssertEqual(wd!.rightAddedRanges.count, 1)
+    }
+
     func test_statsCountAddedRemovedChanged() {
         let r = DiffEngine.compare(
             "alpha\nbeta\ngamma\ndelta",

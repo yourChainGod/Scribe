@@ -72,6 +72,25 @@ public struct DiffResult: Sendable {
         return rightLines.count
     }
 
+    /// UTF-16 ranges within a single line where the *added* / *removed*
+    /// tokens sit. Computed on demand by `wordDiff(for:)` so we don't
+    /// pay the cost for hunks the user hasn't scrolled to.
+    public struct WordDiff: Sendable {
+        public let leftAddedRanges: [Range<Int>]
+        public let rightAddedRanges: [Range<Int>]
+    }
+
+    /// Computes a word-level diff for a `.replace` op by tokenising both
+    /// sides and running the same Myers algorithm one level down. Returns
+    /// nil for non-replace ops (insert / delete don't need it; the whole
+    /// run is the change).
+    public func wordDiff(for op: DiffOp) -> WordDiff? {
+        guard op.kind == .replace else { return nil }
+        let leftBlock = leftLines[op.leftRange].joined(separator: "\n")
+        let rightBlock = rightLines[op.rightRange].joined(separator: "\n")
+        return DiffEngine.wordDiff(left: leftBlock, right: rightBlock)
+    }
+
     /// Mirror of `mapLeftToRight` for the other direction.
     public func mapRightToLeft(_ rightLine: Int) -> Int {
         for op in ops {
@@ -97,6 +116,93 @@ public enum DiffEngine {
         let rightLines = splitLines(rightText)
         let ops = diff(left: leftLines, right: rightLines)
         return DiffResult(leftLines: leftLines, rightLines: rightLines, ops: ops)
+    }
+
+    // MARK: - Word-level diff
+
+    /// One token + the UTF-16 range it occupies in the original string.
+    private struct Token: Equatable {
+        let text: String
+        let range: Range<Int>
+        static func == (lhs: Token, rhs: Token) -> Bool { lhs.text == rhs.text }
+    }
+
+    /// Tokeniser: runs of [letter | number | _] are one token; every
+    /// other character (whitespace, punctuation, brackets) is its own
+    /// single-character token. Matches GitHub-style word diff splitting.
+    private static func tokenize(_ s: String) -> [Token] {
+        var out: [Token] = []
+        var current = ""
+        var currentStart = 0
+        var utf16Index = 0
+        let scalars = s.unicodeScalars
+        // We work in UTF-16 units because that's what Scintilla wants
+        // for its indicator ranges.
+        for scalar in scalars {
+            let isWord = CharacterSet.alphanumerics.contains(scalar) || scalar == "_"
+            let scalarUTF16 = Int(scalar.utf16.count)
+            if isWord {
+                if current.isEmpty { currentStart = utf16Index }
+                current.unicodeScalars.append(scalar)
+            } else {
+                if !current.isEmpty {
+                    out.append(Token(text: current,
+                                     range: currentStart..<utf16Index))
+                    current = ""
+                }
+                let single = String(scalar)
+                out.append(Token(text: single,
+                                 range: utf16Index..<(utf16Index + scalarUTF16)))
+            }
+            utf16Index += scalarUTF16
+        }
+        if !current.isEmpty {
+            out.append(Token(text: current,
+                             range: currentStart..<utf16Index))
+        }
+        return out
+    }
+
+    /// Word-level diff between two blocks of text. Returns the UTF-16
+    /// ranges (within each block) that are different.
+    static func wordDiff(left: String, right: String) -> DiffResult.WordDiff {
+        let lefts = tokenize(left)
+        let rights = tokenize(right)
+        let ops = diff(left: lefts.map(\.text), right: rights.map(\.text))
+        var leftRanges: [Range<Int>] = []
+        var rightRanges: [Range<Int>] = []
+        for op in ops {
+            switch op.kind {
+            case .equal:
+                continue
+            case .delete:
+                appendMerged(&leftRanges, with: spannedRange(of: lefts, op.leftRange))
+            case .insert:
+                appendMerged(&rightRanges, with: spannedRange(of: rights, op.rightRange))
+            case .replace:
+                appendMerged(&leftRanges, with: spannedRange(of: lefts, op.leftRange))
+                appendMerged(&rightRanges, with: spannedRange(of: rights, op.rightRange))
+            }
+        }
+        return DiffResult.WordDiff(leftAddedRanges: leftRanges,
+                                   rightAddedRanges: rightRanges)
+    }
+
+    /// UTF-16 range covering a contiguous slice of tokens.
+    private static func spannedRange(of tokens: [Token], _ slice: Range<Int>) -> Range<Int>? {
+        guard !slice.isEmpty else { return nil }
+        let first = tokens[slice.lowerBound]
+        let last  = tokens[slice.upperBound - 1]
+        return first.range.lowerBound..<last.range.upperBound
+    }
+
+    private static func appendMerged(_ list: inout [Range<Int>], with range: Range<Int>?) {
+        guard let range else { return }
+        if let last = list.last, last.upperBound == range.lowerBound {
+            list[list.count - 1] = last.lowerBound..<range.upperBound
+        } else {
+            list.append(range)
+        }
     }
 
     // MARK: - Line splitting

@@ -46,6 +46,7 @@ struct DiffEditorPane: NSViewRepresentable {
         }
         configureMarkers(in: view)
         configureMargins(in: view)
+        configureIndicators(in: view)
         configureTheme(in: view)
         // setString must happen BEFORE we lock the buffer read-only —
         // SCI_SETREADONLY rejects every internal SCI_INSERTTEXT,
@@ -53,6 +54,7 @@ struct DiffEditorPane: NSViewRepresentable {
         applyText(text, to: view)
         view.setEditable(false)
         applyOps(ops, to: view)
+        applyWordDiff(in: view)
         return view
     }
 
@@ -65,6 +67,7 @@ struct DiffEditorPane: NSViewRepresentable {
             view.setEditable(false)
         }
         applyOps(ops, to: view)
+        applyWordDiff(in: view)
         scrollToHunk(in: view)
     }
 
@@ -78,6 +81,39 @@ struct DiffEditorPane: NSViewRepresentable {
         view.message(SCI_DIFF.SETMARGINTYPEN, wParam: 1, lParam: SC_DIFF.MARGIN_SYMBOL)
         view.message(SCI_DIFF.SETMARGINWIDTHN, wParam: 1, lParam: 14)
         view.message(SCI_DIFF.SETMARGINMASKN,  wParam: 1, lParam: SC_DIFF.MARK_MASK_DIFF)
+    }
+
+    /// Set up two indicators for word-level diff.
+    /// 1 = removed-word background (red), 2 = added-word background (green).
+    /// INDIC_STRAIGHTBOX with ~110/255 alpha mirrors GitHub's palette and
+    /// keeps the underlying glyph legible.
+    private func configureIndicators(in view: ScintillaView) {
+        defineIndicator(view,
+                        num: SC_DIFF.IND_REMOVED,
+                        rgb: 0xE74C3C,
+                        alpha: 110)
+        defineIndicator(view,
+                        num: SC_DIFF.IND_ADDED,
+                        rgb: 0x27AE60,
+                        alpha: 110)
+    }
+
+    private func defineIndicator(_ view: ScintillaView,
+                                 num: Int,
+                                 rgb: Int,
+                                 alpha: Int) {
+        view.message(SCI_DIFF.INDICSETSTYLE,
+                     wParam: UInt(num),
+                     lParam: SC_DIFF.INDIC_STRAIGHTBOX)
+        view.message(SCI_DIFF.INDICSETFORE,
+                     wParam: UInt(num),
+                     lParam: bgrColor(rgb))
+        view.message(SCI_DIFF.INDICSETALPHA,
+                     wParam: UInt(num),
+                     lParam: alpha)
+        view.message(SCI_DIFF.INDICSETOUTLINEALPHA,
+                     wParam: UInt(num),
+                     lParam: 255)
     }
 
     private func configureMarkers(in view: ScintillaView) {
@@ -153,6 +189,70 @@ struct DiffEditorPane: NSViewRepresentable {
         }
     }
 
+    /// Walk every `.replace` op, run a word-level diff on the relevant
+    /// block of text, and paint indicators 1/2 (red for removed, green
+    /// for added) over the actual changed token byte ranges. UTF-16 ↔
+    /// UTF-8 conversion is needed because Scintilla addresses positions
+    /// in bytes, while our DiffEngine emits UTF-16 offsets.
+    private func applyWordDiff(in view: ScintillaView) {
+        let isLeft = side == .left
+        let myIndicator = isLeft ? SC_DIFF.IND_REMOVED : SC_DIFF.IND_ADDED
+        // SCI_SETREADONLY rejects INDICATORFILLRANGE / CLEARRANGE just
+        // like it rejects text edits. Toggle the lock for the duration
+        // of this paint pass.
+        view.setEditable(true)
+        defer { view.setEditable(false) }
+
+        // Wipe any previous fills so updates don't accumulate.
+        view.message(SCI_DIFF.SETINDICATORCURRENT,
+                     wParam: UInt(myIndicator))
+        let docLen = Int(view.message(SCI_DIFF.GETLENGTH))
+        view.message(SCI_DIFF.INDICATORCLEARRANGE,
+                     wParam: 0, lParam: docLen)
+
+        // Word diff needs both sides' text. Read the sibling pane's text
+        // off the session — bail if the session has gone away.
+        guard let session, session.result != nil else { return }
+        let myLines    = DiffEngine.splitLines(text)
+        let otherText  = isLeft ? session.rightText : session.leftText
+        let otherLines = DiffEngine.splitLines(otherText)
+
+        for op in ops where op.kind == .replace {
+            let myRange    = isLeft ? op.leftRange  : op.rightRange
+            let otherRange = isLeft ? op.rightRange : op.leftRange
+            let myBlock    = myLines[myRange].joined(separator: "\n")
+            let otherBlock = otherLines[otherRange].joined(separator: "\n")
+            // Always invoke wordDiff with the consistent (left, right)
+            // ordering it expects — leftAddedRanges is the LHS-changed
+            // set, regardless of which pane we're rendering.
+            let wd = isLeft
+                ? DiffEngine.wordDiff(left: myBlock, right: otherBlock)
+                : DiffEngine.wordDiff(left: otherBlock, right: myBlock)
+            let ranges16 = isLeft ? wd.leftAddedRanges : wd.rightAddedRanges
+            let blockStart = Int(view.message(SCI_DIFF.POSITIONFROMLINE,
+                                              wParam: UInt(myRange.lowerBound)))
+            for r in ranges16 {
+                let startByte = blockStart + utf8Offset(in: myBlock, utf16: r.lowerBound)
+                let endByte   = blockStart + utf8Offset(in: myBlock, utf16: r.upperBound)
+                guard endByte > startByte else { continue }
+                view.message(SCI_DIFF.INDICATORFILLRANGE,
+                             wParam: UInt(startByte),
+                             lParam: endByte - startByte)
+            }
+        }
+    }
+
+    /// UTF-16 index in `s` ⇒ byte offset (UTF-8). NSString-based so it
+    /// handles surrogate pairs correctly without the bridging cost of
+    /// full-string UTF-8 conversion on every call.
+    private func utf8Offset(in s: String, utf16: Int) -> Int {
+        let ns = s as NSString
+        let clamped = max(0, min(utf16, ns.length))
+        if clamped == 0 { return 0 }
+        return (ns.substring(to: clamped) as NSString)
+            .lengthOfBytes(using: String.Encoding.utf8.rawValue)
+    }
+
     private func scrollToHunk(in view: ScintillaView) {
         let nonEqual = ops.filter { $0.kind != .equal }
         guard !nonEqual.isEmpty else { return }
@@ -223,8 +323,10 @@ struct DiffEditorPane: NSViewRepresentable {
 
 private enum SCI_DIFF {
     static let GETLINECOUNT:      UInt32 = 2154
+    static let GETLENGTH:         UInt32 = 2006
     static let GETCURRENTPOS:     UInt32 = 2008
     static let LINEFROMPOSITION:  UInt32 = 2166
+    static let POSITIONFROMLINE:  UInt32 = 2167
     static let GETFIRSTVISIBLELINE: UInt32 = 2152
     static let SETMARGINTYPEN:    UInt32 = 2240
     static let SETMARGINWIDTHN:   UInt32 = 2242
@@ -239,6 +341,15 @@ private enum SCI_DIFF {
     static let STYLESETBACK:      UInt32 = 2052
     static let GOTOLINE:          UInt32 = 2024
     static let SCROLLCARET:       UInt32 = 2169
+    // Indicators (Phase 5b-2 word-level diff)
+    static let INDICSETSTYLE:     UInt32 = 2080
+    static let INDICSETFORE:      UInt32 = 2082
+    static let INDICSETALPHA:     UInt32 = 2523
+    static let INDICSETOUTLINEALPHA: UInt32 = 2558
+    static let INDICSETUNDER:     UInt32 = 2510
+    static let SETINDICATORCURRENT: UInt32 = 2500
+    static let INDICATORFILLRANGE:  UInt32 = 2504
+    static let INDICATORCLEARRANGE: UInt32 = 2505
 }
 
 /// Bit flags for SCNotification.updated.
@@ -263,6 +374,16 @@ private enum SC_DIFF {
     /// Bitmask covering every marker we use; passed to SETMARGINMASKN
     /// so margin 1 only displays our four markers.
     static let MARK_MASK_DIFF: Int = (1 << MARK_ADDED) | (1 << MARK_REMOVED) | (1 << MARK_CHANGED) | (1 << MARK_PLACEHOLDER)
+    /// Indicator numbers (Phase 5b-2 word-level diff).
+    /// Indicator 0 is reserved for find-match highlight in the editor;
+    /// the diff panes don't share that, but staying clear of it keeps
+    /// future shared infrastructure simple.
+    static let IND_REMOVED: Int = 1
+    static let IND_ADDED:   Int = 2
+    /// Indicator styles.
+    static let INDIC_FULLBOX:     Int = 16
+    static let INDIC_ROUNDBOX:    Int = 7
+    static let INDIC_STRAIGHTBOX: Int = 8
 }
 
 private enum SCN_DIFF {
