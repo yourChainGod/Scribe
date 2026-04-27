@@ -1,0 +1,14 @@
+// Added by Scribe on 2026-04-28 (not part of upstream Scintilla).
+// SwiftPM serves Scintilla as a static-library target, so the original
+// `framework module` declaration in cocoa/Scintilla/module.modulemap does
+// not apply. Putting our own modulemap here lets `Scintilla.h` resolve via
+// same-directory lookup when ScintillaView.h imports it.
+//
+// Removal: delete this file plus ScribeScintillaUmbrella.h to revert.
+module Scintilla {
+  umbrella header "ScribeScintillaUmbrella.h"
+  // ILexer.h is C++-only — not reachable via this umbrella so no exclude
+  // needed.
+  export *
+  module * { export * }
+}
