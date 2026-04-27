@@ -30,6 +30,10 @@ struct DiffEditorPane: NSViewRepresentable {
     /// Closure called when the user clicks a line on this pane — the
     /// container uses it to keep the two panes in sync.
     let onLineClicked: (Int) -> Void
+    /// Phase 15 — read the user-selected theme. The host (DiffView)
+    /// passes the live EditorPreferences so the diff pane re-themes
+    /// alongside the editor when the user switches palettes.
+    @EnvironmentObject var prefs: EditorPreferences
 
     func makeCoordinator() -> Coordinator {
         Coordinator(side: side, session: session, onLineClicked: onLineClicked)
@@ -60,6 +64,11 @@ struct DiffEditorPane: NSViewRepresentable {
 
     func updateNSView(_ view: ScintillaView, context: Context) {
         context.coordinator.onLineClicked = onLineClicked
+        // Phase 15: re-apply theme on every update so a live theme
+        // switch picks up immediately. Cheap — STYLECLEARALL touches
+        // a dozen styles tops.
+        configureMarkers(in: view)
+        configureTheme(in: view)
         if view.string() != text {
             // Same caveat as makeNSView — toggle off → write → toggle back.
             view.setEditable(true)
@@ -117,7 +126,7 @@ struct DiffEditorPane: NSViewRepresentable {
     }
 
     private func configureMarkers(in view: ScintillaView) {
-        let theme = Theme.resolved(for: NSApp.effectiveAppearance)
+        let theme = prefs.themeID.resolve(appearance: NSApp.effectiveAppearance)
         // Marker number → glyph + colour. Empty side uses opaque dimmed
         // background so the placeholder lines are visible but muted.
         defineMarker(view, num: SC_DIFF.MARK_ADDED,    fore: 0x2ECC71, back: 0xD5F5E3)
@@ -138,7 +147,7 @@ struct DiffEditorPane: NSViewRepresentable {
     }
 
     private func configureTheme(in view: ScintillaView) {
-        let theme = Theme.resolved(for: NSApp.effectiveAppearance)
+        let theme = prefs.themeID.resolve(appearance: NSApp.effectiveAppearance)
         view.message(SCI_DIFF.STYLESETBACK, wParam: UInt(SC_DIFF.STYLE_DEFAULT), lParam: bgrColor(theme.background))
         view.message(SCI_DIFF.STYLESETFORE, wParam: UInt(SC_DIFF.STYLE_DEFAULT), lParam: bgrColor(theme.foreground))
         view.message(SCI_DIFF.STYLECLEARALL)

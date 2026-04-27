@@ -305,7 +305,10 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         }
 
         func applyTheme(to view: ScintillaView) {
-            let theme = Theme.resolved(for: NSApp.effectiveAppearance)
+            // Phase 15: prefer the user-chosen theme. `.system` falls
+            // back to the original "follow NSAppearance" behaviour, so
+            // existing default-theme users see no change.
+            let theme = prefs.themeID.resolve(appearance: NSApp.effectiveAppearance)
 
             // STYLE_DEFAULT first — STYLECLEARALL copies it to every other style.
             view.message(SCI.STYLESETBACK, wParam: UInt(SC.STYLE_DEFAULT), lParam: sciColor(theme.background))

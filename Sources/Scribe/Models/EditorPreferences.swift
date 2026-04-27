@@ -26,6 +26,7 @@ final class EditorPreferences: ObservableObject {
         static let softTabs = "editor.softTabs"
         static let recentFiles = "editor.recentFiles"
         static let recentFolders = "editor.recentFolders"
+        static let themeID = "editor.themeID"
     }
 
     private let defaults: UserDefaults
@@ -56,6 +57,13 @@ final class EditorPreferences: ObservableObject {
         didSet { defaults.set(recentFolders.map(\.path), forKey: Key.recentFolders) }
     }
 
+    /// Phase 15 — currently active editor theme. `.system` keeps the
+    /// pre-Phase-15 behaviour (follow NSAppearance); explicit cases
+    /// pin a specific palette regardless of the OS-wide setting.
+    @Published var themeID: ThemeID {
+        didSet { defaults.set(themeID.rawValue, forKey: Key.themeID) }
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
 
@@ -76,6 +84,12 @@ final class EditorPreferences: ObservableObject {
         let folderPaths = defaults.stringArray(forKey: Key.recentFolders) ?? []
         self.recentFolders = folderPaths
             .map { URL(fileURLWithPath: $0).standardizedFileURL }
+
+        // Theme falls back to .system if the persisted value is
+        // missing or no longer maps to a known case (e.g. user
+        // downgraded after a future commit removed a theme).
+        let themeRaw = defaults.string(forKey: Key.themeID) ?? ""
+        self.themeID = ThemeID(rawValue: themeRaw) ?? .system
     }
 
     // MARK: - Font

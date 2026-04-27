@@ -115,6 +115,14 @@ struct ScribeApp: App {
                         fileIndex.rebuild(at: root)
                     }
                     outline.update(for: workspace.current)
+                    // Phase 15 verification hook: SCRIBE_TEST_THEME pins
+                    // the editor to the named theme at startup so the
+                    // screenshot script can grab a single palette
+                    // without driving the View > Editor Theme menu.
+                    if let themeRaw = ProcessInfo.processInfo.environment["SCRIBE_TEST_THEME"],
+                       let id = ThemeID(rawValue: themeRaw) {
+                        prefs.themeID = id
+                    }
                     // Phase 11 verification hook: SCRIBE_TEST_PALETTE_QUERY
                     // pre-fills ⌘P with the given query so we can take a
                     // screenshot of the symbol-mode UI without
@@ -253,6 +261,27 @@ struct ScribeApp: App {
                     .keyboardShortcut("-", modifiers: .command)
                 Button("Actual Size") { prefs.resetFontSize() }
                     .keyboardShortcut("0", modifiers: .command)
+
+                // Phase 15 — theme picker. Sub-menu so the View root
+                // doesn't grow long; checkmark on the active item
+                // works because the prefs object is observed by the
+                // host scene.
+                Menu("Editor Theme") {
+                    ForEach(ThemeID.allCases) { id in
+                        Button {
+                            prefs.themeID = id
+                        } label: {
+                            // Leading checkmark by way of label —
+                            // SwiftUI's Menu doesn't natively expose a
+                            // "checked" state on plain Buttons.
+                            if prefs.themeID == id {
+                                Label(id.displayName, systemImage: "checkmark")
+                            } else {
+                                Text(id.displayName)
+                            }
+                        }
+                    }
+                }
             }
             CommandMenu("Go") {
                 Button("Quick Open File…") {
