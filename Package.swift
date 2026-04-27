@@ -4,7 +4,7 @@ import PackageDescription
 let package = Package(
     name: "Scribe",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v14)   // bumped from v13 in Phase 3 for SwiftUI onKeyPress + onChange(of:_:_)
     ],
     products: [
         .executable(name: "Scribe", targets: ["Scribe"])

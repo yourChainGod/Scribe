@@ -10,6 +10,7 @@ import AppKit
 struct ScribeApp: App {
     @StateObject private var prefs: EditorPreferences
     @StateObject private var workspace: Workspace
+    @StateObject private var commands = CommandRegistry()
 
     init() {
         // SwiftPM-built executables default to background activation policy.
@@ -58,7 +59,24 @@ struct ScribeApp: App {
             MainWindow()
                 .environmentObject(workspace)
                 .environmentObject(prefs)
+                .environmentObject(commands)
                 .frame(minWidth: 900, minHeight: 600)
+                .onAppear {
+                    CommandRegistration.refresh(
+                        registry: commands,
+                        workspace: workspace,
+                        prefs: prefs
+                    )
+                }
+                .onChange(of: workspace.documents.map(\.id)) { _, _ in
+                    CommandRegistration.refresh(registry: commands, workspace: workspace, prefs: prefs)
+                }
+                .onChange(of: workspace.selectedID) { _, _ in
+                    CommandRegistration.refresh(registry: commands, workspace: workspace, prefs: prefs)
+                }
+                .onChange(of: prefs.softTabs) { _, _ in
+                    CommandRegistration.refresh(registry: commands, workspace: workspace, prefs: prefs)
+                }
                 .onOpenURL { url in
                     workspace.openFile(at: url)
                 }
@@ -87,6 +105,12 @@ struct ScribeApp: App {
                     .keyboardShortcut("-", modifiers: .command)
                 Button("Actual Size") { prefs.resetFontSize() }
                     .keyboardShortcut("0", modifiers: .command)
+            }
+            CommandMenu("Go") {
+                Button("Command Palette…") {
+                    PaletteWindowController.shared.toggle(registry: commands)
+                }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
             }
         }
 
