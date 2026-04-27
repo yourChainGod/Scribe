@@ -35,11 +35,13 @@
   - Vendor/scintilla 拉取 + 添 module.modulemap + umbrella header
   - Swift `import Scintilla` 编译 / 链接 / 模块解析全通
   - 17/17 测试 + Scribe 启动不崩
-- [ ] **1.7** 把 ScintillaView 渲染到 GUI（runtime 验证）
-- [ ] **1.7** 替换 CodeEditor 内层（NSTextView → ScintillaView）
-  - 双向同步 doc.text、字号、Tab 宽、软 Tab、光标行/列、暗色
-  - 删除 LineNumberRuler（被 Scintilla 内置取代）
-- [ ] **1.7** 默认 lexer 设为 SCLEX_NULL，所有现有功能回归
+- [x] **1.7a** ScintillaView 在 GUI 真实渲染（commit `2a184a9`）
+  - 新增 `ScintillaCodeEditor` SwiftUI 桥（doc → view 单向）
+  - `SCRIBE_USE_SCINTILLA=1` env hatch 切换新旧桥
+  - `SCRIBE_AUTO_OPEN` env var 绕过 SwiftUI WindowGroup 不接 argv 的坑（HANDOFF 5.7）
+  - 截图实锤：Swift + 中日韩注释正常上屏
+- [ ] **1.7b** view → doc 反向同步 + 软 Tab + 行号 margin + 暗色（HANDOFF 第 7 节 5 步）
+- [ ] **1.7c** 删 env hatch + 旧 CodeEditor + 调试探针窗口
 - [ ] **1.8** 接 Lexilla 5.4.4（语法高亮）+ cpp/swift/python lexer
 
 **验收**：能打开 ndd 的 9985 行 ccnotepad.cpp，丝滑滚动 + 高亮。

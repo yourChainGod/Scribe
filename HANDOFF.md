@@ -1,12 +1,12 @@
 # Scribe 交接文档
 
-> **Last session**: 2026-04-28（接力第二夜，Phase 1 起手）
-> **Phase reached**: 1.0 (SwiftPM 已接通 Scintilla 5.6.1，runtime 待下次)
-> **Status**: ✅ 可双击运行 · ✅ 编码/行尾全支持 · ✅ Scintilla link OK · 🔜 下次接 ScintillaView 进 CodeEditor
+> **Last session**: 2026-04-28（接力第二夜，Phase 1.7a 落地）
+> **Phase reached**: 1.7a (ScintillaView 在 GUI 真实渲染，单向数据流通)
+> **Status**: ✅ 可双击运行 · ✅ 编码/行尾全支持 · ✅ Scintilla 真上屏（SCRIBE_USE_SCINTILLA=1 + SCRIBE_AUTO_OPEN）· 🔜 下次反向同步 + 主题/光标/软 Tab
 
 ## 0. 这一夜的接力记录（2026-04-28）
 
-五件事一气干完：
+六件事一气干完：
 
 | 阶段 | 提交 | 内容 |
 |------|------|------|
@@ -15,6 +15,8 @@
 | **C · Phase 0.3 编码与行尾** | `aef0b34` | 新增 `TextFormat.swift` 启发式检测器（BOM → 严格 UTF-8 → GB18030 → Big5 → Shift-JIS）· 状态栏编码/行尾改 Menu（`Reopen with…` / `Save with…`）· `Workspace.reopen(doc:as:)` · ScribeTests target + 15 个单测全绿 |
 | **文档** | `d331157` | HANDOFF + ROADMAP 全面刷新，加 ADR-003 |
 | **A · Phase 1.0 Scintilla 接通** | `cc283b4` | 拉 Scintilla 5.6.1 到 Vendor/ · 自添 `include/module.modulemap` + `ScribeScintillaUmbrella.h` · Package.swift 加 cxx17 target · `swift build` 全过 · `swift test` 17/17（含 2 个 bridge 测）· Scribe 启动不崩 · runtime GUI 嵌入留下次 |
+| **文档 2** | `7802d44` | HANDOFF + ROADMAP 记 Phase 1.0 进展，ADR-003 标记完结 |
+| **A · Phase 1.7a Scintilla 上屏** | `2a184a9` | 新增 `ScintillaCodeEditor.swift` SwiftUI 桥 · `EditorAreaView` 加 `SCRIBE_USE_SCINTILLA=1` 切换 · `ScribeApp` 加 `SCRIBE_AUTO_OPEN` env var（避开 SwiftUI WindowGroup 不接受 argv 的坑）· `Workspace.init(prefs:openInitialUntitled:)` 让调用方可选不开 Untitled · **screenshot 实锤**：Scintilla 渲染 Swift 代码 + 中文/韩文/日文注释 + 状态栏 299 chars |
 
 **License 锁定**：GPL-3.0。原因不可逆——ROADMAP ADR-002 要求 Phase 2+ 移植 ndd C++ 核心 (`Encode.cpp` / `CmpareMode.cpp` / HEX)，这些是 GPL-3.0，传染性使 Scribe 必须同 license。MIT/Apache 已无可能。
 
@@ -200,6 +202,32 @@ Swift 把 `"\r\n"` 当作**单个 Character**（扩展字形簇 grapheme cluster
 单独出现，CRLF 计数永远是 0。必须改用 `text.unicodeScalars` 才能拆开。
 单测 `testDetectCRLF` 锁住这个行为。
 
+### 5.7 为什么 Scribe 不能用 `swift run Scribe foo.txt`？
+
+SwiftUI 的 `WindowGroup` 在 SwiftPM unbundled 二进制下，**只要 argv 里有任何
+非选项位置参数，就会拒绝实例化主 NSWindow**——它把这视为 NSDocument 风格的
+"open document" 意图，等待一个永远不到的 NSDocumentController 事件。
+现象：进程活着、`@StateObject` 完整、`body` 求值正常，但 `NSApp.windows == []`。
+真相是 SwiftPM 出来的 binary 没注册 NSDocument 类型，那个事件就不会被派发。
+
+**workaround**（已落地于 `cc283b4` → `2a184a9`）：
+- `ScribeApp.init` **不读** `CommandLine.arguments`
+- 改用 `ProcessInfo.processInfo.environment["SCRIBE_AUTO_OPEN"]`（`:` 分隔）
+- 启动方式：`SCRIBE_AUTO_OPEN=/path/a:/path/b swift run Scribe`
+- 而且 `openFile` 必须 `DispatchQueue.main.async` 推迟一个 runloop——
+  在 `init` 里直接 mutate `@Published` 数组，会把 `NSWindow` 的创建一起拖死。
+
+如果以后做成 `.app` bundle，可以走标准 NSApplicationDelegate `application(_:open:)`
+路径，那时这个 hatch 可以删除。
+
+### 5.8 ScintillaView 启动时 `Wait cursor is invalid`
+
+ScintillaView `-init` 在 NSApp 还没"完全 ready"时调 `NSCursor.set` 触发
+警告 `Wait cursor is invalid. / Reverse arrow cursor is invalid.`。无害但
+噪音。**真正的副作用**：在 `xctest`（无 NSApp）环境下直接构造 ScintillaView
+会 SIGSEGV——这就是为什么 `ScintillaBridgeTests` 不构造 view，只测类型可达。
+GUI 模式下警告可忽略。
+
 ---
 
 ## 6. ndd 改动遗留状态
@@ -231,33 +259,52 @@ Swift 把 `"\r\n"` 当作**单个 Character**（扩展字形簇 grapheme cluster
 
 ## 7. 下一会话起手清单
 
-### 头号事项 · Phase 1.7 把 Scintilla 接进 CodeEditor
+### 头号事项 · Phase 1.7b 反向同步 + 完善桥
 
-Phase 1.0 已 commit (`cc283b4`)：编译期、链接期、模块解析全通，Swift 端 `import Scintilla` 可见 `ScintillaView` 类型。但**还没在真实 GUI 里见过它**。下次会话第一件事就是**真正把 ScintillaView 渲染出来**。
+Phase 1.7a 已 commit (`2a184a9`)：ScintillaView 在 GUI 真实渲染（**已截图实锤**）。**当前是单向数据流**——doc.text 推到 view，view 里输入的字符**不**回写到 doc。下次会话先把这条路打通，然后逐项补齐桥的剩余功能。
+
+**当前可用方式**：
+```bash
+SCRIBE_USE_SCINTILLA=1 SCRIBE_AUTO_OPEN=/path/to/file.txt swift run Scribe
+```
+Scribe 默认仍然走旧的 NSTextView CodeEditor。`SCRIBE_USE_SCINTILLA=1`（DEBUG 限定）切到新桥。
 
 **起手步骤（建议按序）**：
 
-1. **GUI 端 runtime 验证**：在 ScribeApp 加一个隐藏 Window scene 或临时把 `ScintillaProbeView` 接进 `EditorAreaView` 的 Welcome 分支，跑起来肉眼看 ScintillaView 是否出现。**这一步不通过下面的步骤都不要做**——可能要踩一些 NSCursor / NSWindow / first responder 的坑。
+1. **view → doc 反向同步**：让用户在 ScintillaView 里打字回写到 `doc.text`：
+   - 设 `view.delegate = coordinator` 实现 `ScintillaNotificationProtocol`
+   - 在 `notification(_:)` 里看 `notification.pointee.nmhdr.code`：
+     - `SCN_MODIFIED` (2008)：拉 `view.string()` 写入 `doc.text` + `markDirty`
+     - `SCN_UPDATEUI` (2007)：拉 `SCI_GETCURRENTPOS` + `SCI_LINEFROMPOSITION` 算行/列回写到 `doc.cursorLine/Column`
+   - 注意 feedback 防回环：从 doc 推到 view 时设个 `isApplyingExternalUpdate` flag，notification handler 检查后跳过。
 
-2. **替换 CodeEditor 内层**：`Sources/Scribe/Views/CodeEditor.swift` 的 NSTextView 改成 ScintillaView。保持 `NSViewRepresentable` 外壳不变。重做这些桥接：
-   - `doc.text ↔ ScintillaView.string` 双向同步
-   - 字号通过 `setFontName:size:bold:italic:`
-   - 软 Tab：用 `SCI_SETTABWIDTH` + `SCI_SETUSETABS`
-   - 光标行/列：监听 `SCEN_CHANGE` / `SCN_UPDATEUI` notification，从 `SCI_GETCURRENTPOS` + `SCI_LINEFROMPOSITION` 计算
-   - 行号 ruler：`SCI_SETMARGINWIDTHN` + line-number margin
-   - 暗色：`SCI_STYLESETBACK` + `SCI_STYLESETFORE`，订阅 NSAppearanceDidChangeNotification
+2. **软 Tab + Tab 宽度**：
+   - `SCI_SETUSETABS = 2125`（false → 软 tab）
+   - `SCI_SETTABWIDTH = 2068`
+   - 通过 `view.message(_:wParam:lParam:)` 调用
 
-3. **删除现有 LineNumberRuler**（被 Scintilla 内置取代）。
+3. **行号 margin**：
+   - `SCI_SETMARGINTYPEN`(0, SC_MARGIN_NUMBER=1)
+   - `SCI_SETMARGINWIDTHN`(0, ~40px)
+   - 同时**删除** `Sources/Scribe/Views/LineNumberRuler.swift`（被 Scintilla 内置取代）
 
-4. **配置默认 lexer**：先 `SCLEX_NULL`（plain text）让所有现有功能 work；语法高亮留到 Phase 1.8（需要 Lexilla 包）。
+4. **暗色主题**：
+   - 订阅 `NSApp.effectiveAppearance` 变化
+   - 走 `SCI_STYLESETBACK` (2052) / `SCI_STYLESETFORE` (2051) 设 `STYLE_DEFAULT` (32)
+   - 调用 `SCI_STYLECLEARALL` (2050) 让其他 style 继承
 
-5. **跑回归**：所有 `swift test` 通过 + 手测 Phase 0.2/0.3 验收清单（见第 10 节）。
+5. **达到 parity 后**：
+   - 把 `SCRIBE_USE_SCINTILLA` env hatch 删掉，让 ScintillaCodeEditor 成为默认
+   - 删除 `Sources/Scribe/Views/CodeEditor.swift`（旧 NSTextView 桥）
+   - 删除调试 Window scene `Scintilla Probe` 和 `ScintillaProbeMenuItem`
+   - 跑 Phase 0.2/0.3 验收清单（第 10 节）确保不回归
 
 **关键文件参考**：
-- `@/Users/zhangshijie/Documents/Project/Scribe/Vendor/scintilla/cocoa/ScintillaView.h` — 公共 ObjC API
-- `@/Users/zhangshijie/Documents/Project/Scribe/Vendor/scintilla/include/Scintilla.h` — `SCI_*` 消息常量
-- `@/Users/zhangshijie/Documents/Project/Scribe/Sources/Scribe/Views/ScintillaProbe.swift` — 当前最小烟测
-- `@/Users/zhangshijie/Documents/Project/Scribe/Vendor/README.md` — 升级与 patch 记录
+- `@/Users/zhangshijie/Documents/Project/Scribe/Vendor/scintilla/cocoa/ScintillaView.h` — 公共 ObjC API + ScintillaNotificationProtocol
+- `@/Users/zhangshijie/Documents/Project/Scribe/Vendor/scintilla/include/Scintilla.h:1306` — SCN_* 通知码
+- `@/Users/zhangshijie/Documents/Project/Scribe/Vendor/scintilla/include/Scintilla.h` — `SCI_*` 消息常量（grep `#define SCI_`）
+- `@/Users/zhangshijie/Documents/Project/Scribe/Sources/Scribe/Views/ScintillaCodeEditor.swift` — 当前桥起点
+- `@/Users/zhangshijie/Documents/Project/Scribe/Sources/Scribe/Views/CodeEditor.swift` — 旧桥（看其桥接细节，作为 parity 参考）
 
 ### 头号事项之后
 
@@ -298,11 +345,16 @@ cd /Users/zhangshijie/Documents/Project/Scribe
 # 看当前进度
 git log --oneline
 # 期望看到（HEAD 在最上面）：
+#   2a184a9 Phase 1.7a: ScintillaView renders inside Scribe at runtime
+#   7802d44 Document Phase 1.0 in HANDOFF + ROADMAP
 #   cc283b4 Phase 1.0: SwiftPM bridge to Scintilla 5.6.1 — link OK, runtime pending
 #   d331157 Refresh HANDOFF + ROADMAP after Phase 0.2/0.3
 #   aef0b34 Phase 0.3 (C): encoding + line-ending detection and conversion
 #   19f524c Phase 0.2: editor preferences, recent files, live cursor
 #   971f1fc Phase 0.1 baseline: SwiftUI shell with NSTextView bridge
+
+# 回到 Phase 1.0（撤掉 GUI 嵌入）
+git reset --hard 7802d44
 
 # 回到 Phase 0.3（撤掉 Scintilla 接通）
 git reset --hard aef0b34
@@ -340,14 +392,22 @@ Phase 0.2/0.3 暂未截图。
 ## 11. 一句话总结
 
 ```
-Scribe 已从 0 长到 Phase 1.0 ——
+Scribe 已从 0 长到 Phase 1.7a ——
 有窗、有标签、有侧栏、有行号、有暗色、有 .app、有持久化偏好、
 有最近文件、有实时光标、有真正的编码检测、有行尾感知、
 有 17 个单测保住核心、Scintilla 5.6.1 已经接进 SwiftPM target，
-Swift 端能 import，编译过、链接过，但还没在 GUI 上现身。
+而且——
+SCRIBE_USE_SCINTILLA=1 SCRIBE_AUTO_OPEN=… 跑起来时，
+ScintillaView 已经在 GUI 上真实渲染 Swift 代码 + 中日韩文注释，
+状态栏 299 chars 也对齐。
+
+但当前是单向流——doc → view 推得过去，
+view → doc 反向（用户键入回写）还没接，软 Tab/暗色/光标行列都还在 TODO。
+Scribe 默认仍然走旧的 NSTextView CodeEditor，新桥靠 env var 切。
 
 下次开工先看本文件第 7 节"头号事项"——
-跑通 ScintillaProbeView，再把 CodeEditor 的 NSTextView 换掉。
+按 5 步路线把反向同步、软 Tab、行号 margin、暗色装上，
+然后删 env hatch + 旧 CodeEditor + 调试探针窗口。
 ```
 
 ---
