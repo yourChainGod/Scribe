@@ -38,16 +38,9 @@ final class FindInFilesEngine {
     /// generated file would dominate the result list.
     static let maxMatchesPerFile: Int = 200
 
-    /// Names that get pruned wholesale during traversal. Matches are
-    /// against the directory's last path component.
-    static let skippedDirectories: Set<String> = [
-        ".git", ".svn", ".hg", ".jj",
-        ".build", ".swiftpm", "DerivedData", "Pods",
-        "node_modules", ".next", ".nuxt", ".turbo", ".cache",
-        "target", "dist", "build", "out",
-        "__pycache__", ".venv", "venv",
-        ".idea", ".vscode"
-    ]
+    // Directory pruning uses IgnoredPaths.shouldSkipDirectory(named:)
+    // directly — keeping that in IgnoredPaths means Find-in-Files,
+    // FileIndex, and any future workspace walker stay in sync.
 
     /// Currently in-flight search task. New `.search()` calls cancel
     /// any previous one before starting.
@@ -122,7 +115,7 @@ final class FindInFilesEngine {
             var isDir: ObjCBool = false
             _ = fm.fileExists(atPath: url.path, isDirectory: &isDir)
             if isDir.boolValue {
-                if lastComponent.hasPrefix(".") || Self.skippedDirectories.contains(lastComponent) {
+                if IgnoredPaths.shouldSkipDirectory(named: lastComponent) {
                     enumerator.skipDescendants()
                 }
                 continue

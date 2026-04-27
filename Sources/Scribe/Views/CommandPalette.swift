@@ -17,6 +17,7 @@ import SwiftUI
 
 struct CommandPalette: View {
     @ObservedObject var registry: CommandRegistry
+    var placeholder: String = "Type a command…"
     let onPick: (ScribeCommand) -> Void
     let onCancel: () -> Void
 
@@ -35,7 +36,7 @@ struct CommandPalette: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
                     .font(.system(size: 14))
-                TextField("Type a command…", text: $query)
+                TextField(placeholder, text: $query)
                     .textFieldStyle(.plain)
                     .font(.system(size: 14))
                     .focused($queryFocused)

@@ -15,14 +15,18 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
     private var panel: NSPanel?
     private weak var registry: CommandRegistry?
 
-    /// Show the palette. Does nothing if it is already visible.
-    func show(registry: CommandRegistry) {
-        if let panel = panel, panel.isVisible {
+    /// Show the palette. If a panel is already up against a *different*
+    /// registry (e.g. ⌘⇧P → ⌘P switch), rebuild it so the new commands
+    /// take effect; same registry just refocuses.
+    func show(registry: CommandRegistry,
+              placeholder: String = "Type a command…") {
+        if let panel = panel, panel.isVisible, registry === self.registry {
             panel.makeKeyAndOrderFront(nil)
             return
         }
+        if panel != nil { hide() }
         self.registry = registry
-        let panel = makePanel(registry: registry)
+        let panel = makePanel(registry: registry, placeholder: placeholder)
         self.panel = panel
 
         if let screenFrame = (NSApp.keyWindow?.screen ?? NSScreen.main)?.visibleFrame {
@@ -43,12 +47,15 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         panel = nil
     }
 
-    /// Toggle for menu bindings.
-    func toggle(registry: CommandRegistry) {
-        if let panel = panel, panel.isVisible {
+    /// Toggle for menu bindings. When the panel is up against the same
+    /// registry, hide it; otherwise (closed, or showing a different
+    /// registry) show with the requested registry.
+    func toggle(registry: CommandRegistry,
+                placeholder: String = "Type a command…") {
+        if let panel = panel, panel.isVisible, registry === self.registry {
             hide()
         } else {
-            show(registry: registry)
+            show(registry: registry, placeholder: placeholder)
         }
     }
 
@@ -63,7 +70,8 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
 
     // MARK: - Plumbing
 
-    private func makePanel(registry: CommandRegistry) -> NSPanel {
+    private func makePanel(registry: CommandRegistry,
+                           placeholder: String) -> NSPanel {
         let panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 560, height: 420),
             styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
@@ -81,6 +89,7 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
 
         let view = CommandPalette(
             registry: registry,
+            placeholder: placeholder,
             onPick: { [weak self] command in
                 self?.hide()
                 registry.invoke(command)

@@ -13,6 +13,7 @@ struct ScribeApp: App {
     @StateObject private var commands = CommandRegistry()
     @StateObject private var findState = FindState()
     @StateObject private var findInFiles = FindInFilesState()
+    @StateObject private var fileIndex = FileIndex()
     private let findInFilesEngine = FindInFilesEngine()
 
     init() {
@@ -87,6 +88,7 @@ struct ScribeApp: App {
                 .environmentObject(commands)
                 .environmentObject(findState)
                 .environmentObject(findInFiles)
+                .environmentObject(fileIndex)
                 .frame(minWidth: 900, minHeight: 600)
                 .onAppear {
                     CommandRegistration.refresh(
@@ -94,6 +96,11 @@ struct ScribeApp: App {
                         workspace: workspace,
                         prefs: prefs
                     )
+                    // First-launch: index the folder we restored from
+                    // SCRIBE_AUTO_FOLDER / Recent if any.
+                    if let root = workspace.folderRoot?.url {
+                        fileIndex.rebuild(at: root)
+                    }
                 }
                 .onChange(of: workspace.documents.map(\.id)) { _, _ in
                     CommandRegistration.refresh(registry: commands, workspace: workspace, prefs: prefs)
@@ -103,6 +110,13 @@ struct ScribeApp: App {
                 }
                 .onChange(of: prefs.softTabs) { _, _ in
                     CommandRegistration.refresh(registry: commands, workspace: workspace, prefs: prefs)
+                }
+                .onChange(of: workspace.folderRoot?.url) { _, newRoot in
+                    if let newRoot {
+                        fileIndex.rebuild(at: newRoot)
+                    } else {
+                        fileIndex.clear()
+                    }
                 }
                 .onOpenURL { url in
                     workspace.openFile(at: url)
@@ -134,6 +148,12 @@ struct ScribeApp: App {
                     .keyboardShortcut("0", modifiers: .command)
             }
             CommandMenu("Go") {
+                Button("Quick Open File…") {
+                    QuickOpenController.shared.toggle(workspace: workspace,
+                                                      fileIndex: fileIndex)
+                }
+                .keyboardShortcut("p", modifiers: .command)
+
                 Button("Command Palette…") {
                     PaletteWindowController.shared.toggle(registry: commands)
                 }
