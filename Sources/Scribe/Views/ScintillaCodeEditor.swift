@@ -15,6 +15,7 @@
 import AppKit
 import SwiftUI
 import Scintilla
+import Lexilla
 
 // MARK: - SCI_* / SCN_* numeric constants
 //
@@ -40,12 +41,55 @@ private enum SCI {
     static let SETSELFORE:       UInt32 = 2067
     static let SETSELBACK:       UInt32 = 2068
     static let SETCARETFORE:     UInt32 = 2069
+    static let STYLESETSIZE:     UInt32 = 2055
+    static let STYLESETFONT:     UInt32 = 2056
+    static let SETKEYWORDS:      UInt32 = 4005
+    static let SETILEXER:        UInt32 = 4033
 }
 
 private enum SC {
-    static let MARGIN_NUMBER:   Int = 1
-    static let STYLE_DEFAULT:   Int = 32
+    static let MARGIN_NUMBER:    Int = 1
+    static let STYLE_DEFAULT:    Int = 32
     static let STYLE_LINENUMBER: Int = 33
+}
+
+/// Lexilla SCE_C_* style indices used by the C/C++/JS/Swift lexers
+/// (LexerCatalog falls back to lmCPP for these). Verified against
+/// Vendor/lexilla/include/SciLexer.h.
+private enum SCE_C {
+    static let DEFAULT:      Int = 0
+    static let COMMENT:      Int = 1
+    static let COMMENTLINE:  Int = 2
+    static let COMMENTDOC:   Int = 3
+    static let NUMBER:       Int = 4
+    static let WORD:         Int = 5
+    static let STRING:       Int = 6
+    static let CHARACTER:    Int = 7
+    static let PREPROCESSOR: Int = 9
+    static let OPERATOR:     Int = 10
+    static let IDENTIFIER:   Int = 11
+    static let WORD2:        Int = 16
+    static let GLOBALCLASS:  Int = 19
+}
+
+/// Lexilla SCE_P_* style indices used by the Python lexer.
+private enum SCE_P {
+    static let DEFAULT:      Int = 0
+    static let COMMENTLINE:  Int = 1
+    static let NUMBER:       Int = 2
+    static let STRING:       Int = 3
+    static let CHARACTER:    Int = 4
+    static let WORD:         Int = 5
+    static let TRIPLE:       Int = 6
+    static let TRIPLEDOUBLE: Int = 7
+    static let CLASSNAME:    Int = 8
+    static let DEFNAME:      Int = 9
+    static let OPERATOR:     Int = 10
+    static let IDENTIFIER:   Int = 11
+    static let COMMENTBLOCK: Int = 12
+    static let WORD2:        Int = 14
+    static let DECORATOR:    Int = 15
+    static let FSTRING:      Int = 16
 }
 
 private enum SCN {
@@ -69,8 +113,10 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         view.delegate = context.coordinator   // ScintillaNotificationProtocol
         context.coordinator.attach(view: view)
 
-        // Initial state push.
+        // Initial state push. Lexer must precede font + theme so per-style
+        // applies hit the right SCE_* indices.
         context.coordinator.applyText(doc.text, to: view, isExternal: true)
+        context.coordinator.applyLexer(for: doc, to: view)
         context.coordinator.applyFont(prefs: prefs, to: view)
         context.coordinator.applyTabs(prefs: prefs, to: view)
         context.coordinator.applyLineNumberMargin(to: view)
@@ -87,6 +133,7 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         if view.string() != doc.text {
             context.coordinator.applyText(doc.text, to: view, isExternal: true)
         }
+        context.coordinator.applyLexer(for: doc, to: view)
         context.coordinator.applyFont(prefs: prefs, to: view)
         context.coordinator.applyTabs(prefs: prefs, to: view)
         context.coordinator.applyTheme(to: view)
@@ -103,6 +150,10 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         /// `true` while we are pushing doc → view; suppresses the SCN_MODIFIED
         /// echo that would otherwise overwrite doc.text with the same content.
         private var isApplyingExternalUpdate = false
+
+        /// Lexer currently set on the view. Tracked so we only call
+        /// `SCI_SETILEXER` when the language actually changes.
+        private var currentLexer: String = ""
 
         private var appearanceObserver: NSKeyValueObservation?
 
@@ -156,29 +207,90 @@ struct ScintillaCodeEditor: NSViewRepresentable {
             view.message(SCI.SETMARGINWIDTHN, wParam: 0, lParam: 44)
         }
 
-        func applyTheme(to view: ScintillaView) {
-            let dark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        func applyLexer(for doc: Document, to view: ScintillaView) {
+            let descriptor = LexerCatalog.descriptor(for: doc)
+            guard descriptor.lexillaName != currentLexer else { return }
+            currentLexer = descriptor.lexillaName
 
-            // STYLE_DEFAULT first — STYLECLEARALL copies it to every other style.
-            let bg = dark ? sciColor(0x1E1E1E) : sciColor(0xFFFFFF)
-            let fg = dark ? sciColor(0xD4D4D4) : sciColor(0x1F1F1F)
-            view.message(SCI.STYLESETBACK, wParam: UInt(SC.STYLE_DEFAULT), lParam: bg)
-            view.message(SCI.STYLESETFORE, wParam: UInt(SC.STYLE_DEFAULT), lParam: fg)
-            view.message(SCI.STYLECLEARALL)
-
-            // Line-number margin gets its own muted look.
-            let lnBg = dark ? sciColor(0x252526) : sciColor(0xF5F5F5)
-            let lnFg = dark ? sciColor(0x858585) : sciColor(0x9A9A9A)
-            view.message(SCI.STYLESETBACK, wParam: UInt(SC.STYLE_LINENUMBER), lParam: lnBg)
-            view.message(SCI.STYLESETFORE, wParam: UInt(SC.STYLE_LINENUMBER), lParam: lnFg)
-
-            // Selection + caret.
-            let selBg = dark ? sciColor(0x264F78) : sciColor(0xADD6FF)
-            view.message(SCI.SETSELBACK, wParam: 1, lParam: selBg)
-            view.message(SCI.SETCARETFORE, wParam: UInt(bitPattern: Int(fg)))
+            // Empty name ⇒ leave Scintilla on its default null lexer.
+            if descriptor.lexillaName.isEmpty {
+                view.setReferenceProperty(Int32(SCI.SETILEXER), parameter: 0, value: nil)
+                return
+            }
+            if let lexerPtr = LexillaBridgeCreateLexer(descriptor.lexillaName) {
+                view.setReferenceProperty(Int32(SCI.SETILEXER), parameter: 0, value: lexerPtr)
+                for (idx, words) in descriptor.keywords.enumerated() {
+                    view.setStringProperty(Int32(SCI.SETKEYWORDS),
+                                           parameter: idx,
+                                           value: words)
+                }
+            }
         }
 
-        /// Scintilla packs colours as 0x00BBGGRR in an `sptr_t`.
+        func applyTheme(to view: ScintillaView) {
+            let theme = Theme.resolved(for: NSApp.effectiveAppearance)
+
+            // STYLE_DEFAULT first — STYLECLEARALL copies it to every other style.
+            view.message(SCI.STYLESETBACK, wParam: UInt(SC.STYLE_DEFAULT), lParam: sciColor(theme.background))
+            view.message(SCI.STYLESETFORE, wParam: UInt(SC.STYLE_DEFAULT), lParam: sciColor(theme.foreground))
+            view.message(SCI.STYLECLEARALL)
+
+            // Line-number margin.
+            view.message(SCI.STYLESETBACK, wParam: UInt(SC.STYLE_LINENUMBER), lParam: sciColor(theme.marginBackground))
+            view.message(SCI.STYLESETFORE, wParam: UInt(SC.STYLE_LINENUMBER), lParam: sciColor(theme.marginForeground))
+
+            // Selection + caret.
+            view.message(SCI.SETSELBACK, wParam: 1, lParam: sciColor(theme.selectionBackground))
+            view.message(SCI.SETCARETFORE, wParam: UInt(bitPattern: sciColor(theme.caret)))
+
+            // Per-token colours depend on which lexer family is active.
+            applyLanguageStyles(theme: theme, lexer: currentLexer, to: view)
+        }
+
+        /// Push token colours to the SCE_* style indices for the active
+        /// lexer family. Adding a new family is two changes here:
+        /// LexerCatalog mapping + a case in this switch.
+        private func applyLanguageStyles(theme: Theme, lexer: String, to view: ScintillaView) {
+            switch lexer {
+            case "cpp", "javascript":
+                setStyleColor(view, SCE_C.WORD,         fg: theme.keyword)
+                setStyleColor(view, SCE_C.WORD2,        fg: theme.type)
+                setStyleColor(view, SCE_C.STRING,       fg: theme.string)
+                setStyleColor(view, SCE_C.CHARACTER,    fg: theme.string)
+                setStyleColor(view, SCE_C.COMMENT,      fg: theme.comment)
+                setStyleColor(view, SCE_C.COMMENTLINE,  fg: theme.comment)
+                setStyleColor(view, SCE_C.COMMENTDOC,   fg: theme.comment)
+                setStyleColor(view, SCE_C.NUMBER,       fg: theme.number)
+                setStyleColor(view, SCE_C.PREPROCESSOR, fg: theme.preprocessor)
+                setStyleColor(view, SCE_C.IDENTIFIER,   fg: theme.identifier)
+                setStyleColor(view, SCE_C.GLOBALCLASS,  fg: theme.type)
+            case "python":
+                setStyleColor(view, SCE_P.WORD,         fg: theme.keyword)
+                setStyleColor(view, SCE_P.WORD2,        fg: theme.type)
+                setStyleColor(view, SCE_P.STRING,       fg: theme.string)
+                setStyleColor(view, SCE_P.CHARACTER,    fg: theme.string)
+                setStyleColor(view, SCE_P.TRIPLE,       fg: theme.string)
+                setStyleColor(view, SCE_P.TRIPLEDOUBLE, fg: theme.string)
+                setStyleColor(view, SCE_P.FSTRING,      fg: theme.string)
+                setStyleColor(view, SCE_P.COMMENTLINE,  fg: theme.comment)
+                setStyleColor(view, SCE_P.COMMENTBLOCK, fg: theme.comment)
+                setStyleColor(view, SCE_P.NUMBER,       fg: theme.number)
+                setStyleColor(view, SCE_P.CLASSNAME,    fg: theme.type)
+                setStyleColor(view, SCE_P.DEFNAME,      fg: theme.type)
+                setStyleColor(view, SCE_P.DECORATOR,    fg: theme.preprocessor)
+                setStyleColor(view, SCE_P.IDENTIFIER,   fg: theme.identifier)
+            default:
+                break
+            }
+        }
+
+        /// Convenience: set foreground for a SCE_* style index.
+        private func setStyleColor(_ view: ScintillaView, _ style: Int, fg rgb: Int) {
+            view.message(SCI.STYLESETFORE, wParam: UInt(style), lParam: sciColor(rgb))
+        }
+
+        /// Scintilla packs colours as 0x00BBGGRR in an `sptr_t`. Argument
+        /// is a plain 0xRRGGBB integer.
         private func sciColor(_ rgb: Int) -> Int {
             let r = (rgb >> 16) & 0xFF
             let g = (rgb >> 8)  & 0xFF

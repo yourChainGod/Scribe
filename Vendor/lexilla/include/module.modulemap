@@ -1,0 +1,9 @@
+// Added by Scribe (not part of upstream Lexilla).
+// Exposes a Swift-friendly slice of Lexilla via an ObjC façade —
+// LexillaBridge.h. Lexilla.h itself uses C++ namespaces and ILexer5,
+// which Swift can't import; the bridge keeps that pollution off the
+// Swift side.
+module Lexilla {
+    umbrella header "ScribeLexillaUmbrella.h"
+    export *
+}

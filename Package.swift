@@ -59,9 +59,46 @@ let package = Package(
                 .linkedFramework("QuartzCore")
             ]
         ),
+        // Lexilla 5.4.4 vendored under Vendor/lexilla. Provides 100+ syntax
+        // lexers; we compile all of them so CreateLexer("…") finds whatever
+        // we ask for at runtime. Lexilla depends on Scintilla's ILexer.h
+        // header but does not link against the Scintilla target — it just
+        // implements the interface, the lexer pointer is passed back into
+        // ScintillaView via SCI_SETILEXER.
+        .target(
+            name: "Lexilla",
+            path: "Vendor/lexilla",
+            exclude: [
+                "bin", "doc", "test", "examples", "scripts",
+                "access",                       // dynamic-loader, we link statically
+                "CONTRIBUTING", "License.txt", "README", "version.txt",
+                "delbin.bat", "tgzsrc", "zipsrc.bat",
+                "cppcheck.suppress",
+                "include/LexicalStyles.iface",
+                // Build infra files inside src/
+                "src/DepGen.py",
+                "src/Lexilla",                  // src/Lexilla/Lexilla.xcodeproj + Info.plist
+                "src/Lexilla.def",
+                "src/Lexilla.pro",
+                "src/Lexilla.vcxproj",
+                "src/Lexilla.ruleset",
+                "src/LexillaVersion.rc",
+                "src/lexilla.mak",
+                "src/deps.mak",
+                "src/nmdeps.mak",
+                "src/makefile"
+            ],
+            sources: ["src", "lexlib", "lexers", "swiftpm-bridge"],
+            publicHeadersPath: "include",
+            cxxSettings: [
+                .headerSearchPath("include"),
+                .headerSearchPath("lexlib"),
+                .headerSearchPath("../scintilla/include")
+            ]
+        ),
         .executableTarget(
             name: "Scribe",
-            dependencies: ["Scintilla"],
+            dependencies: ["Scintilla", "Lexilla"],
             path: "Sources/Scribe"
         ),
         .testTarget(

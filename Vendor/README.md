@@ -1,5 +1,52 @@
 # Vendored dependencies
 
+## Lexilla 5.4.4
+
+**Source**: https://www.scintilla.org/lexilla544.tgz (1.0 MB, 2025-04-01)
+**License**: HPND, GPL-compatible
+**Why vendored**: Phase 1.8 syntax highlighting. Companion to Scintilla
+5.x — Scintilla 5 stripped all lexers out into Lexilla, so we have to
+ship both.
+
+### What we changed
+
+Three files **added** by Scribe (do not exist upstream):
+
+| File | Purpose |
+|------|---------|
+| `lexilla/include/module.modulemap` | Defines the Swift module `Lexilla`. |
+| `lexilla/include/ScribeLexillaUmbrella.h` | Umbrella header that *only* surfaces the Swift-friendly ObjC façade — Lexilla's own headers use C++ namespaces and `Scintilla::ILexer5`, which Swift can't import. |
+| `lexilla/include/LexillaBridge.h` | ObjC declarations (`LexillaBridgeCreateLexer`, `LexillaBridgeLexerCount`, `LexillaBridgeLexerNames`) wrapped in `extern "C"` so name-mangling doesn't break the Swift link. |
+| `lexilla/swiftpm-bridge/LexillaBridge.mm` | ObjC++ implementation. Calls Lexilla's `CreateLexer/GetLexerCount/GetLexerName` and casts `ILexer5*` to `void*` for transit through Swift. |
+
+### How to upgrade
+
+1. Download the new tarball and replace the directory:
+   ```bash
+   curl -L https://www.scintilla.org/lexilla<NEW>.tgz -o /tmp/lex.tgz
+   rm -rf Vendor/lexilla
+   tar -xzf /tmp/lex.tgz -C Vendor/
+   ```
+2. Restore the four Scribe-owned files:
+   ```bash
+   git checkout HEAD -- \
+       Vendor/lexilla/include/module.modulemap \
+       Vendor/lexilla/include/ScribeLexillaUmbrella.h \
+       Vendor/lexilla/include/LexillaBridge.h \
+       Vendor/lexilla/swiftpm-bridge/LexillaBridge.mm
+   ```
+3. `swift build` and verify `swift test` is still 17/17.
+4. Update the version line above.
+
+### What's NOT vendored
+
+`.gitignore` strips `doc/`, `test/`, `examples/`, `scripts/`, `access/`
+(dynamic-loader, irrelevant to a static link). Re-extracting the tarball
+brings them back on disk; SwiftPM ignores them via the target's
+`exclude:` list anyway.
+
+---
+
 ## Scintilla 5.6.1
 
 **Source**: https://www.scintilla.org/scintilla561.tgz (1.7 MB, 2025-03-25)

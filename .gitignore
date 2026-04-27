@@ -18,3 +18,10 @@ Vendor/scintilla/win32/
 Vendor/scintilla/gtk/
 Vendor/scintilla/qt/
 Vendor/scintilla/scripts/
+
+# Vendored Lexilla — same idea: skip docs / tests / Windows-only / examples.
+Vendor/lexilla/doc/
+Vendor/lexilla/test/
+Vendor/lexilla/examples/
+Vendor/lexilla/scripts/
+Vendor/lexilla/access/

@@ -35,7 +35,7 @@ private struct DocumentStatusItems: View {
     @EnvironmentObject var workspace: Workspace
 
     var body: some View {
-        Label(doc.languageGuess.uppercased(),
+        Label(LexerCatalog.descriptor(for: doc).display,
               systemImage: "chevron.left.forwardslash.chevron.right")
         Divider().frame(height: 12)
         encodingMenu
