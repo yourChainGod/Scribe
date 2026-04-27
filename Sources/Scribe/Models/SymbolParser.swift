@@ -59,24 +59,63 @@ private func regex(_ pattern: String,
 /// `rules`. The handler turns a regex match on the line into a
 /// SymbolEntry; returning nil skips it. Single pass over the text;
 /// each line is tested against every rule in order until one matches.
+///
+/// `tracksBraces`: when true, scanLines maintains a running `{ } `
+/// depth counter. Each emitted entry inherits that depth, and
+/// .function entries that appear inside one or more `{` get
+/// re-tagged as .method. This is the brace-balanced-language path
+/// (Swift/JS/Rust/Go/C/Obj-C). Markdown / Python use the legacy
+/// path because their nesting isn't expressed with `{` `}`.
+///
+/// Brace counting is intentionally naïve — strings and comments are
+/// not stripped first. In practice, a misplaced `{` inside a string
+/// literal makes one method look like a free function (or vice
+/// versa) until the next balancing `}` brings the counter back; the
+/// rest of the file is unaffected. Acceptable trade-off for an
+/// outline that's purely a navigation aid.
 private func scanLines(_ text: String,
                        rules: [(regex: NSRegularExpression,
-                                make: (NSTextCheckingResult, String, Int) -> SymbolEntry?)])
+                                make: (NSTextCheckingResult, String, Int) -> SymbolEntry?)],
+                       tracksBraces: Bool = false)
     -> [SymbolEntry]
 {
     var out: [SymbolEntry] = []
     var lineNumber = 0
+    var braceDepth = 0
     text.enumerateLines { line, _ in
         lineNumber += 1
         let nsLine = line as NSString
         let range = NSRange(location: 0, length: nsLine.length)
         for rule in rules {
             if let m = rule.regex.firstMatch(in: line, options: [], range: range) {
-                if let entry = rule.make(m, line, lineNumber) {
+                if var entry = rule.make(m, line, lineNumber) {
+                    if tracksBraces {
+                        // The line `class Foo {` declares Foo at the
+                        // OUTER depth; the open brace only takes effect
+                        // for subsequent lines. So we tag the entry
+                        // BEFORE updating the brace counter.
+                        entry.depth = braceDepth
+                        // A function discovered while we're already
+                        // inside something else (a class/struct/extension/
+                        // namespace) is conventionally a method. Test
+                        // functions stay .test — the test runner badge
+                        // is more useful than the method designation.
+                        if braceDepth > 0, entry.kind == .function {
+                            entry.kind = .method
+                        }
+                    }
                     out.append(entry)
                 }
                 break   // one rule wins per line — keeps `func test_x` from
                         // appearing as both .function AND .test
+            }
+        }
+        if tracksBraces {
+            // Update AFTER emitting so the symbol on this line keeps
+            // the outer depth (see comment above).
+            for ch in line {
+                if ch == "{" { braceDepth += 1 }
+                else if ch == "}" { braceDepth = max(0, braceDepth - 1) }
             }
         }
     }
@@ -146,7 +185,7 @@ struct SwiftSymbolParser: SymbolParser {
                 let name = capture(m, group: 1, in: line)
                 return SymbolEntry(kind: .property, name: name, lineNumber: ln)
             }),
-        ])
+        ], tracksBraces: true)
     }
 }
 
@@ -226,7 +265,7 @@ struct JavaScriptSymbolParser: SymbolParser {
                             name: capture(m, group: 1, in: line),
                             lineNumber: ln)
             }),
-        ])
+        ], tracksBraces: true)
     }
 }
 
@@ -262,7 +301,7 @@ struct RustSymbolParser: SymbolParser {
                 }
                 return SymbolEntry(kind: kind, name: name, lineNumber: ln)
             }),
-        ])
+        ], tracksBraces: true)
     }
 }
 
@@ -295,7 +334,7 @@ struct GoSymbolParser: SymbolParser {
                 }
                 return SymbolEntry(kind: kind, name: name, lineNumber: ln)
             }),
-        ])
+        ], tracksBraces: true)
     }
 }
 
@@ -362,6 +401,6 @@ struct CSymbolParser: SymbolParser {
                 guard !reserved.contains(name) else { return nil }
                 return SymbolEntry(kind: .function, name: name, lineNumber: ln)
             }),
-        ])
+        ], tracksBraces: true)
     }
 }

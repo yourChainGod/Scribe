@@ -88,14 +88,15 @@ enum SymbolKind: String, Sendable {
 /// results all use 1-based lines).
 struct SymbolEntry: Identifiable, Hashable, Sendable {
     let id: UUID
-    let kind: SymbolKind
+    var kind: SymbolKind
     let name: String
     let lineNumber: Int
-    /// Logical nesting depth. Markdown uses heading level (1..6); other
-    /// parsers leave this at 0 for the time being. The view indents
-    /// rows by this value so once we add nested-aware parsers the UI
-    /// "just works".
-    let depth: Int
+    /// Logical nesting depth. Markdown uses heading level (1..6);
+    /// brace-balanced languages (Swift/JS/Rust/Go/C) get one level
+    /// per unclosed `{` thanks to scanLines' brace tracker.
+    /// Mutated by scanLines after the rule emits the entry, hence
+    /// `var` rather than `let`.
+    var depth: Int
 
     init(id: UUID = UUID(),
          kind: SymbolKind,

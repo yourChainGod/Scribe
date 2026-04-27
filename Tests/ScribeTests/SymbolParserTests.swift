@@ -79,6 +79,44 @@ final class SymbolParserTests: XCTestCase {
         XCTAssertTrue(symbols.contains { $0.kind == .extensionDecl && $0.name == "Point" })
     }
 
+    func test_swift_nestedFunctionsTaggedAsMethod() {
+        // Phase 14: tracks { } depth so a `func` inside a class becomes
+        // a method. The struct itself stays at depth 0; methods at
+        // depth 1; locals inside a method body at depth 2.
+        let src = """
+        struct Calc {
+            let zero: Int = 0
+            func add(_ a: Int, _ b: Int) -> Int {
+                let result = a + b
+                return result
+            }
+            func sub(_ a: Int, _ b: Int) -> Int { a - b }
+        }
+        func free(_ x: Int) -> Int { x }
+        """
+        let symbols = SwiftSymbolParser().parse(src)
+        let calc = symbols.first { $0.name == "Calc" }
+        XCTAssertEqual(calc?.depth, 0)
+        XCTAssertEqual(calc?.kind, .structDecl)
+
+        let add = symbols.first { $0.name == "add" }
+        XCTAssertEqual(add?.depth, 1)
+        XCTAssertEqual(add?.kind, .method)
+
+        let sub = symbols.first { $0.name == "sub" }
+        XCTAssertEqual(sub?.depth, 1)
+        XCTAssertEqual(sub?.kind, .method)
+
+        // Local let inside a method body lives one level deeper still.
+        let result = symbols.first { $0.name == "result" }
+        XCTAssertEqual(result?.depth, 2)
+
+        // Top-level func stays a function, not a method.
+        let free = symbols.first { $0.name == "free" }
+        XCTAssertEqual(free?.depth, 0)
+        XCTAssertEqual(free?.kind, .function)
+    }
+
     func test_swift_doesNotMisparseLocalLetInsideFunction() {
         // `let x = 1` at indent inside a func *would* match propertyRule,
         // which is the price we pay for one-pass regex. Still, top-level
@@ -142,6 +180,45 @@ final class SymbolParserTests: XCTestCase {
         XCTAssertTrue(names.contains("Maybe"))
         XCTAssertEqual(symbols.first { $0.name == "Config" }?.kind, .protocolDecl)
         XCTAssertEqual(symbols.first { $0.name == "Maybe" }?.kind, .typealiasDecl)
+    }
+
+    func test_javascript_nestedFunctionsTaggedAsMethod() {
+        // Phase 14: brace-depth tracking promotes any function declared
+        // inside another `{ }` block to .method. Strictly speaking a
+        // free `function inner()` inside another free function isn't a
+        // class method, but for navigation-outline purposes the
+        // `.method` icon (cursive `f`) is the right visual distinction
+        // from a top-level entry.
+        //
+        // The JS regex parser doesn't recognise method-shorthand
+        // (`ping() {}`) inside a class body — that's a Phase 7 limit
+        // tracked separately. This test pins the brace-depth promotion
+        // through the codepaths that DO match (function decl + arrow).
+        let src = """
+        function outer() {
+            function inner() { return 1 }
+            const helper = (x) => x
+        }
+        const free = (x) => x
+        """
+        let symbols = JavaScriptSymbolParser().parse(src)
+        let outer = symbols.first { $0.name == "outer" }
+        XCTAssertEqual(outer?.depth, 0)
+        XCTAssertEqual(outer?.kind, .function)
+
+        let inner = symbols.first { $0.name == "inner" }
+        XCTAssertEqual(inner?.depth, 1)
+        XCTAssertEqual(inner?.kind, .method,
+                       "function decl inside another block ⇒ .method")
+
+        let helper = symbols.first { $0.name == "helper" }
+        XCTAssertEqual(helper?.depth, 1)
+        XCTAssertEqual(helper?.kind, .method,
+                       "arrow assigned at depth 1 ⇒ .method")
+
+        let free = symbols.first { $0.name == "free" }
+        XCTAssertEqual(free?.depth, 0)
+        XCTAssertEqual(free?.kind, .function)
     }
 
     // MARK: - Rust
