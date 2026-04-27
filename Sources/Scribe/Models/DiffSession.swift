@@ -7,6 +7,7 @@
 
 import AppKit
 import Foundation
+import Scintilla
 
 @MainActor
 final class DiffSession: ObservableObject {
@@ -16,6 +17,15 @@ final class DiffSession: ObservableObject {
     @Published var rightText: String = ""
     @Published var result: DiffResult?
     @Published var error: String?
+
+    /// Weak refs to the two ScintillaViews, set by the panes' coordinators
+    /// in attach(side:view:). Used to broker synchronised scrolling — the
+    /// panes themselves don't know about each other.
+    weak var leftView: ScintillaView?
+    weak var rightView: ScintillaView?
+    /// Re-entry guard. The 'sync the other side' write itself triggers
+    /// SCN_UPDATEUI on the receiver, which would loop straight back.
+    var isSyncingScroll: Bool = false
     /// `true` while a diff is being computed off-main. We don't bother
     /// cancelling the previous one — Myers is cheap and the user can
     /// only kick off one comparison per ⌘⌥D anyway.
@@ -84,5 +94,35 @@ final class DiffSession: ObservableObject {
     func previousHunk() {
         guard !hunks.isEmpty else { return }
         activeHunk = (activeHunk - 1 + hunks.count) % hunks.count
+    }
+
+    // MARK: - Synchronised scrolling
+
+    /// Called by a pane's coordinator when it observes a vertical-scroll
+    /// SCN_UPDATEUI. We translate the scrolling pane's first-visible-line
+    /// to the matching line on the other side via `mapLeftToRight` /
+    /// `mapRightToLeft` and push it through SCI_SETFIRSTVISIBLELINE.
+    func syncScroll(from side: DiffEditorPane.Side, firstVisibleLine: Int) {
+        guard let result, !isSyncingScroll else { return }
+        let targetLine: Int
+        let targetView: ScintillaView?
+        switch side {
+        case .left:
+            targetLine = result.mapLeftToRight(firstVisibleLine)
+            targetView = rightView
+        case .right:
+            targetLine = result.mapRightToLeft(firstVisibleLine)
+            targetView = leftView
+        }
+        guard let targetView else { return }
+        isSyncingScroll = true
+        // SCI_SETFIRSTVISIBLELINE = 2613
+        targetView.message(2613, wParam: UInt(max(0, targetLine)))
+        // Release the guard on the next tick so the echo SCN_UPDATEUI
+        // gets ignored, but a genuine user scroll arriving immediately
+        // afterwards still works.
+        DispatchQueue.main.async { [weak self] in
+            self?.isSyncingScroll = false
+        }
     }
 }

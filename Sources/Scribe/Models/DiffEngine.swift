@@ -46,6 +46,48 @@ public struct DiffResult: Sendable {
         }
         return (added, removed, changed)
     }
+
+    /// Map a left-side line index to the corresponding right-side line.
+    /// Inside an `.equal` op the mapping is exact (preserves offset);
+    /// inside any change op we anchor to the op's right-side start so
+    /// the synchronised scroll lands on the matching change rather than
+    /// somewhere in the middle of an unrelated section.
+    public func mapLeftToRight(_ leftLine: Int) -> Int {
+        for op in ops {
+            // Pure deletes have an empty rightRange; the leftRange covers
+            // them. Treat the line as anchored at right.lowerBound.
+            if op.leftRange.contains(leftLine) {
+                if op.kind == .equal {
+                    let offset = leftLine - op.leftRange.lowerBound
+                    return op.rightRange.lowerBound + offset
+                }
+                return op.rightRange.lowerBound
+            }
+            // Stop if we've already gone past the requested line — handles
+            // pure inserts (empty leftRange) cleanly.
+            if leftLine < op.leftRange.lowerBound {
+                return op.rightRange.lowerBound
+            }
+        }
+        return rightLines.count
+    }
+
+    /// Mirror of `mapLeftToRight` for the other direction.
+    public func mapRightToLeft(_ rightLine: Int) -> Int {
+        for op in ops {
+            if op.rightRange.contains(rightLine) {
+                if op.kind == .equal {
+                    let offset = rightLine - op.rightRange.lowerBound
+                    return op.leftRange.lowerBound + offset
+                }
+                return op.leftRange.lowerBound
+            }
+            if rightLine < op.rightRange.lowerBound {
+                return op.leftRange.lowerBound
+            }
+        }
+        return leftLines.count
+    }
 }
 
 public enum DiffEngine {

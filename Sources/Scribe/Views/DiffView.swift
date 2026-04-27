@@ -115,6 +115,7 @@ struct DiffView: View {
                     ops: result.ops,
                     side: .left,
                     activeHunkIndex: session.activeHunk,
+                    session: session,
                     onLineClicked: { _ in }
                 )
             }
@@ -127,6 +128,7 @@ struct DiffView: View {
                     ops: result.ops,
                     side: .right,
                     activeHunkIndex: session.activeHunk,
+                    session: session,
                     onLineClicked: { _ in }
                 )
             }

@@ -104,7 +104,37 @@ final class DiffEngineTests: XCTestCase {
         XCTAssertEqual(rightCursor, r.rightLines.count, file: file, line: line)
     }
 
-    // MARK: - stats
+    // MARK: - Line mapping (Phase 5b synchronised scrolling)
+
+    func test_mapLeftToRight_passesThroughEqualOffsets() {
+        let r = DiffEngine.compare("a\nb\nc\nd", "a\nx\nc\nd")
+        // ops: equal(0..1), replace(1..2, 1..2), equal(2..4, 2..4)
+        XCTAssertEqual(r.mapLeftToRight(0), 0)        // equal head
+        XCTAssertEqual(r.mapLeftToRight(2), 2)        // equal tail, exact offset
+        XCTAssertEqual(r.mapLeftToRight(3), 3)
+    }
+
+    func test_mapLeftToRight_anchorsToHunkStartInsideChanges() {
+        let r = DiffEngine.compare("a\nb\nc", "a\nbb\nc")
+        // ops: equal(0..1), replace(1..2, 1..2), equal(2..3, 2..3)
+        // line 1 is inside the replace; should map to right-side start = 1
+        XCTAssertEqual(r.mapLeftToRight(1), 1)
+    }
+
+    func test_mapRightToLeft_handlesPureInsertions() {
+        let r = DiffEngine.compare("a\nc", "a\nb\nc")
+        // ops: equal(0..1, 0..1), insert(0..0, 1..2), equal(1..2, 2..3)
+        // Right line 1 is in the insert; left has no corresponding line, so
+        // we anchor to the left start of the op (= 1).
+        XCTAssertEqual(r.mapRightToLeft(1), 1)
+        XCTAssertEqual(r.mapRightToLeft(2), 1)        // equal tail at left=1
+    }
+
+    func test_mapClampsToFileEnd() {
+        let r = DiffEngine.compare("a\nb", "a\nb\nc\nd")
+        XCTAssertEqual(r.mapLeftToRight(99), r.rightLines.count)
+        XCTAssertEqual(r.mapRightToLeft(99), r.leftLines.count)
+    }
 
     func test_statsCountAddedRemovedChanged() {
         let r = DiffEngine.compare(

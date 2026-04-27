@@ -24,18 +24,26 @@ struct DiffEditorPane: NSViewRepresentable {
     /// Driven by the toolbar's "Next / Previous diff" buttons. The pane
     /// scrolls + selects this hunk's first line on every update.
     let activeHunkIndex: Int
+    /// Owning session — coordinator forwards scroll notifications here
+    /// so the other pane can be synced.
+    weak var session: DiffSession?
     /// Closure called when the user clicks a line on this pane — the
     /// container uses it to keep the two panes in sync.
     let onLineClicked: (Int) -> Void
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(side: side, onLineClicked: onLineClicked)
+        Coordinator(side: side, session: session, onLineClicked: onLineClicked)
     }
 
     func makeNSView(context: Context) -> ScintillaView {
         let view = ScintillaView(frame: .zero)
         view.delegate = context.coordinator
         context.coordinator.attach(view: view)
+        // Register on the session so the sibling pane can find us.
+        switch side {
+        case .left:  session?.leftView = view
+        case .right: session?.rightView = view
+        }
         configureMarkers(in: view)
         configureMargins(in: view)
         configureTheme(in: view)
@@ -170,11 +178,15 @@ struct DiffEditorPane: NSViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, @preconcurrency ScintillaNotificationProtocol {
         let side: Side
+        weak var session: DiffSession?
         var onLineClicked: (Int) -> Void
         weak var view: ScintillaView?
 
-        init(side: Side, onLineClicked: @escaping (Int) -> Void) {
+        init(side: Side,
+             session: DiffSession?,
+             onLineClicked: @escaping (Int) -> Void) {
             self.side = side
+            self.session = session
             self.onLineClicked = onLineClicked
         }
 
@@ -182,15 +194,25 @@ struct DiffEditorPane: NSViewRepresentable {
 
         nonisolated func notification(_ scn: UnsafeMutablePointer<SCNotification>?) {
             guard let scn else { return }
-            // SCN_UPDATEUI fires for caret moves — translate that into a
-            // "click at this line" so the other pane can sync.
-            if scn.pointee.nmhdr.code == SCN_DIFF.UPDATEUI {
+            let code = scn.pointee.nmhdr.code
+            // updated bit-mask: see SC_UPDATE_* in Scintilla.h.
+            // We can't read the bit field across the nonisolated boundary,
+            // so capture the masked-int value here.
+            let updated = scn.pointee.updated
+            if code == SCN_DIFF.UPDATEUI {
                 Task { @MainActor [weak self] in
                     guard let self, let view = self.view else { return }
+                    // Always echo caret line for click-to-jump UX.
                     let pos = view.message(SCI_DIFF.GETCURRENTPOS)
-                    let line = view.message(SCI_DIFF.LINEFROMPOSITION,
-                                            wParam: UInt(pos))
-                    self.onLineClicked(Int(line))
+                    let caretLine = view.message(SCI_DIFF.LINEFROMPOSITION,
+                                                 wParam: UInt(pos))
+                    self.onLineClicked(Int(caretLine))
+                    // Vertical scroll bit set ⇒ sync sibling pane.
+                    if updated & SC_UPDATE.V_SCROLL != 0 {
+                        let firstVisible = view.message(SCI_DIFF.GETFIRSTVISIBLELINE)
+                        self.session?.syncScroll(from: self.side,
+                                                 firstVisibleLine: Int(firstVisible))
+                    }
                 }
             }
         }
@@ -203,6 +225,7 @@ private enum SCI_DIFF {
     static let GETLINECOUNT:      UInt32 = 2154
     static let GETCURRENTPOS:     UInt32 = 2008
     static let LINEFROMPOSITION:  UInt32 = 2166
+    static let GETFIRSTVISIBLELINE: UInt32 = 2152
     static let SETMARGINTYPEN:    UInt32 = 2240
     static let SETMARGINWIDTHN:   UInt32 = 2242
     static let SETMARGINMASKN:    UInt32 = 2244
@@ -216,6 +239,14 @@ private enum SCI_DIFF {
     static let STYLESETBACK:      UInt32 = 2052
     static let GOTOLINE:          UInt32 = 2024
     static let SCROLLCARET:       UInt32 = 2169
+}
+
+/// Bit flags for SCNotification.updated.
+private enum SC_UPDATE {
+    static let CONTENT:  Int32 = 0x1
+    static let SELECTION: Int32 = 0x2
+    static let V_SCROLL: Int32 = 0x4
+    static let H_SCROLL: Int32 = 0x8
 }
 
 private enum SC_DIFF {
