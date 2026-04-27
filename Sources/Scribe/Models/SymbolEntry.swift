@@ -45,6 +45,26 @@ enum SymbolKind: String, Sendable {
         }
     }
 
+    /// Human-readable label, e.g. for ⌘P @symbol subtitles or
+    /// VoiceOver descriptions. Lowercase by convention so it composes
+    /// with "function · line 42"-style strings without an extra format
+    /// step on the caller's side.
+    var label: String {
+        switch self {
+        case .function:      "function"
+        case .method:        "method"
+        case .classDecl:     "class"
+        case .structDecl:    "struct"
+        case .enumDecl:      "enum"
+        case .protocolDecl:  "protocol"
+        case .extensionDecl: "extension"
+        case .typealiasDecl: "typealias"
+        case .property:      "property"
+        case .heading:       "heading"
+        case .test:          "test"
+        }
+    }
+
     /// Tint colour. Aligned with the icon palette VSCode + JetBrains
     /// IDEs use so users coming from those tools have the muscle memory.
     var tint: Color {

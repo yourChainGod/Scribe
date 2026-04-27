@@ -45,11 +45,32 @@ struct CommandMatch: Identifiable {
     var id: String { command.id }
 }
 
+/// Routes a query starting with `prefix` to a different CommandRegistry.
+/// Used by Phase 11 ⌘P @symbol so a single palette window can switch
+/// between file picker (default) and symbol picker (prefix "@") without
+/// the host having to teardown / rebuild the panel itself.
+struct PrefixRoute: Identifiable {
+    let id: String
+    let prefix: String
+    /// The sub-registry that owns the commands surfaced under this
+    /// prefix. The palette never observes this object directly, so the
+    /// caller must finish populating it BEFORE attaching the route.
+    let registry: CommandRegistry
+    /// Placeholder displayed in the search field while this route is
+    /// active. nil ⇒ caller-supplied default.
+    let placeholder: String?
+}
+
 @MainActor
 final class CommandRegistry: ObservableObject {
     /// Live snapshot of every registered command. Rebuilt by callers
     /// whenever the surface changes (e.g. open documents, lexers).
     @Published var commands: [ScribeCommand] = []
+
+    /// Optional sub-registries activated by query prefix. Searched in
+    /// order, first matching prefix wins. Empty ⇒ classic single-mode
+    /// registry (every Phase < 11 caller).
+    @Published var prefixRoutes: [PrefixRoute] = []
 
     /// MRU stack of command IDs. Capped at 50; in-memory only for now —
     /// persistence can come later if it proves useful.
@@ -95,9 +116,22 @@ final class CommandRegistry: ObservableObject {
 
     // MARK: - Search
 
+    /// First prefix route that matches `query`, or nil if `query` has
+    /// no prefix routing. Pure read — view code uses this for the
+    /// effective placeholder, search uses it to dispatch.
+    func activeRoute(for query: String) -> PrefixRoute? {
+        prefixRoutes.first { query.hasPrefix($0.prefix) }
+    }
+
     /// Returns commands ranked by relevance to `query`. Empty query
-    /// returns every command, MRU first.
+    /// returns every command, MRU first. If `query` starts with a
+    /// registered prefix, defers to the corresponding sub-registry
+    /// with the prefix stripped.
     func search(_ query: String) -> [CommandMatch] {
+        if let route = activeRoute(for: query) {
+            let stripped = String(query.dropFirst(route.prefix.count))
+            return route.registry.search(stripped)
+        }
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         if trimmed.isEmpty {
             return commands

@@ -111,6 +111,26 @@ struct ScribeApp: App {
                         fileIndex.rebuild(at: root)
                     }
                     outline.update(for: workspace.current)
+                    // Phase 11 verification hook: SCRIBE_TEST_PALETTE_QUERY
+                    // pre-fills ⌘P with the given query so we can take a
+                    // screenshot of the symbol-mode UI without
+                    // synthesising keystrokes through a non-activating
+                    // panel (which simulators struggle to drive).
+                    if let q = ProcessInfo.processInfo.environment["SCRIBE_TEST_PALETTE_QUERY"],
+                       !q.isEmpty {
+                        // outline parses asynchronously: 250 ms debounce
+                        // + detached parse on a background queue.
+                        // 1.5 s is comfortable headroom for any file
+                        // we'd reasonably auto-open at startup.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            QuickOpenController.shared.show(
+                                workspace: workspace,
+                                fileIndex: fileIndex,
+                                outline: outline,
+                                initialQuery: q
+                            )
+                        }
+                    }
                 }
                 .onChange(of: workspace.documents.map(\.id)) { _, _ in
                     CommandRegistration.refresh(registry: commands, workspace: workspace, prefs: prefs)
@@ -164,7 +184,8 @@ struct ScribeApp: App {
             CommandMenu("Go") {
                 Button("Quick Open File…") {
                     QuickOpenController.shared.toggle(workspace: workspace,
-                                                      fileIndex: fileIndex)
+                                                      fileIndex: fileIndex,
+                                                      outline: outline)
                 }
                 .keyboardShortcut("p", modifiers: .command)
 

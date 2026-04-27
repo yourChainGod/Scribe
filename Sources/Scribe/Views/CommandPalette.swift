@@ -18,15 +18,45 @@ import SwiftUI
 struct CommandPalette: View {
     @ObservedObject var registry: CommandRegistry
     var placeholder: String = "Type a command…"
+    /// Pre-fill the search field. Used by automated tests to drive the
+    /// panel without simulating keystrokes; production callers leave
+    /// it empty.
+    var initialQuery: String = ""
     let onPick: (ScribeCommand) -> Void
     let onCancel: () -> Void
 
-    @State private var query: String = ""
+    @State private var query: String
     @State private var selection: Int = 0
     @FocusState private var queryFocused: Bool
 
+    init(registry: CommandRegistry,
+         placeholder: String = "Type a command…",
+         initialQuery: String = "",
+         onPick: @escaping (ScribeCommand) -> Void,
+         onCancel: @escaping () -> Void) {
+        self.registry = registry
+        self.placeholder = placeholder
+        self.initialQuery = initialQuery
+        self.onPick = onPick
+        self.onCancel = onCancel
+        // Initialize @State directly so the very first body evaluation
+        // already sees the seeded query — avoids a flicker where the
+        // user briefly sees the empty-query result list before
+        // .onAppear kicks in.
+        _query = State(initialValue: initialQuery)
+    }
+
     private var matches: [CommandMatch] {
         registry.search(query)
+    }
+
+    /// Placeholder text for the search field. Falls back to the
+    /// caller-supplied `placeholder` when no prefix route matches the
+    /// current query. When a route IS active (e.g. user typed `@`),
+    /// surface the route's own placeholder so the UI signals what kind
+    /// of result is being filtered.
+    private var effectivePlaceholder: String {
+        registry.activeRoute(for: query)?.placeholder ?? placeholder
     }
 
     var body: some View {
@@ -36,7 +66,7 @@ struct CommandPalette: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
                     .font(.system(size: 14))
-                TextField(placeholder, text: $query)
+                TextField(effectivePlaceholder, text: $query)
                     .textFieldStyle(.plain)
                     .font(.system(size: 14))
                     .focused($queryFocused)
@@ -72,12 +102,23 @@ struct CommandPalette: View {
                                 .frame(maxWidth: .infinity, alignment: .center)
                                 .padding(.vertical, 24)
                         } else {
+                            // Force the LazyVStack to reset its row
+                            // identities whenever a prefix-route mode
+                            // toggles. Without this, switching from the
+                            // file picker to "@symbol" mode reuses the
+                            // first cell and renders a stale "● file"
+                            // row even though `matches` no longer
+                            // contains it. The `routeID` part of the key
+                            // changes only when the active route does,
+                            // so plain typing inside one mode doesn't
+                            // pay any tear-down cost.
+                            let routeID = registry.activeRoute(for: query)?.id ?? "default"
                             ForEach(Array(matches.enumerated()), id: \.element.id) { idx, match in
                                 CommandRow(
                                     match: match,
                                     isSelected: idx == selection
                                 )
-                                .id(idx)
+                                .id("\(routeID)#\(idx)")
                                 .contentShape(Rectangle())
                                 .onTapGesture {
                                     selection = idx
