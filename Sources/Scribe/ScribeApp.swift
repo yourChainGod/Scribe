@@ -179,6 +179,29 @@ struct ScribeApp: App {
                                     }
                                 }
                             }
+                            // Phase 17 verification hook: line-level
+                            // opt-out. Format is
+                            //   "<filename>:<line>,<filename>:<line>"
+                            // e.g. "lib.rs:2,main.rs:1". Resolved
+                            // against current findInFiles.results.
+                            if let lines = ProcessInfo.processInfo.environment["SCRIBE_TEST_FIND_DESELECT_LINES"],
+                               !lines.isEmpty {
+                                let pairs = lines.split(separator: ",")
+                                    .map { String($0).trimmingCharacters(in: .whitespaces) }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                                    for pair in pairs {
+                                        let parts = pair.split(separator: ":")
+                                        guard parts.count == 2,
+                                              let line = Int(parts[1]) else { continue }
+                                        let name = String(parts[0])
+                                        if let result = findInFiles.results.first(
+                                            where: { $0.url.lastPathComponent == name }
+                                        ) {
+                                            findInFiles.toggleLineSelection(result.url, line: line)
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }

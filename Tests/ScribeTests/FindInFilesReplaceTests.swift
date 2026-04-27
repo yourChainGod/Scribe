@@ -165,6 +165,94 @@ final class FindInFilesReplaceTests: XCTestCase {
         XCTAssertFalse(state.isReplacing)
     }
 
+    // MARK: - Phase 17: per-line exclusion
+
+    @MainActor
+    func test_replaceAll_skipsLinesInExcludedSet() async throws {
+        // Three matching lines; user opts out of line 2. The disk
+        // file should end up with replacements on lines 1 and 3 only.
+        let url = try write(
+            "line1 alpha here\nline2 alpha there\nline3 alpha last\n",
+            to: "x.txt"
+        )
+        let engine = FindInFilesEngine()
+        let state = FindInFilesState()
+        let opts = FindInFilesOptions(query: "alpha",
+                                      matchCase: true,
+                                      wholeWord: false,
+                                      regex: false,
+                                      includeGlobs: [],
+                                      excludeGlobs: [])
+
+        let summary = await withCheckedContinuation { (cont: CheckedContinuation<ReplaceSummary, Never>) in
+            engine.replaceAll(options: opts,
+                              replacement: "ALPHA",
+                              urls: [url],
+                              excludedLinesByURL: [url: [2]],
+                              into: state) { cont.resume(returning: $0) }
+        }
+        XCTAssertEqual(summary.totalReplacements, 2,
+                       "line 2 must be skipped")
+        XCTAssertEqual(try contents(of: url),
+                       "line1 ALPHA here\nline2 alpha there\nline3 ALPHA last\n")
+    }
+
+    @MainActor
+    func test_replaceAll_perLineExclusionPreservesBackrefs() async throws {
+        // The slow path computes its own replacement string per
+        // match — it needs to honour template substitution with the
+        // same fidelity as the fast path.
+        let url = try write("Mr. Smith\nMrs. Jones\nDr. Brown", to: "x.txt")
+        let engine = FindInFilesEngine()
+        let state = FindInFilesState()
+        let opts = FindInFilesOptions(query: "(Mr|Mrs|Dr)\\. (\\w+)",
+                                      matchCase: true,
+                                      wholeWord: false,
+                                      regex: true,
+                                      includeGlobs: [],
+                                      excludeGlobs: [])
+
+        // Skip line 2 (Mrs. Jones) — backrefs on lines 1 and 3 must
+        // still resolve correctly.
+        let summary = await withCheckedContinuation { (cont: CheckedContinuation<ReplaceSummary, Never>) in
+            engine.replaceAll(options: opts,
+                              replacement: "$2 ($1)",
+                              urls: [url],
+                              excludedLinesByURL: [url: [2]],
+                              into: state) { cont.resume(returning: $0) }
+        }
+        XCTAssertEqual(summary.totalReplacements, 2)
+        XCTAssertEqual(try contents(of: url),
+                       "Smith (Mr)\nMrs. Jones\nBrown (Dr)")
+    }
+
+    @MainActor
+    func test_replaceAll_perLineExclusionAllLinesOff() async throws {
+        // Excluding every line means the file gets neither read-write
+        // churn nor a write at all; summary.filesChanged stays 0.
+        let url = try write("alpha\nalpha\nalpha\n", to: "x.txt")
+        let engine = FindInFilesEngine()
+        let state = FindInFilesState()
+        let opts = FindInFilesOptions(query: "alpha",
+                                      matchCase: true,
+                                      wholeWord: false,
+                                      regex: false,
+                                      includeGlobs: [],
+                                      excludeGlobs: [])
+        let summary = await withCheckedContinuation { (cont: CheckedContinuation<ReplaceSummary, Never>) in
+            engine.replaceAll(options: opts,
+                              replacement: "x",
+                              urls: [url],
+                              excludedLinesByURL: [url: [1, 2, 3]],
+                              into: state) { cont.resume(returning: $0) }
+        }
+        XCTAssertEqual(summary.totalReplacements, 0)
+        XCTAssertEqual(summary.filesChanged, 0)
+        XCTAssertEqual(try contents(of: url), "alpha\nalpha\nalpha\n")
+    }
+
+    // MARK: - Original error / boundary cases
+
     @MainActor
     func test_replaceAll_recordsErrorForBinaryFile() async throws {
         // 8KB of binary data — replaceAll's runReplace tries UTF-8 decode

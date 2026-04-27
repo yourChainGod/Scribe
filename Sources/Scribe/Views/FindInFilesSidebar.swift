@@ -138,11 +138,11 @@ struct FindInFilesSidebar: View {
                 Text("\(find.totalMatches) results in \(find.filesWithMatches) files (\(find.filesScanned) scanned)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                // Phase 16: surface the selected slice when the user
-                // has deselected at least one file. Otherwise the
-                // summary stays a single line — no UI churn for the
-                // common "replace everything" case.
-                if !find.excludedURLs.isEmpty {
+                // Phase 16/17: surface the selected slice when the user
+                // has deselected anything — file or individual line.
+                // Otherwise the summary stays a single line — no UI
+                // churn for the common "replace everything" case.
+                if !find.excludedURLs.isEmpty || !find.excludedLines.isEmpty {
                     Text("Replace will touch \(find.selectedMatchCount) match\(find.selectedMatchCount == 1 ? "" : "es") in \(find.selectedURLs.count) file\(find.selectedURLs.count == 1 ? "" : "s").")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
@@ -173,6 +173,8 @@ struct FindInFilesSidebar: View {
                         isSelected: find.isSelected(file.url),
                         toggleExpanded: { toggle(file.url) },
                         toggleSelection: { find.toggleSelection(file.url) },
+                        isLineSelected: { line in find.isLineSelected(file.url, line: line) },
+                        toggleLineSelection: { line in find.toggleLineSelection(file.url, line: line) },
                         onPick: { match in jump(to: file.url, line: match.lineNumber) }
                     )
                 }
@@ -249,6 +251,7 @@ struct FindInFilesSidebar: View {
         engine.replaceAll(options: opts,
                           replacement: find.replacement,
                           urls: urls,
+                          excludedLinesByURL: find.excludedLinesByURL,
                           into: find) { [find, workspace] summary in
             // Pull every still-open document forward so the buffer
             // matches what's now on disk. Skipped errors stay in the
@@ -309,6 +312,8 @@ private struct FileGroup: View {
     let isSelected: Bool
     let toggleExpanded: () -> Void
     let toggleSelection: () -> Void
+    let isLineSelected: (Int) -> Bool
+    let toggleLineSelection: (Int) -> Void
     let onPick: (LineMatch) -> Void
 
     var body: some View {
@@ -370,8 +375,18 @@ private struct FileGroup: View {
 
             if expanded {
                 ForEach(file.matches) { match in
-                    MatchRow(match: match)
-                        .onTapGesture { onPick(match) }
+                    MatchRow(
+                        match: match,
+                        isSelected: isLineSelected(match.lineNumber),
+                        // Skip the line-checkbox interaction when the
+                        // parent file is opted out — the row is
+                        // greyed out anyway and toggling it would
+                        // create UI ambiguity ("file off but line
+                        // on?"). The accessibility label still
+                        // surfaces the disabled state.
+                        toggleSelection: { toggleLineSelection(match.lineNumber) }
+                    )
+                    .onTapGesture { onPick(match) }
                 }
             }
         }
@@ -380,18 +395,39 @@ private struct FileGroup: View {
 
 private struct MatchRow: View {
     let match: LineMatch
+    let isSelected: Bool
+    let toggleSelection: () -> Void
     @State private var hover = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 6) {
+            // Phase 17: line-level inclusion toggle. Compact size so a
+            // dense result list (5+ matches per file) doesn't grow
+            // vertically. Tap target is the checkbox itself plus the
+            // padding around it; the rest of the row preserves its
+            // jump-to-source click behaviour.
+            Toggle(isOn: Binding(
+                get: { isSelected },
+                set: { _ in toggleSelection() }
+            )) { EmptyView() }
+            .toggleStyle(.checkbox)
+            .controlSize(.small)
+            .help(isSelected
+                  ? "Include this match in Replace All"
+                  : "Skip this match during Replace All")
+            .accessibilityLabel("Line \(match.lineNumber) match selected: \(isSelected)")
+            .frame(width: 18)
             Text("\(match.lineNumber)")
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundStyle(.tertiary)
-                .frame(width: 32, alignment: .trailing)
+                .frame(width: 24, alignment: .trailing)
             Text(highlighted)
                 .font(.system(size: 11, design: .monospaced))
                 .lineLimit(1)
                 .truncationMode(.tail)
+                // Subtle dim on excluded rows so the user can scan
+                // for "what gets touched" at a glance.
+                .opacity(isSelected ? 1.0 : 0.45)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 8)

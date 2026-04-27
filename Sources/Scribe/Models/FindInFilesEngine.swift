@@ -107,6 +107,7 @@ final class FindInFilesEngine {
     func replaceAll(options: FindInFilesOptions,
                     replacement: String,
                     urls: [URL],
+                    excludedLinesByURL: [URL: Set<Int>] = [:],
                     into state: FindInFilesState,
                     completion: @escaping @MainActor (ReplaceSummary) -> Void) {
         cancel()
@@ -142,7 +143,8 @@ final class FindInFilesEngine {
             guard let self else { return }
             let summary = await self.runReplace(urls: urls,
                                                 regex: regex,
-                                                template: template)
+                                                template: template,
+                                                excludedLinesByURL: excludedLinesByURL)
             await MainActor.run {
                 state.setReplacing(false)
                 completion(summary)
@@ -152,7 +154,10 @@ final class FindInFilesEngine {
 
     private nonisolated func runReplace(urls: [URL],
                                         regex: NSRegularExpression,
-                                        template: String) async -> ReplaceSummary {
+                                        template: String,
+                                        excludedLinesByURL: [URL: Set<Int>])
+        async -> ReplaceSummary
+    {
         var summary = ReplaceSummary()
         for url in urls {
             if Task.isCancelled { break }
@@ -163,15 +168,48 @@ final class FindInFilesEngine {
                     summary.errors.append((url, "Not valid UTF-8"))
                     continue
                 }
-                let mutable = NSMutableString(string: text)
-                let range = NSRange(location: 0, length: mutable.length)
-                let count = regex.replaceMatches(in: mutable,
+                let excludedLines = excludedLinesByURL[url] ?? []
+                let count: Int
+                let newText: String
+                if excludedLines.isEmpty {
+                    // Fast path: no per-line opt-outs ⇒ full-file regex
+                    // pass. Same code we've used since Phase 4c.
+                    let mutable = NSMutableString(string: text)
+                    let range = NSRange(location: 0, length: mutable.length)
+                    count = regex.replaceMatches(in: mutable,
                                                  options: [],
                                                  range: range,
                                                  withTemplate: template)
+                    newText = mutable as String
+                } else {
+                    // Slow path: walk each match, skip the ones whose
+                    // line number the user opted out of. We mutate from
+                    // the END of the string forward so earlier offsets
+                    // stay valid as we splice in the replacement text.
+                    let nsText = text as NSString
+                    let lineStarts = Self.lineStartOffsets(in: text)
+                    let allMatches = regex.matches(
+                        in: text,
+                        options: [],
+                        range: NSRange(location: 0, length: nsText.length)
+                    )
+                    let mutable = NSMutableString(string: text)
+                    var localCount = 0
+                    for m in allMatches.reversed() {
+                        let lineNumber = Self.lineNumber(forUTF16Offset: m.range.location,
+                                                         lineStarts: lineStarts)
+                        if excludedLines.contains(lineNumber) { continue }
+                        let replacement = regex.replacementString(
+                            for: m, in: text, offset: 0, template: template
+                        )
+                        mutable.replaceCharacters(in: m.range, with: replacement)
+                        localCount += 1
+                    }
+                    count = localCount
+                    newText = mutable as String
+                }
                 if count == 0 { continue }
 
-                let newText = mutable as String
                 guard let bytes = newText.data(using: .utf8) else {
                     summary.errors.append((url, "Re-encoded text is not UTF-8"))
                     continue
@@ -186,6 +224,47 @@ final class FindInFilesEngine {
             }
         }
         return summary
+    }
+
+    /// Sorted UTF-16 offsets of each line start. lineStarts[i] is the
+    /// 0-based UTF-16 offset of the start of the (i+1)-th line. Used
+    /// by `lineNumber(forUTF16Offset:)` to map a match offset back to
+    /// the 1-based line number the UI reports.
+    private nonisolated static func lineStartOffsets(in text: String) -> [Int] {
+        var out: [Int] = [0]
+        let ns = text as NSString
+        let length = ns.length
+        var i = 0
+        while i < length {
+            let ch = ns.character(at: i)
+            if ch == 0x0A {                          // LF
+                out.append(i + 1)
+            } else if ch == 0x0D {                   // CR / CRLF
+                if i + 1 < length, ns.character(at: i + 1) == 0x0A {
+                    i += 1                            // consume LF, count once
+                }
+                out.append(i + 1)
+            }
+            i += 1
+        }
+        return out
+    }
+
+    /// 1-based line number containing a given UTF-16 offset. Binary
+    /// search keeps replace passes on multi-MB files responsive.
+    private nonisolated static func lineNumber(forUTF16Offset offset: Int,
+                                               lineStarts: [Int]) -> Int {
+        var lo = 0
+        var hi = lineStarts.count - 1
+        while lo < hi {
+            let mid = (lo + hi + 1) / 2
+            if lineStarts[mid] <= offset {
+                lo = mid
+            } else {
+                hi = mid - 1
+            }
+        }
+        return lo + 1
     }
 
     // MARK: - Implementation

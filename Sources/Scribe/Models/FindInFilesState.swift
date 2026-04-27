@@ -75,9 +75,24 @@ final class FindInFilesState: ObservableObject {
     /// from the Code/Sublime equivalents.
     @Published var excludedURLs: Set<URL> = []
 
+    /// Phase 17 — line-level inclusion overrides. Keyed by URL ⇒
+    /// 1-based line numbers the user opted OUT of within that file.
+    /// Same negation convention as `excludedURLs`. A file with every
+    /// line unticked is *not* automatically promoted into
+    /// `excludedURLs`; the file checkbox stays as the user left it,
+    /// the per-row checkboxes drive the "what gets touched" count.
+    @Published var excludedLines: [URL: Set<Int>] = [:]
+
     /// True if `url` is currently included in a Replace All pass.
     func isSelected(_ url: URL) -> Bool {
         !excludedURLs.contains(url)
+    }
+
+    /// True if a specific line within `url` is currently slated for
+    /// replacement. Excluding the parent file shadows any line state.
+    func isLineSelected(_ url: URL, line: Int) -> Bool {
+        if excludedURLs.contains(url) { return false }
+        return !(excludedLines[url]?.contains(line) ?? false)
     }
 
     /// Toggle a single file's inclusion.
@@ -89,9 +104,28 @@ final class FindInFilesState: ObservableObject {
         }
     }
 
+    /// Toggle a specific line's inclusion within a file. The file's
+    /// own selection bit is left alone — the user can opt back into
+    /// "include the file but skip these N lines" by unticking the
+    /// rows individually.
+    func toggleLineSelection(_ url: URL, line: Int) {
+        var set = excludedLines[url] ?? []
+        if set.contains(line) {
+            set.remove(line)
+        } else {
+            set.insert(line)
+        }
+        if set.isEmpty {
+            excludedLines.removeValue(forKey: url)
+        } else {
+            excludedLines[url] = set
+        }
+    }
+
     /// Mark every current result as selected.
     func selectAll() {
         excludedURLs = []
+        excludedLines = [:]
     }
 
     /// Mark every current result as deselected.
@@ -100,16 +134,42 @@ final class FindInFilesState: ObservableObject {
     }
 
     /// URLs that will actually be touched by a Replace All right now.
-    /// Drops the order from `results` so callers don't have to.
+    /// A file is "touched" when (a) the file checkbox is on AND
+    /// (b) at least one of its lines is also on.
     var selectedURLs: [URL] {
-        results.map(\.url).filter { !excludedURLs.contains($0) }
+        results.compactMap { file in
+            guard !excludedURLs.contains(file.url) else { return nil }
+            let excludedSet = excludedLines[file.url] ?? []
+            let anyLineKept = file.matches.contains { !excludedSet.contains($0.lineNumber) }
+            return anyLineKept ? file.url : nil
+        }
     }
 
-    /// Aggregate match count across the currently-selected files only.
-    /// Drives the "Replace N matches in M files" hint.
+    /// Per-URL set of line numbers to skip during Replace. Driven by
+    /// `excludedLines` on selected files only — a file whose top-level
+    /// checkbox is off doesn't need an entry here because the engine
+    /// won't be called against it in the first place.
+    var excludedLinesByURL: [URL: Set<Int>] {
+        var out: [URL: Set<Int>] = [:]
+        for (url, set) in excludedLines where !set.isEmpty {
+            if !excludedURLs.contains(url) {
+                out[url] = set
+            }
+        }
+        return out
+    }
+
+    /// Aggregate match count across the currently-selected files /
+    /// lines. Drives the "Replace N matches in M files" hint.
     var selectedMatchCount: Int {
-        results.reduce(0) {
-            excludedURLs.contains($1.url) ? $0 : $0 + $1.matches.count
+        results.reduce(0) { acc, file in
+            guard !excludedURLs.contains(file.url) else { return acc }
+            let excludedSet = excludedLines[file.url] ?? []
+            return acc + file.matches.reduce(0) { lineAcc, match in
+                excludedSet.contains(match.lineNumber)
+                    ? lineAcc
+                    : lineAcc + match.matchRanges.count
+            }
         }
     }
 
@@ -126,10 +186,31 @@ final class FindInFilesState: ObservableObject {
         // A fresh result set invalidates the previous selection. Drop
         // any excluded URLs that aren't represented in the new tree
         // so an unrelated file from a prior search doesn't quietly
-        // "re-include itself" if it shows up again later.
+        // "re-include itself" if it shows up again later. Same
+        // pruning logic applies to `excludedLines` — both URL keys
+        // that vanished and line numbers that no longer match the
+        // new result must be cleared so the next search starts
+        // from a coherent baseline.
+        let newURLs = Set(results.map(\.url))
         if !excludedURLs.isEmpty {
-            let newURLs = Set(results.map(\.url))
             excludedURLs.formIntersection(newURLs)
+        }
+        if !excludedLines.isEmpty {
+            // Drop URLs that vanished entirely.
+            excludedLines = excludedLines.filter { newURLs.contains($0.key) }
+            // For URLs still present, intersect line numbers with the
+            // new result's line set so a re-run that produces a
+            // different match layout doesn't carry over stale rows.
+            for file in results {
+                guard var lines = excludedLines[file.url] else { continue }
+                let newLineSet = Set(file.matches.map(\.lineNumber))
+                lines.formIntersection(newLineSet)
+                if lines.isEmpty {
+                    excludedLines.removeValue(forKey: file.url)
+                } else {
+                    excludedLines[file.url] = lines
+                }
+            }
         }
     }
 
@@ -152,5 +233,6 @@ final class FindInFilesState: ObservableObject {
         error = nil
         lastReplaceSummary = nil
         excludedURLs = []
+        excludedLines = [:]
     }
 }

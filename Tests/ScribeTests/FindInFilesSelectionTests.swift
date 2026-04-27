@@ -121,5 +121,115 @@ final class FindInFilesSelectionTests: XCTestCase {
         s.toggleSelection(s.results[0].url)
         s.reset()
         XCTAssertTrue(s.excludedURLs.isEmpty)
+        XCTAssertTrue(s.excludedLines.isEmpty)
+    }
+
+    // MARK: - Phase 17: line-level selection
+
+    func test_lineSelection_defaultsToOn() {
+        let s = FindInFilesState()
+        seedResults(s, count: 1, matchesPerFile: 3)
+        let url = s.results[0].url
+        for match in s.results[0].matches {
+            XCTAssertTrue(s.isLineSelected(url, line: match.lineNumber))
+        }
+    }
+
+    func test_toggleLineSelection_excludesAndReincludes() {
+        let s = FindInFilesState()
+        seedResults(s, count: 1, matchesPerFile: 3)
+        let url = s.results[0].url
+        s.toggleLineSelection(url, line: 2)
+        XCTAssertFalse(s.isLineSelected(url, line: 2))
+        XCTAssertTrue(s.isLineSelected(url, line: 1))
+        XCTAssertTrue(s.isLineSelected(url, line: 3))
+        XCTAssertEqual(s.selectedMatchCount, 2)
+
+        s.toggleLineSelection(url, line: 2)
+        XCTAssertTrue(s.isLineSelected(url, line: 2))
+        XCTAssertEqual(s.selectedMatchCount, 3)
+    }
+
+    func test_toggleLineSelection_emptySetClearsURLEntry() {
+        // Toggling all lines off and then back on should leave
+        // excludedLines without that URL key — keeps the dict from
+        // accumulating { url: [] } sentinels across edits.
+        let s = FindInFilesState()
+        seedResults(s, count: 1, matchesPerFile: 2)
+        let url = s.results[0].url
+        s.toggleLineSelection(url, line: 1)
+        XCTAssertEqual(s.excludedLines[url], [1])
+        s.toggleLineSelection(url, line: 1)
+        XCTAssertNil(s.excludedLines[url])
+    }
+
+    func test_lineSelection_shadowedByFileExclusion() {
+        // File-off ⇒ every line reads as deselected, regardless of
+        // its own bit. The line bit is preserved so re-enabling the
+        // file restores the user's earlier per-line choices.
+        let s = FindInFilesState()
+        seedResults(s, count: 1, matchesPerFile: 2)
+        let url = s.results[0].url
+        s.toggleLineSelection(url, line: 1)
+        s.toggleSelection(url)              // file off
+        XCTAssertFalse(s.isLineSelected(url, line: 1))
+        XCTAssertFalse(s.isLineSelected(url, line: 2))
+        XCTAssertEqual(s.selectedMatchCount, 0)
+
+        s.toggleSelection(url)              // file back on
+        XCTAssertFalse(s.isLineSelected(url, line: 1))   // earlier per-line bit restored
+        XCTAssertTrue(s.isLineSelected(url, line: 2))
+    }
+
+    func test_selectedURLs_dropsFilesWithEveryLineDeselected() {
+        let s = FindInFilesState()
+        seedResults(s, count: 2, matchesPerFile: 2)
+        let url = s.results[0].url
+        s.toggleLineSelection(url, line: 1)
+        s.toggleLineSelection(url, line: 2)
+        // Every line of file 0 deselected ⇒ file drops out of
+        // selectedURLs without us having to also flip the file
+        // checkbox. The engine call gets a clean list of URLs that
+        // actually need a write.
+        XCTAssertEqual(s.selectedURLs, [s.results[1].url])
+        XCTAssertEqual(s.selectedMatchCount, 2)
+    }
+
+    func test_excludedLinesByURL_filtersFilesAlreadyExcluded() {
+        // If a file's top-level checkbox is off, its excludedLines
+        // entries shouldn't propagate to the engine (no need — the
+        // file isn't in `selectedURLs` at all).
+        let s = FindInFilesState()
+        seedResults(s, count: 2, matchesPerFile: 2)
+        let url = s.results[0].url
+        s.toggleLineSelection(url, line: 1)
+        s.toggleSelection(url)              // turn off entire file
+        XCTAssertNil(s.excludedLinesByURL[url],
+                     "engine shouldn't see line filter for an excluded file")
+    }
+
+    func test_freshSearch_dropsLineEntriesForVanishedLineNumbers() {
+        // Shape of the second result set differs from the first —
+        // line 5 is gone. The exclusion bit on line 5 must clear so
+        // a hypothetical future result with line 5 again starts
+        // selected by default, matching the URL-level behaviour.
+        let s = FindInFilesState()
+        seedResults(s, count: 1, matchesPerFile: 5)
+        let url = s.results[0].url
+        s.toggleLineSelection(url, line: 5)
+        XCTAssertEqual(s.excludedLines[url], [5])
+
+        // Re-run search with only lines 1..3.
+        let trimmed = (1...3).map {
+            LineMatch(lineNumber: $0,
+                      lineText: "line \($0)",
+                      matchRanges: [0..<3])
+        }
+        s.update(results: [FileResult(url: url, matches: trimmed)],
+                 totalMatches: 3,
+                 filesScanned: 1,
+                 filesWithMatches: 1)
+        XCTAssertNil(s.excludedLines[url],
+                     "line-5 exclusion must drop when line 5 vanishes")
     }
 }
