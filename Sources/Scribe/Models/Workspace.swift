@@ -8,11 +8,12 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-/// Which mode the side panel is in: project tree or find-in-files
-/// results. Mirrors the VSCode primary side bar tabs.
+/// Which mode the side panel is in. Mirrors the VSCode primary side
+/// bar tabs: project tree, search results, symbol outline.
 enum SidebarMode: String {
     case files
     case search
+    case outline
 }
 
 @MainActor

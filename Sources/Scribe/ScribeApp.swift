@@ -14,6 +14,7 @@ struct ScribeApp: App {
     @StateObject private var findState = FindState()
     @StateObject private var findInFiles = FindInFilesState()
     @StateObject private var fileIndex = FileIndex()
+    @StateObject private var outline = SymbolOutline()
     private let findInFilesEngine = FindInFilesEngine()
 
     init() {
@@ -89,6 +90,7 @@ struct ScribeApp: App {
                 .environmentObject(findState)
                 .environmentObject(findInFiles)
                 .environmentObject(fileIndex)
+                .environmentObject(outline)
                 .frame(minWidth: 900, minHeight: 600)
                 .onAppear {
                     CommandRegistration.refresh(
@@ -101,12 +103,17 @@ struct ScribeApp: App {
                     if let root = workspace.folderRoot?.url {
                         fileIndex.rebuild(at: root)
                     }
+                    outline.update(for: workspace.current)
                 }
                 .onChange(of: workspace.documents.map(\.id)) { _, _ in
                     CommandRegistration.refresh(registry: commands, workspace: workspace, prefs: prefs)
                 }
                 .onChange(of: workspace.selectedID) { _, _ in
                     CommandRegistration.refresh(registry: commands, workspace: workspace, prefs: prefs)
+                    outline.update(for: workspace.current)
+                }
+                .onChange(of: workspace.current?.text) { _, _ in
+                    outline.update(for: workspace.current)
                 }
                 .onChange(of: prefs.softTabs) { _, _ in
                     CommandRegistration.refresh(registry: commands, workspace: workspace, prefs: prefs)
@@ -131,7 +138,7 @@ struct ScribeApp: App {
                 Button("Open…") { workspace.openDocument() }
                     .keyboardShortcut("o")
                 Button("Open Folder…") { workspace.openFolder() }
-                    .keyboardShortcut("o", modifiers: [.command, .shift])
+                    .keyboardShortcut("o", modifiers: [.command, .option])
                 RecentFilesMenu(prefs: prefs, workspace: workspace)
                 RecentFoldersMenu(prefs: prefs, workspace: workspace)
             }
@@ -158,6 +165,14 @@ struct ScribeApp: App {
                     PaletteWindowController.shared.toggle(registry: commands)
                 }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
+
+                Divider()
+
+                Button("Show Outline") {
+                    workspace.sidebarVisible = true
+                    workspace.sidebarMode = .outline
+                }
+                .keyboardShortcut("o", modifiers: [.command, .shift])
             }
             CommandMenu("Tools") {
                 Button("Compare Files…") {

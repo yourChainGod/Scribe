@@ -7,6 +7,7 @@ import SwiftUI
 
 struct SidebarView: View {
     @EnvironmentObject var workspace: Workspace
+    @EnvironmentObject var outline: SymbolOutline
     let findInFiles: FindInFilesEngine
 
     var body: some View {
@@ -14,8 +15,9 @@ struct SidebarView: View {
             modeSwitcher
             Divider()
             switch workspace.sidebarMode {
-            case .files: filesPane
-            case .search: FindInFilesSidebar(engine: findInFiles)
+            case .files:   filesPane
+            case .search:  FindInFilesSidebar(engine: findInFiles)
+            case .outline: OutlineSidebar(outline: outline)
             }
         }
         .background(Color(nsColor: .controlBackgroundColor))
@@ -25,8 +27,9 @@ struct SidebarView: View {
 
     private var modeSwitcher: some View {
         HStack(spacing: 0) {
-            modeButton(.files, system: "folder", title: "Files")
-            modeButton(.search, system: "magnifyingglass", title: "Search")
+            modeButton(.files,   system: "folder",        title: "Files")
+            modeButton(.search,  system: "magnifyingglass", title: "Search")
+            modeButton(.outline, system: "list.bullet.indent", title: "Outline")
             Spacer()
         }
         .padding(.horizontal, 6)
