@@ -32,14 +32,15 @@ struct StatusBarView: View {
 
 private struct DocumentStatusItems: View {
     @ObservedObject var doc: Document
+    @EnvironmentObject var workspace: Workspace
 
     var body: some View {
         Label(doc.languageGuess.uppercased(),
               systemImage: "chevron.left.forwardslash.chevron.right")
         Divider().frame(height: 12)
-        Text(encodingDescription(doc.encoding))
+        encodingMenu
         Divider().frame(height: 12)
-        Text(doc.lineEnding.short)
+        lineEndingMenu
         Divider().frame(height: 12)
         Text("Ln \(doc.cursorLine), Col \(doc.cursorColumn)")
             .monospacedDigit()
@@ -47,12 +48,54 @@ private struct DocumentStatusItems: View {
         Text("\(doc.text.count) chars")
     }
 
-    private func encodingDescription(_ enc: String.Encoding) -> String {
-        switch enc {
-        case .utf8: "UTF-8"
-        case .utf16: "UTF-16"
-        case .ascii: "ASCII"
-        default: "Unknown"
+    private var encodingMenu: some View {
+        Menu {
+            if doc.url != nil {
+                Section("Reopen with Encoding") {
+                    ForEach(TextEncoding.allCases) { enc in
+                        Button(enc.displayName) { workspace.reopen(doc: doc, as: enc) }
+                    }
+                }
+            }
+            Section("Save with Encoding") {
+                ForEach(TextEncoding.allCases) { enc in
+                    Button {
+                        workspace.setEncoding(of: doc, to: enc)
+                    } label: {
+                        if doc.encoding == enc {
+                            Label(enc.displayName, systemImage: "checkmark")
+                        } else {
+                            Text(enc.displayName)
+                        }
+                    }
+                }
+            }
+        } label: {
+            Text(doc.encoding.displayName)
         }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+
+    private var lineEndingMenu: some View {
+        Menu {
+            ForEach(LineEnding.allCases) { ending in
+                Button {
+                    workspace.setLineEnding(of: doc, to: ending)
+                } label: {
+                    if doc.lineEnding == ending {
+                        Label(ending.rawValue, systemImage: "checkmark")
+                    } else {
+                        Text(ending.rawValue)
+                    }
+                }
+            }
+        } label: {
+            Text(doc.lineEnding.short)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
     }
 }

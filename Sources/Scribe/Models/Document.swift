@@ -12,7 +12,7 @@ final class Document: ObservableObject, Identifiable {
     @Published var title: String
     @Published var text: String
     @Published var url: URL?
-    @Published var encoding: String.Encoding = .utf8
+    @Published var encoding: TextEncoding = .utf8
     @Published var lineEnding: LineEnding = .lf
     @Published var isDirty: Bool = false
     @Published var cursorLine: Int = 1
@@ -32,19 +32,5 @@ final class Document: ObservableObject, Identifiable {
         guard let url else { return "txt" }
         let ext = url.pathExtension.lowercased()
         return ext.isEmpty ? "txt" : ext
-    }
-}
-
-enum LineEnding: String, CaseIterable, Identifiable {
-    case lf = "Unix (LF)"
-    case crlf = "Windows (CRLF)"
-    case cr = "Classic Mac (CR)"
-    var id: String { rawValue }
-    var short: String {
-        switch self {
-        case .lf: "LF"
-        case .crlf: "CRLF"
-        case .cr: "CR"
-        }
     }
 }
