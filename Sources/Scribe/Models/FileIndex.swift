@@ -31,11 +31,29 @@ final class FileIndex: ObservableObject {
 
     private var rebuildTask: Task<Void, Never>?
 
+    /// Workspace-wide FS watcher. Created when rebuild(at:) starts a
+    /// fresh root and torn down by clear(). Triggers a debounced
+    /// rebuild on any external file-tree change (`git checkout`,
+    /// `mv`, an editor outside Scribe writing a new file, …).
+    private var watcher: DirectoryWatcher?
+
+    /// Hook for the host app to run extra work whenever the index
+    /// gets refreshed because of a file-system change. Set by ScribeApp
+    /// to also reload the FileNode tree so the sidebar stays in sync.
+    var onFileSystemChange: (@MainActor () -> Void)?
+
     // MARK: - Public surface
 
-    /// Kick off a (re)scan rooted at `root`. Cancels any in-flight scan.
+    /// Kick off a (re)scan rooted at `root`. Cancels any in-flight scan
+    /// and (re)attaches the FSEvents watcher so subsequent external
+    /// changes auto-rebuild without needing the user to re-open the
+    /// folder. Calling rebuild(at:) with the same root just refreshes
+    /// the index — the watcher gets recreated either way to make
+    /// filesystem-restart edge cases (network volume, encrypted disk
+    /// mount) recoverable.
     func rebuild(at root: URL) {
         rebuildTask?.cancel()
+        watcher = nil   // tear down the previous root's watcher first
         rootURL = root
         files = []
         isIndexing = true
@@ -53,6 +71,15 @@ final class FileIndex: ObservableObject {
                 self.isIndexing = false
             }
         }
+
+        // Start the FS watcher AFTER kicking off the initial scan so
+        // we don't miss files that landed in the millisecond between
+        // `walk` reading the directory and the watcher activating.
+        // FSEvents tolerates the ordering either way; we just stay on
+        // the safe side.
+        watcher = DirectoryWatcher(url: root) { [weak self] in
+            self?.handleFSChange()
+        }
     }
 
     /// Forget the current scan. Workspace closes the folder ⇒ index goes
@@ -60,9 +87,31 @@ final class FileIndex: ObservableObject {
     func clear() {
         rebuildTask?.cancel()
         rebuildTask = nil
+        watcher = nil
         rootURL = nil
         files = []
         isIndexing = false
+    }
+
+    /// FSEvents → debounced → here. Re-walk the tree using the same
+    /// root we already have, then notify the host app so it can
+    /// refresh anything else that mirrors the workspace state
+    /// (e.g. the FileNode-backed sidebar tree).
+    private func handleFSChange() {
+        guard let root = rootURL else { return }
+        rebuildTask?.cancel()
+        isIndexing = true
+        rebuildTask = Task { [weak self, root] in
+            let collected: [URL] = await Task.detached(priority: .userInitiated) {
+                Self.walk(root: root)
+            }.value
+            await MainActor.run { [weak self] in
+                guard let self, self.rootURL == root else { return }
+                self.files = collected
+                self.isIndexing = false
+                self.onFileSystemChange?()
+            }
+        }
     }
 
     // MARK: - File walk

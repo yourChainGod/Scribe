@@ -98,6 +98,13 @@ struct ScribeApp: App {
                         workspace: workspace,
                         prefs: prefs
                     )
+                    // External FS changes (git checkout, mv, npm install)
+                    // → reload the file tree so the sidebar matches disk.
+                    // The index already updates itself; this is the
+                    // host-app callback for the FileNode view layer.
+                    fileIndex.onFileSystemChange = { [workspace] in
+                        workspace.folderRoot?.reload()
+                    }
                     // First-launch: index the folder we restored from
                     // SCRIBE_AUTO_FOLDER / Recent if any.
                     if let root = workspace.folderRoot?.url {
