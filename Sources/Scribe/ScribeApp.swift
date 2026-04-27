@@ -48,6 +48,9 @@ struct ScribeApp: App {
         // here is observed to delay (or skip!) NSWindow creation on
         // macOS 14+ / swift-tools 5.9.
         let autoFolder = (ProcessInfo.processInfo.environment["SCRIBE_AUTO_FOLDER"] ?? "")
+        // SCRIBE_AUTO_COMPARE expects "leftPath:rightPath" — opens the
+        // diff view straight away. Used by Phase 5 verification scripts.
+        let autoCompare = (ProcessInfo.processInfo.environment["SCRIBE_AUTO_COMPARE"] ?? "")
         DispatchQueue.main.async {
             for url in autoOpen {
                 ws.openFile(at: url)
@@ -56,6 +59,18 @@ struct ScribeApp: App {
                 let url = URL(fileURLWithPath: autoFolder)
                 if FileManager.default.fileExists(atPath: url.path) {
                     ws.openFolder(at: url)
+                }
+            }
+            if !autoCompare.isEmpty {
+                let parts = autoCompare.split(separator: ":", maxSplits: 1)
+                                       .map(String.init)
+                if parts.count == 2,
+                   FileManager.default.fileExists(atPath: parts[0]),
+                   FileManager.default.fileExists(atPath: parts[1]) {
+                    let session = DiffSession()
+                    session.load(left: URL(fileURLWithPath: parts[0]),
+                                 right: URL(fileURLWithPath: parts[1]))
+                    ws.compareSession = session
                 }
             }
         }
@@ -123,6 +138,16 @@ struct ScribeApp: App {
                     PaletteWindowController.shared.toggle(registry: commands)
                 }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
+            }
+            CommandMenu("Tools") {
+                Button("Compare Files…") {
+                    let session = DiffSession()
+                    session.chooseAndCompare()
+                    if session.leftURL != nil, session.rightURL != nil {
+                        workspace.compareSession = session
+                    }
+                }
+                .keyboardShortcut("d", modifiers: [.command, .option])
             }
             CommandGroup(replacing: .textEditing) {
                 Button("Find…") {

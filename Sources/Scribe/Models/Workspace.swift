@@ -23,6 +23,11 @@ final class Workspace: ObservableObject {
     @Published var sidebarMode: SidebarMode = .files
     @Published var folderRoot: FileNode?
 
+    /// Non-nil ⇒ MainWindow renders the Compare-Files screen instead of
+    /// the editor. ScribeApp keeps a single DiffSession for the app
+    /// lifetime; toggling here just shows / hides the screen.
+    @Published var compareSession: DiffSession?
+
     let prefs: EditorPreferences
 
     /// One file-system watcher per open document with a URL. Removed when

@@ -13,6 +13,16 @@ struct MainWindow: View {
     @State private var dragOver = false
 
     var body: some View {
+        if let session = workspace.compareSession {
+            DiffView(session: session, onClose: {
+                workspace.compareSession = nil
+            })
+        } else {
+            editorLayout
+        }
+    }
+
+    private var editorLayout: some View {
         NavigationSplitView {
             SidebarView(findInFiles: findInFilesEngine)
                 .navigationSplitViewColumnWidth(min: 200, ideal: 260, max: 380)
@@ -76,10 +86,12 @@ struct MainWindow: View {
                 }
                 .help("Find (⌘F)")
 
-                Button {} label: {
+                Button {
+                    startCompare()
+                } label: {
                     Image(systemName: "rectangle.split.2x1")
                 }
-                .help("Compare Files")
+                .help("Compare Files (⌥⌘D)")
             }
         }
         .navigationTitle(workspace.current?.title ?? "Scribe")
@@ -112,6 +124,17 @@ struct MainWindow: View {
                     .padding(8)
                     .allowsHitTesting(false)
             }
+        }
+    }
+
+    /// Pop the open panel, load the two picked files, switch
+    /// MainWindow into Compare mode.
+    private func startCompare() {
+        let session = DiffSession()
+        session.chooseAndCompare()
+        // Only show the diff view if the user actually chose two files.
+        if session.leftURL != nil, session.rightURL != nil {
+            workspace.compareSession = session
         }
     }
 }
