@@ -98,6 +98,10 @@ struct ScribeApp: App {
                         workspace: workspace,
                         prefs: prefs
                     )
+                    // Wire ⌘P's `>` route through to the same registry
+                    // ⌘⇧P uses, so users can run any palette command
+                    // without dismissing Quick Open first.
+                    QuickOpenController.shared.bindCommandPalette(commands)
                     // External FS changes (git checkout, mv, npm install)
                     // → reload the file tree so the sidebar matches disk.
                     // The index already updates itself; this is the

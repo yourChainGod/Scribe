@@ -84,4 +84,61 @@ final class CommandRegistryRoutingTests: XCTestCase {
         XCTAssertEqual(r.activeRoute(for: "@x")?.placeholder, "Jump to symbol…")
         XCTAssertNil(r.activeRoute(for: "x")?.placeholder)
     }
+
+    // MARK: - Phase 13: dynamic routes
+
+    func test_search_dynamicRouteWinsOverStaticRegistry() {
+        // A route can have BOTH a registry and a dynamicCommands
+        // closure; dynamic must win, matching the documented
+        // contract.
+        let main = CommandRegistry()
+        let stale = CommandRegistry()
+        stale.commands = [ScribeCommand(id: "stale", title: "stale", perform: {})]
+
+        var receivedQuery: String = ""
+        main.prefixRoutes = [
+            PrefixRoute(id: "dyn",
+                        prefix: ":",
+                        registry: stale,
+                        dynamicCommands: { stripped in
+                            receivedQuery = stripped
+                            return [
+                                ScribeCommand(id: "dyn:\(stripped)",
+                                              title: "go \(stripped)",
+                                              perform: {})
+                            ]
+                        })
+        ]
+        let res = main.search(":42")
+        XCTAssertEqual(receivedQuery, "42")
+        XCTAssertEqual(res.map(\.command.id), ["dyn:42"])
+        XCTAssertFalse(res.map(\.command.id).contains("stale"))
+    }
+
+    func test_search_dynamicRouteEmptyResultRendersEmpty() {
+        let main = CommandRegistry()
+        main.prefixRoutes = [
+            PrefixRoute(id: "dyn",
+                        prefix: ":",
+                        dynamicCommands: { _ in [] })
+        ]
+        XCTAssertTrue(main.search(":xyz").isEmpty)
+    }
+
+    func test_search_dynamicRouteSeesEmptyStrippedQuery() {
+        // Bare prefix ":" should still invoke the closure with "" so
+        // it can decide what (if anything) to show.
+        let main = CommandRegistry()
+        var sawEmpty = false
+        main.prefixRoutes = [
+            PrefixRoute(id: "dyn",
+                        prefix: ":",
+                        dynamicCommands: { stripped in
+                            if stripped.isEmpty { sawEmpty = true }
+                            return []
+                        })
+        ]
+        _ = main.search(":")
+        XCTAssertTrue(sawEmpty)
+    }
 }

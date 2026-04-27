@@ -45,20 +45,44 @@ struct CommandMatch: Identifiable {
     var id: String { command.id }
 }
 
-/// Routes a query starting with `prefix` to a different CommandRegistry.
-/// Used by Phase 11 ⌘P @symbol so a single palette window can switch
-/// between file picker (default) and symbol picker (prefix "@") without
-/// the host having to teardown / rebuild the panel itself.
+/// Routes a query starting with `prefix` to a different command source.
+/// Two flavours:
+///   1. Static sub-registry (Phase 11 @symbol): caller pre-populates a
+///      CommandRegistry, search routes the stripped query to it.
+///   2. Dynamic (Phase 13 :N goto-line): caller supplies a closure that
+///      maps the stripped query to a fresh [ScribeCommand]. Used when
+///      the result list depends on the query itself rather than being
+///      fuzzy-matched against a static set — e.g. ":42" can't be
+///      faked by registering 1..N "go to line K" commands ahead of
+///      time.
 struct PrefixRoute: Identifiable {
     let id: String
     let prefix: String
-    /// The sub-registry that owns the commands surfaced under this
-    /// prefix. The palette never observes this object directly, so the
-    /// caller must finish populating it BEFORE attaching the route.
-    let registry: CommandRegistry
+    /// Optional static sub-registry. If non-nil and `dynamicCommands`
+    /// is nil, search() defers to `registry.search(strippedQuery)`.
+    let registry: CommandRegistry?
+    /// Optional dynamic builder. If non-nil it wins over `registry`:
+    /// search() invokes the closure with the stripped query and wraps
+    /// the returned commands in CommandMatch values (no fuzzy scoring;
+    /// the closure already decided what's relevant).
+    let dynamicCommands: ((String) -> [ScribeCommand])?
     /// Placeholder displayed in the search field while this route is
     /// active. nil ⇒ caller-supplied default.
     let placeholder: String?
+
+    init(id: String,
+         prefix: String,
+         registry: CommandRegistry? = nil,
+         dynamicCommands: ((String) -> [ScribeCommand])? = nil,
+         placeholder: String? = nil) {
+        precondition(registry != nil || dynamicCommands != nil,
+                     "PrefixRoute needs either a registry or a dynamicCommands closure")
+        self.id = id
+        self.prefix = prefix
+        self.registry = registry
+        self.dynamicCommands = dynamicCommands
+        self.placeholder = placeholder
+    }
 }
 
 @MainActor
@@ -130,7 +154,18 @@ final class CommandRegistry: ObservableObject {
     func search(_ query: String) -> [CommandMatch] {
         if let route = activeRoute(for: query) {
             let stripped = String(query.dropFirst(route.prefix.count))
-            return route.registry.search(stripped)
+            // Dynamic routes win over static ones — same as the init
+            // precondition: caller can have one or the other, not
+            // neither, and dynamic is the more specific contract.
+            if let build = route.dynamicCommands {
+                return build(stripped).map {
+                    CommandMatch(command: $0, score: 0, highlightedRanges: nil)
+                }
+            }
+            if let registry = route.registry {
+                return registry.search(stripped)
+            }
+            return []
         }
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         if trimmed.isEmpty {
