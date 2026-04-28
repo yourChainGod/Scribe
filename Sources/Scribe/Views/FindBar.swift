@@ -45,16 +45,16 @@ struct FindBar: View {
             }
             .toggleStyle(.button)
             .buttonStyle(.borderless)
-            .help("Toggle Replace")
+            .help(L10n.t("findbar.toggleReplace"))
 
             historyMenu(
                 history: state.queryHistory,
-                empty: "No recent searches",
+                empty: L10n.t("findbar.history.emptySearches"),
                 onPick: { state.query = $0 },
                 onClear: { state.clearHistory() }
             )
 
-            TextField("Find", text: $state.query)
+            TextField(L10n.t("findbar.placeholder.find"), text: $state.query)
                 .textFieldStyle(.roundedBorder)
                 .focused($queryFocused)
                 .font(.system(size: 12))
@@ -83,9 +83,9 @@ struct FindBar: View {
                     return .handled
                 }
 
-            optionToggle("Aa", help: "Match Case", binding: $state.matchCase)
-            optionToggle("ab\u{2009}|", help: "Whole Word", binding: $state.wholeWord)
-            optionToggle(".*", help: "Regular Expression", binding: $state.regex)
+            optionToggle("Aa", help: L10n.t("find.option.matchCase"), binding: $state.matchCase)
+            optionToggle("ab\u{2009}|", help: L10n.t("find.option.wholeWord"), binding: $state.wholeWord)
+            optionToggle(".*", help: L10n.t("find.option.regex"), binding: $state.regex)
 
             // Spacer first so the status sticks to the right next to
             // the navigation buttons, like Xcode / VSCode.
@@ -102,7 +102,7 @@ struct FindBar: View {
             }
             .buttonStyle(.borderless)
             .keyboardShortcut("g", modifiers: [.command, .shift])
-            .help("Find Previous (⇧⌘G)")
+            .help(L10n.t("findbar.action.previous") + " (⇧⌘G)")
 
             Button {
                 state.commands.send(.findNext)
@@ -111,7 +111,7 @@ struct FindBar: View {
             }
             .buttonStyle(.borderless)
             .keyboardShortcut("g", modifiers: .command)
-            .help("Find Next (⌘G)")
+            .help(L10n.t("findbar.action.next") + " (⌘G)")
 
             CloseButton(action: state.hide)
                 .keyboardShortcut(.escape, modifiers: [])
@@ -127,12 +127,12 @@ struct FindBar: View {
 
             historyMenu(
                 history: state.replacementHistory,
-                empty: "No recent replacements",
+                empty: L10n.t("findbar.history.emptyReplacements"),
                 onPick: { state.replacement = $0 },
                 onClear: { state.replacementHistory = [] }
             )
 
-            TextField("Replace", text: $state.replacement)
+            TextField(L10n.t("findbar.placeholder.replace"), text: $state.replacement)
                 .textFieldStyle(.roundedBorder)
                 .focused($replaceFocused)
                 .font(.system(size: 12))
@@ -143,19 +143,23 @@ struct FindBar: View {
                     state.commands.send(.replaceCurrent)
                 }
 
-            Button("Replace") {
+            Button {
                 state.commitQueryToHistory()
                 state.commitReplacementToHistory()
                 state.commands.send(.replaceCurrent)
+            } label: {
+                Text("findbar.action.replace", bundle: .module)
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
             .disabled(state.query.isEmpty)
 
-            Button("Replace All") {
+            Button {
                 state.commitQueryToHistory()
                 state.commitReplacementToHistory()
                 state.commands.send(.replaceAll)
+            } label: {
+                Text("findbar.action.replaceAll", bundle: .module)
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
@@ -182,7 +186,9 @@ struct FindBar: View {
                     Button(item) { onPick(item) }
                 }
                 Divider()
-                Button("Clear History", role: .destructive) { onClear() }
+                Button(role: .destructive) {
+                    onClear()
+                } label: { Text("findbar.clearHistory", bundle: .module) }
             }
         } label: {
             Image(systemName: "magnifyingglass")
@@ -192,7 +198,7 @@ struct FindBar: View {
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .frame(width: 18)
-        .help("Recent — click to reuse")
+        .help(L10n.t("findbar.history"))
     }
 
     // MARK: - Pieces
@@ -229,7 +235,7 @@ struct FindBar: View {
             }
             .buttonStyle(.plain)
             .onHover { hover = $0 }
-            .help("Close (Esc)")
+            .help(L10n.t("findbar.action.close") + " (Esc)")
         }
     }
 

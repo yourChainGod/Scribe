@@ -12,11 +12,29 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             EditorSettingsPane(prefs: prefs)
-                .tabItem { Label("Editor", systemImage: "text.cursor") }
+                .tabItem {
+                    Label {
+                        Text("settings.tab.editor", bundle: .module)
+                    } icon: {
+                        Image(systemName: "text.cursor")
+                    }
+                }
             AppearanceSettingsPane(prefs: prefs)
-                .tabItem { Label("Appearance", systemImage: "paintpalette") }
+                .tabItem {
+                    Label {
+                        Text("settings.tab.appearance", bundle: .module)
+                    } icon: {
+                        Image(systemName: "paintpalette")
+                    }
+                }
             AboutPane()
-                .tabItem { Label("About", systemImage: "info.circle") }
+                .tabItem {
+                    Label {
+                        Text("settings.tab.about", bundle: .module)
+                    } icon: {
+                        Image(systemName: "info.circle")
+                    }
+                }
         }
         .frame(width: 540, height: 380)
     }
@@ -27,12 +45,12 @@ private struct EditorSettingsPane: View {
 
     var body: some View {
         Form {
-            Section("Font") {
+            Section {
                 HStack {
-                    Text("Family")
+                    Text("settings.field.family", bundle: .module)
                     Spacer()
                     Picker("", selection: $prefs.fontName) {
-                        Text("System Monospaced").tag("")
+                        Text("settings.font.systemMonospaced", bundle: .module).tag("")
                         ForEach(monospacedFamilies, id: \.self) { name in
                             Text(name).tag(name)
                         }
@@ -42,7 +60,7 @@ private struct EditorSettingsPane: View {
                 }
 
                 HStack {
-                    Text("Size")
+                    Text("settings.field.size", bundle: .module)
                     Spacer()
                     Stepper(value: $prefs.fontSize,
                             in: EditorPreferences.fontSizeMin...EditorPreferences.fontSizeMax,
@@ -52,11 +70,13 @@ private struct EditorSettingsPane: View {
                             .frame(minWidth: 48, alignment: .trailing)
                     }
                 }
+            } header: {
+                Text("settings.section.font", bundle: .module)
             }
 
-            Section("Indentation") {
+            Section {
                 HStack {
-                    Text("Tab width")
+                    Text("settings.field.tabWidth", bundle: .module)
                     Spacer()
                     Stepper(value: $prefs.tabWidth,
                             in: EditorPreferences.tabWidthMin...EditorPreferences.tabWidthMax) {
@@ -65,17 +85,27 @@ private struct EditorSettingsPane: View {
                             .frame(minWidth: 80, alignment: .trailing)
                     }
                 }
-                Toggle("Insert spaces when Tab is pressed", isOn: $prefs.softTabs)
+                Toggle(isOn: $prefs.softTabs) {
+                    Text("settings.field.softTabs", bundle: .module)
+                }
+            } header: {
+                Text("settings.section.indent", bundle: .module)
             }
 
-            Section("Recent Files") {
+            Section {
                 HStack {
                     Text("\(prefs.recentFiles.count) remembered (max \(EditorPreferences.recentFilesMax))")
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("Clear") { prefs.clearRecent() }
-                        .disabled(prefs.recentFiles.isEmpty)
+                    Button {
+                        prefs.clearRecent()
+                    } label: {
+                        Text("settings.action.clear", bundle: .module)
+                    }
+                    .disabled(prefs.recentFiles.isEmpty)
                 }
+            } header: {
+                Text("settings.section.recent", bundle: .module)
             }
         }
         .formStyle(.grouped)
@@ -105,16 +135,18 @@ private struct AppearanceSettingsPane: View {
                 // resolves at render-time against the current
                 // NSAppearance so flipping macOS dark mode doesn't
                 // require re-picking.
-                Picker("Theme", selection: $prefs.themeID) {
+                Picker(selection: $prefs.themeID) {
                     ForEach(ThemeID.allCases) { id in
                         Text(id.displayName).tag(id)
                     }
+                } label: {
+                    Text("settings.appearance.theme", bundle: .module)
                 }
                 .pickerStyle(.menu)
             } header: {
-                Text("Editor Theme")
+                Text("settings.appearance.section.theme", bundle: .module)
             } footer: {
-                Text("System (auto) follows the macOS light/dark preference. Pinning a specific theme overrides that.")
+                Text("settings.appearance.themeFooter", bundle: .module)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -122,7 +154,7 @@ private struct AppearanceSettingsPane: View {
             // Live preview swatch. Confirms the picked theme's
             // colours without forcing the user to flip back to
             // the editor.
-            Section("Preview") {
+            Section {
                 ThemePreviewSwatch(theme: prefs.themeID
                                     .resolve(appearance: NSApp.effectiveAppearance))
                     .frame(height: 110)
@@ -132,6 +164,8 @@ private struct AppearanceSettingsPane: View {
                             .strokeBorder(Color(nsColor: .separatorColor).opacity(0.5),
                                           lineWidth: 0.5)
                     )
+            } header: {
+                Text("settings.appearance.preview", bundle: .module)
             }
         }
         .formStyle(.grouped)
@@ -187,17 +221,17 @@ private struct AboutPane: View {
                 .font(.system(size: 56, weight: .ultraLight))
                 .foregroundStyle(.tertiary)
             VStack(spacing: 4) {
-                Text("Scribe")
+                Text(verbatim: "Scribe")
                     .font(.system(size: 24, weight: .light))
-                Text("Native macOS text editor")
+                Text("about.tagline", bundle: .module)
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
             VStack(spacing: 2) {
-                Text("v1.0 · Phase 25 polish")
+                Text("about.version", bundle: .module)
                     .font(.caption)
                     .foregroundStyle(.tertiary)
-                Text("GPL-3.0 · aligned with notepad--")
+                Text("about.license", bundle: .module)
                     .font(.caption2)
                     .foregroundStyle(.quaternary)
             }

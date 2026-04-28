@@ -43,7 +43,7 @@ struct OutlineSidebar: View {
             Image(systemName: "list.bullet.indent")
                 .foregroundStyle(.secondary)
                 .font(.system(size: 11))
-            Text("OUTLINE")
+            Text("sidebar.outline.header", bundle: .module)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
             if outline.isParsing {
@@ -71,9 +71,9 @@ struct OutlineSidebar: View {
     @ViewBuilder
     private var content: some View {
         if workspace.current == nil {
-            placeholder("No document open")
+            placeholder(L10n.t("sidebar.outline.noDocument"))
         } else if outline.symbols.isEmpty && !outline.isParsing {
-            placeholder("No symbols in this file")
+            placeholder(L10n.t("sidebar.outline.empty"))
         } else {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {

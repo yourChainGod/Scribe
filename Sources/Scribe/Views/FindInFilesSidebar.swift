@@ -37,7 +37,7 @@ struct FindInFilesSidebar: View {
                     .foregroundStyle(.secondary)
                     .font(.system(size: 12))
                     .frame(width: 14)
-                TextField("Search", text: $find.query)
+                TextField(L10n.t("find.placeholder"), text: $find.query)
                     .textFieldStyle(.roundedBorder)
                     .focused($queryFocused)
                     .font(.system(size: 12))
@@ -53,7 +53,7 @@ struct FindInFilesSidebar: View {
                     .foregroundStyle(.secondary)
                     .font(.system(size: 12))
                     .frame(width: 14)
-                TextField("Replace", text: $find.replacement)
+                TextField(L10n.t("find.replacePlaceholder"), text: $find.replacement)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 12))
                     .onSubmit { confirmReplace() }
@@ -66,8 +66,8 @@ struct FindInFilesSidebar: View {
                                          ? Color.secondary.opacity(0.5)
                                          : Color.accentColor)
                 }
-                .help("Replace All matches in selected files")
-                .accessibilityLabel("Replace All")
+                .help(L10n.t("finfiles.button.replaceAll"))
+                .accessibilityLabel(L10n.t("findbar.action.replaceAll"))
                 .buttonStyle(.plain)
                 .disabled(replaceDisabled)
             }
@@ -76,9 +76,9 @@ struct FindInFilesSidebar: View {
             // between the two so it reads as "in flight" without
             // making the layout reflow.
             HStack(spacing: 4) {
-                optionToggle("Aa", help: "Match Case", binding: $find.matchCase)
-                optionToggle("ab\u{2009}|", help: "Whole Word", binding: $find.wholeWord)
-                optionToggle(".*", help: "Regular Expression", binding: $find.regex)
+                optionToggle("Aa", help: L10n.t("find.option.matchCase"), binding: $find.matchCase)
+                optionToggle("ab\u{2009}|", help: L10n.t("find.option.wholeWord"), binding: $find.wholeWord)
+                optionToggle(".*", help: L10n.t("find.option.regex"), binding: $find.regex)
                 Spacer()
                 if find.isSearching || find.isReplacing {
                     ProgressView()
@@ -95,7 +95,7 @@ struct FindInFilesSidebar: View {
                                          : Color.accentColor)
                 }
                 .buttonStyle(.plain)
-                .help("Run search (Enter)")
+                .help(L10n.t("finfiles.button.runSearch"))
                 .disabled(searchDisabled)
             }
 
@@ -103,10 +103,10 @@ struct FindInFilesSidebar: View {
             // controls (most users never use them), so the rows
             // get a dimmer label glyph + smaller text.
             globFieldRow(systemImage: "doc.badge.plus",
-                         placeholder: "files to include",
+                         placeholder: L10n.t("find.includes.placeholder"),
                          text: $find.includeGlob)
             globFieldRow(systemImage: "doc.badge.minus",
-                         placeholder: "files to exclude",
+                         placeholder: L10n.t("find.excludes.placeholder"),
                          text: $find.excludeGlob)
         }
         .padding(12)
@@ -169,7 +169,10 @@ struct FindInFilesSidebar: View {
                 .padding(.vertical, 6)
         } else if find.totalMatches > 0 {
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(find.totalMatches) results in \(find.filesWithMatches) files (\(find.filesScanned) scanned)")
+                Text(L10n.t("finfiles.summary.results",
+                            find.totalMatches,
+                            find.filesWithMatches,
+                            find.filesScanned))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 // Phase 16/17: surface the selected slice when the user
@@ -177,7 +180,12 @@ struct FindInFilesSidebar: View {
                 // Otherwise the summary stays a single line — no UI
                 // churn for the common "replace everything" case.
                 if !find.excludedURLs.isEmpty || !find.excludedLines.isEmpty {
-                    Text("Replace will touch \(find.selectedMatchCount) match\(find.selectedMatchCount == 1 ? "" : "es") in \(find.selectedURLs.count) file\(find.selectedURLs.count == 1 ? "" : "s").")
+                    Text(find.selectedMatchCount == 1
+                         ? L10n.t("finfiles.summary.replace.scope.singular",
+                                  find.selectedURLs.count)
+                         : L10n.t("finfiles.summary.replace.scope",
+                                  find.selectedMatchCount,
+                                  find.selectedURLs.count))
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
@@ -185,7 +193,7 @@ struct FindInFilesSidebar: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
         } else if find.hasRun && !find.isSearching {
-            Text("No results.")
+            Text("finfiles.summary.empty", bundle: .module)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 12)
@@ -221,7 +229,7 @@ struct FindInFilesSidebar: View {
 
     private func runSearch() {
         guard let root = workspace.folderRoot?.url else {
-            find.error = "Open a workspace folder first."
+            find.error = L10n.t("finfiles.error.noWorkspace")
             return
         }
         let opts = FindInFilesOptions(
@@ -258,20 +266,26 @@ struct FindInFilesSidebar: View {
         let alert = NSAlert()
         let totalFiles = find.results.count
         let skipped = totalFiles - urls.count
-        alert.messageText = "Replace \(selectedMatches) match\(selectedMatches == 1 ? "" : "es") in \(urls.count) file\(urls.count == 1 ? "" : "s")?"
-        var info = "“\(find.query)” → “\(find.replacement)”."
+        alert.messageText = selectedMatches == 1
+            ? L10n.t("alert.replace.title.singular", urls.count)
+            : L10n.t("alert.replace.title", selectedMatches, urls.count)
+        var info = L10n.t("alert.replace.subject",
+                          find.query as NSString,
+                          find.replacement as NSString)
         if skipped > 0 {
-            info += "\n\(skipped) file\(skipped == 1 ? "" : "s") deselected and will be skipped."
+            info += skipped == 1
+                ? L10n.t("alert.replace.skipped.singular")
+                : L10n.t("alert.replace.skipped", skipped)
         }
         if !dirtyOpen.isEmpty {
             let names = dirtyOpen.map(\.title).joined(separator: ", ")
-            info += "\n\nUnsaved changes in \(names) will be lost."
+            info += L10n.t("alert.replace.unsaved", names as NSString)
         }
-        info += "\nThis cannot be undone from inside Scribe."
+        info += L10n.t("alert.replace.warning")
         alert.informativeText = info
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "Replace")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: L10n.t("alert.button.replace"))
+        alert.addButton(withTitle: L10n.t("alert.button.cancel"))
         guard alert.runModal() == .alertFirstButtonReturn else { return }
 
         let opts = FindInFilesOptions(

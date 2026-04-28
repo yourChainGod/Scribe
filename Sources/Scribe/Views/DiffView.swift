@@ -31,14 +31,22 @@ struct DiffView: View {
             Button {
                 session.chooseAndCompare()
             } label: {
-                Label("Open Pair…", systemImage: "doc.on.doc")
+                Label {
+                    Text("diff.button.openPair", bundle: .module)
+                } icon: {
+                    Image(systemName: "doc.on.doc")
+                }
             }
             .controlSize(.regular)
 
             Button {
                 swap()
             } label: {
-                Label("Swap", systemImage: "arrow.left.arrow.right")
+                Label {
+                    Text("diff.button.swap", bundle: .module)
+                } icon: {
+                    Image(systemName: "arrow.left.arrow.right")
+                }
             }
             .disabled(session.result == nil)
 
@@ -51,7 +59,7 @@ struct DiffView: View {
             }
             .keyboardShortcut("[", modifiers: [.command, .option])
             .disabled(session.hunks.isEmpty)
-            .help("Previous Diff (⌥⌘[)")
+            .help(L10n.t("diff.button.previous") + " (⌥⌘[)")
 
             Button {
                 session.nextHunk()
@@ -60,7 +68,7 @@ struct DiffView: View {
             }
             .keyboardShortcut("]", modifiers: [.command, .option])
             .disabled(session.hunks.isEmpty)
-            .help("Next Diff (⌥⌘])")
+            .help(L10n.t("diff.button.next") + " (⌥⌘])")
 
             statusText
 
@@ -69,7 +77,11 @@ struct DiffView: View {
             Button {
                 onClose()
             } label: {
-                Label("Close", systemImage: "xmark")
+                Label {
+                    Text("diff.button.close", bundle: .module)
+                } icon: {
+                    Image(systemName: "xmark")
+                }
             }
             .keyboardShortcut(.escape, modifiers: [])
         }
@@ -96,15 +108,15 @@ struct DiffView: View {
         if session.isComputing {
             HStack(spacing: 6) {
                 ProgressView().controlSize(.small).scaleEffect(0.7)
-                Text("Diffing…")
+                Text("diff.status.diffing", bundle: .module)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         } else if let result = session.result {
             let stats = result.stats
             let hunkLabel = session.hunks.isEmpty
-                ? "no diffs"
-                : "diff \(session.activeHunk + 1) of \(session.hunks.count)"
+                ? L10n.t("diff.summary.noDiffs")
+                : L10n.t("diff.summary.diffOf", session.activeHunk + 1, session.hunks.count)
             Text("+\(stats.added)  -\(stats.removed)  ~\(stats.changed)  ·  \(hunkLabel)")
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(.secondary)
@@ -195,16 +207,20 @@ struct DiffView: View {
                 .font(.system(size: 52, weight: .ultraLight))
                 .foregroundStyle(.tertiary)
             VStack(spacing: 6) {
-                Text("Compare Files")
+                Text("diff.empty.title", bundle: .module)
                     .font(.system(size: 22, weight: .light))
-                Text("Pick two files to see a side-by-side diff\nwith synchronized scrolling.")
+                Text("diff.empty.subtitle", bundle: .module)
                     .font(.system(size: 13))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(2)
                     .frame(maxWidth: 380)
             }
-            Button("Choose Files…") { session.chooseAndCompare() }
+            Button {
+                session.chooseAndCompare()
+            } label: {
+                Text("diff.empty.button", bundle: .module)
+            }
                 .controlSize(.large)
                 .buttonStyle(.borderedProminent)
                 .padding(.top, 4)

@@ -87,7 +87,11 @@ final class Workspace: ObservableObject {
 
     func newDocument() {
         let untitledIndex = documents.filter { $0.url == nil }.count
-        let title = untitledIndex == 0 ? "Untitled" : "Untitled \(untitledIndex)"
+        // Localised "Untitled" / "Untitled 2" — keys match
+        // tab.untitled / tab.untitled.numbered in Localizable.strings.
+        let title = untitledIndex == 0
+            ? L10n.t("tab.untitled")
+            : L10n.t("tab.untitled.numbered", untitledIndex)
         let doc = Document(title: title)
         documents.append(doc)
         selectedID = doc.id
@@ -170,11 +174,11 @@ final class Workspace: ObservableObject {
 
         if doc.isDirty {
             let alert = NSAlert()
-            alert.messageText = "“\(doc.title)” has changed on disk."
-            alert.informativeText = "You have unsaved changes. Reload from disk and lose them, or keep your edits?"
+            alert.messageText = L10n.t("alert.diskChanged.title", doc.title as NSString)
+            alert.informativeText = L10n.t("alert.diskChanged.body")
             alert.alertStyle = .warning
-            alert.addButton(withTitle: "Reload")
-            alert.addButton(withTitle: "Keep My Changes")
+            alert.addButton(withTitle: L10n.t("alert.button.reload"))
+            alert.addButton(withTitle: L10n.t("alert.button.keepChanges"))
             if alert.runModal() != .alertFirstButtonReturn { return }
         }
         // Silent refresh for clean documents (and confirmed-reload dirty ones).
@@ -210,11 +214,13 @@ final class Workspace: ObservableObject {
         guard let url = doc.url else { return }
         if doc.isDirty {
             let alert = NSAlert()
-            alert.messageText = "Reopen “\(doc.title)” with \(encoding.displayName)?"
-            alert.informativeText = "Your unsaved changes will be discarded."
+            alert.messageText = L10n.t("alert.reopenEncoding.title",
+                                       doc.title as NSString,
+                                       encoding.displayName as NSString)
+            alert.informativeText = L10n.t("alert.reopenEncoding.body")
             alert.alertStyle = .warning
-            alert.addButton(withTitle: "Reopen")
-            alert.addButton(withTitle: "Cancel")
+            alert.addButton(withTitle: L10n.t("alert.button.reopen"))
+            alert.addButton(withTitle: L10n.t("alert.button.cancel"))
             if alert.runModal() != .alertFirstButtonReturn { return }
         }
         do {
@@ -224,7 +230,7 @@ final class Workspace: ObservableObject {
                 let err = NSError(domain: NSCocoaErrorDomain,
                                   code: NSFileReadInapplicableStringEncodingError,
                                   userInfo: [NSLocalizedDescriptionKey:
-                                                "Cannot decode file as \(encoding.displayName)."])
+                                                L10n.t("error.cannotDecode", encoding.displayName as NSString)])
                 NSAlert(error: err).runModal()
                 return
             }
@@ -283,7 +289,7 @@ final class Workspace: ObservableObject {
                 let err = NSError(domain: NSCocoaErrorDomain,
                                   code: NSFileWriteInapplicableStringEncodingError,
                                   userInfo: [NSLocalizedDescriptionKey:
-                                                "Cannot encode text as \(doc.encoding.displayName)."])
+                                                L10n.t("error.cannotEncode", doc.encoding.displayName as NSString)])
                 NSAlert(error: err).runModal()
                 return
             }
@@ -300,12 +306,12 @@ final class Workspace: ObservableObject {
 
         if doc.isDirty {
             let alert = NSAlert()
-            alert.messageText = "Save changes to “\(doc.title)”?"
-            alert.informativeText = "Your changes will be lost if you don't save them."
+            alert.messageText = L10n.t("alert.unsaved.title", doc.title as NSString)
+            alert.informativeText = L10n.t("alert.unsaved.body")
             alert.alertStyle = .warning
-            alert.addButton(withTitle: "Save")        // returns .alertFirstButtonReturn
-            alert.addButton(withTitle: "Don't Save")  // returns .alertSecondButtonReturn
-            alert.addButton(withTitle: "Cancel")      // returns .alertThirdButtonReturn
+            alert.addButton(withTitle: L10n.t("alert.button.save"))      // returns .alertFirstButtonReturn
+            alert.addButton(withTitle: L10n.t("alert.button.dontSave"))  // returns .alertSecondButtonReturn
+            alert.addButton(withTitle: L10n.t("alert.button.cancel"))    // returns .alertThirdButtonReturn
 
             switch alert.runModal() {
             case .alertFirstButtonReturn:

@@ -1,0 +1,266 @@
+/*
+  Localizable.strings (zh-Hans)
+  Scribe — Simplified Chinese catalogue.
+
+  Tone: terse, technical. Match the style of macOS system Chinese
+  translations (Notes, TextEdit) rather than overly literal renders.
+*/
+
+// MARK: - Welcome view (empty editor canvas)
+
+"welcome.title"          = "Scribe";
+"welcome.subtitle"       = "原生 macOS 文本编辑器";
+"welcome.button.new"     = "新建";
+"welcome.button.open"    = "打开…";
+"welcome.recent.header"  = "最近使用";
+
+// MARK: - Sidebar
+
+"sidebar.mode.files"     = "文件";
+"sidebar.mode.search"    = "搜索";
+"sidebar.mode.outline"   = "大纲";
+"sidebar.section.open"        = "已打开";
+"sidebar.section.workspace"   = "工作区";
+"sidebar.action.openFolder"   = "打开文件夹…";
+"sidebar.action.newFile"      = "新建文件";
+"sidebar.outline.header"      = "大纲";
+"sidebar.outline.parsing"     = "正在解析…";
+"sidebar.outline.empty"       = "此文件没有符号";
+"sidebar.outline.noDocument"  = "未打开文档";
+
+// MARK: - Tabs
+
+"tab.untitled"            = "未命名";
+"tab.untitled.numbered"   = "未命名 %lld";
+
+// MARK: - Status bar
+
+"status.ready"        = "准备就绪";
+"status.modified"     = "已修改";
+"status.lineCol"      = "第 %lld 行，第 %lld 列";
+"status.charCount"    = "%lld 个字符";
+
+"status.menu.syntax"           = "语法高亮";
+"status.menu.resetAuto"        = "恢复自动检测";
+"status.menu.reopenEncoding"   = "用编码重新打开";
+"status.menu.saveEncoding"     = "用编码保存";
+
+// MARK: - Lexers
+
+"lexer.plainText"  = "纯文本";
+
+// MARK: - Toolbar
+
+"toolbar.newFile"        = "新建文件";
+"toolbar.openFile"       = "打开文件";
+"toolbar.openFolder"     = "打开文件夹";
+"toolbar.save"           = "保存";
+"toolbar.find"           = "查找";
+"toolbar.findInFiles"    = "在文件中查找";
+"toolbar.compare"        = "对比文件";
+"toolbar.toggleSidebar"  = "显示/隐藏侧栏";
+"toolbar.zoomOut"        = "缩小";
+"toolbar.zoomIn"         = "放大";
+"toolbar.zoomReset"      = "重置缩放";
+
+// MARK: - Find bar (single document)
+
+"findbar.placeholder.find"        = "查找";
+"findbar.placeholder.replace"     = "替换";
+"findbar.action.next"             = "下一个";
+"findbar.action.previous"         = "上一个";
+"findbar.action.replace"          = "替换";
+"findbar.action.replaceAll"       = "全部替换";
+"findbar.action.close"            = "关闭";
+"findbar.history"                 = "最近搜索 — 点击复用";
+"findbar.history.emptySearches"   = "暂无搜索记录";
+"findbar.history.emptyReplacements" = "暂无替换记录";
+"findbar.clearHistory"            = "清空历史";
+"findbar.toggleReplace"           = "显示替换栏";
+"findbar.matches.count"           = "第 %lld 个，共 %lld 个";
+"findbar.matches.none"            = "没有结果";
+
+// MARK: - Find-in-Files extras
+
+"finfiles.summary.results"        = "在 %2$lld 个文件中找到 %1$lld 个结果（共扫描 %3$lld 个）";
+"finfiles.summary.replace.scope"  = "替换将作用于 %lld 个文件中的 %lld 个匹配项。";
+"finfiles.summary.replace.scope.singular" = "替换将作用于 %lld 个文件中的 1 个匹配项。";
+"finfiles.summary.empty"          = "没有结果。";
+"finfiles.button.runSearch"       = "运行搜索（回车）";
+"finfiles.button.replaceAll"      = "替换所选文件中的全部匹配";
+"finfiles.error.noWorkspace"      = "请先打开一个工作区文件夹。";
+
+// MARK: - Diff hunks
+
+"diff.summary.hunks"       = "%lld 处差异 · 新增 %lld · 删除 %lld";
+"diff.summary.identical"   = "两个文件完全一致";
+"diff.summary.noDiffs"     = "没有差异";
+"diff.summary.diffOf"      = "第 %lld 处，共 %lld 处";
+"diff.button.previous"     = "上一处";
+"diff.button.next"         = "下一处";
+
+// MARK: - Context menu (editor)
+
+"context.cut"               = "剪切";
+"context.copy"              = "拷贝";
+"context.paste"             = "粘贴";
+"context.selectAll"         = "全选";
+"context.findInFiles"       = "在文件中查找";
+"context.revealInFinder"    = "在访达中显示";
+"context.copyPath"          = "拷贝路径";
+
+// MARK: - Common menu
+
+"menu.file"           = "文件";
+"menu.edit"           = "编辑";
+"menu.view"           = "显示";
+"menu.go"             = "前往";
+"menu.tools"          = "工具";
+"menu.window"         = "窗口";
+"menu.help"           = "帮助";
+
+"menu.file.new"           = "新建";
+"menu.file.open"          = "打开…";
+"menu.file.openFolder"    = "打开文件夹…";
+"menu.file.openRecent"        = "打开最近使用";
+"menu.file.openRecentFolder"  = "打开最近文件夹";
+"menu.file.openRecentClear"   = "清空菜单";
+"menu.file.noRecentFiles"     = "暂无最近文件";
+"menu.file.noRecentFolders"   = "暂无最近文件夹";
+"menu.file.save"          = "保存";
+"menu.file.saveAs"        = "另存为…";
+"menu.file.close"         = "关闭";
+
+"menu.edit.find"          = "查找…";
+"menu.edit.findNext"      = "查找下一个";
+"menu.edit.findPrev"      = "查找上一个";
+"menu.edit.replace"       = "替换…";
+"menu.edit.findInFiles"   = "在文件中查找…";
+"menu.edit.multiCursor"   = "多光标";
+"menu.edit.selectNext"    = "选择下一个匹配";
+"menu.edit.selectAll.occ" = "选择全部匹配";
+"menu.edit.skipNext"      = "跳过下一个";
+"menu.edit.cursorAbove"   = "在上方添加光标";
+"menu.edit.cursorBelow"   = "在下方添加光标";
+"menu.edit.columnSelect"  = "切换列选模式";
+"menu.edit.singleCursor"  = "返回单光标";
+
+"menu.view.zoomIn"        = "放大";
+"menu.view.zoomOut"       = "缩小";
+"menu.view.zoomReset"     = "重置缩放";
+"menu.view.toggleSidebar" = "显示/隐藏侧栏";
+"menu.view.showOutline"   = "显示大纲";
+"menu.view.showSearch"    = "显示搜索";
+"menu.view.compareFiles"  = "对比文件…";
+"menu.view.theme"         = "主题";
+
+"menu.go.quickOpen"       = "快速打开…";
+"menu.go.gotoLine"        = "跳转到行…";
+"menu.go.gotoSymbol"      = "跳转到符号…";
+"menu.go.commandPalette"  = "命令面板…";
+
+"menu.tools.diff"         = "对比文件…";
+"menu.tools.compareHEAD"  = "与 HEAD 对比";
+"menu.tools.settings"     = "设置…";
+
+"menu.view.editorTheme"   = "编辑器主题";
+"menu.edit.useSelection"  = "用选区作为查找词";
+"menu.edit.hideFindBar"   = "隐藏查找栏";
+
+// MARK: - Alerts
+
+"alert.replace.title"          = "要在 %2$lld 个文件中替换 %1$lld 个匹配项吗？";
+"alert.replace.title.singular" = "要在 %lld 个文件中替换 1 个匹配项吗？";
+"alert.replace.subject"        = "“%@” → “%@”。";
+"alert.replace.skipped"        = "\n已取消选中 %lld 个文件，将被跳过。";
+"alert.replace.skipped.singular" = "\n已取消选中 1 个文件，将被跳过。";
+"alert.replace.unsaved"        = "\n\n%@ 中未保存的更改将丢失。";
+"alert.replace.warning"        = "\n该操作无法在 Scribe 内撤销。";
+"alert.button.replace"         = "替换";
+"alert.button.cancel"          = "取消";
+
+"alert.diskChanged.title"      = "“%@” 在磁盘上发生变动。";
+"alert.diskChanged.body"       = "你有未保存的更改。是要从磁盘重新载入（会丢失未保存的更改），还是保留当前编辑？";
+"alert.button.reload"          = "重新载入";
+"alert.button.keepChanges"     = "保留更改";
+
+"alert.reopenEncoding.title"   = "要以 %2$@ 重新打开 “%1$@” 吗？";
+"alert.reopenEncoding.body"    = "未保存的更改将被丢弃。";
+"alert.button.reopen"          = "重新打开";
+
+"alert.unsaved.title"          = "要保存对 “%@” 的更改吗？";
+"alert.unsaved.body"           = "如果不保存，你的更改将丢失。";
+"alert.button.save"            = "保存";
+"alert.button.dontSave"        = "不保存";
+
+"error.cannotDecode"           = "无法以 %@ 解码文件。";
+"error.cannotEncode"           = "无法以 %@ 编码文本。";
+
+// MARK: - Tabs context
+
+"tabContext.close"          = "关闭";
+"tabContext.closeOthers"    = "关闭其他";
+"tabContext.closeAll"       = "关闭全部";
+"tabContext.revealInFinder" = "在访达中显示";
+"tabContext.copyPath"       = "拷贝路径";
+
+// MARK: - Find bar / find-in-files
+
+"find.placeholder"           = "搜索";
+"find.replacePlaceholder"    = "替换";
+"find.option.matchCase"      = "区分大小写";
+"find.option.wholeWord"      = "全字匹配";
+"find.option.regex"          = "正则表达式";
+"find.action.next"           = "下一个";
+"find.action.previous"       = "上一个";
+"find.action.replaceAll"     = "全部替换";
+"find.includes.placeholder"  = "包含文件";
+"find.excludes.placeholder"  = "排除文件";
+
+// MARK: - Quick Open / command palette
+
+"palette.placeholder.commands"  = "输入命令";
+"palette.placeholder.files"     = "在 %@ 中搜索文件";
+"palette.placeholder.symbol"    = "跳转到符号";
+"palette.placeholder.line"      = "跳转到行";
+"palette.empty.noCommands"      = "暂无可用命令";
+"palette.empty.noMatches"       = "找不到“%@”的匹配项";
+
+// MARK: - Settings
+
+"settings.tab.editor"        = "编辑器";
+"settings.tab.appearance"    = "外观";
+"settings.tab.about"         = "关于";
+"settings.section.font"      = "字体";
+"settings.field.family"      = "字体族";
+"settings.field.size"        = "字号";
+"settings.section.indent"    = "缩进";
+"settings.field.tabWidth"    = "Tab 宽度";
+"settings.field.softTabs"    = "按 Tab 键插入空格";
+"settings.section.recent"    = "最近的文件";
+"settings.action.clear"      = "清除";
+"settings.appearance.theme"          = "主题";
+"settings.appearance.section.theme"  = "编辑器主题";
+"settings.appearance.themeFooter"    = "“跟随系统”会根据 macOS 浅色/深色外观自动切换；选择具体主题将覆盖系统设置。";
+"settings.appearance.preview"        = "预览";
+"settings.font.systemMonospaced"     = "系统等宽字体";
+
+"about.tagline"  = "原生 macOS 文本编辑器";
+"about.version"  = "v1.0 · 打磨阶段 (Phase 25)";
+"about.license"  = "GPL-3.0 · 与 notepad-- 对齐";
+
+// MARK: - Diff view
+
+"diff.button.openPair"  = "打开文件对…";
+"diff.button.swap"      = "交换";
+"diff.button.close"     = "关闭";
+"diff.empty.title"      = "对比文件";
+"diff.empty.subtitle"   = "选择两个文件以并排查看差异，\n滚动会自动同步。";
+"diff.empty.button"     = "选择文件…";
+"diff.status.diffing"   = "正在对比…";
+
+// MARK: - Common
+
+"common.cancel"   = "取消";
+"common.ok"       = "好";
+"common.replace"  = "替换";

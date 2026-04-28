@@ -337,32 +337,32 @@ struct ScribeApp: App {
         .windowToolbarStyle(.unified(showsTitle: true))
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("New Tab") { workspace.newDocument() }
+                Button { workspace.newDocument() } label: { Text("menu.file.new", bundle: .module) }
                     .keyboardShortcut("n")
-                Button("Open…") { workspace.openDocument() }
+                Button { workspace.openDocument() } label: { Text("menu.file.open", bundle: .module) }
                     .keyboardShortcut("o")
-                Button("Open Folder…") { workspace.openFolder() }
+                Button { workspace.openFolder() } label: { Text("menu.file.openFolder", bundle: .module) }
                     .keyboardShortcut("o", modifiers: [.command, .option])
                 RecentFilesMenu(prefs: prefs, workspace: workspace)
                 RecentFoldersMenu(prefs: prefs, workspace: workspace)
             }
             CommandGroup(after: .saveItem) {
-                Button("Save") { workspace.saveCurrent() }
+                Button { workspace.saveCurrent() } label: { Text("menu.file.save", bundle: .module) }
                     .keyboardShortcut("s")
             }
             CommandGroup(after: .toolbar) {
-                Button("Zoom In") { prefs.zoomIn() }
+                Button { prefs.zoomIn() } label: { Text("menu.view.zoomIn", bundle: .module) }
                     .keyboardShortcut("+", modifiers: .command)
-                Button("Zoom Out") { prefs.zoomOut() }
+                Button { prefs.zoomOut() } label: { Text("menu.view.zoomOut", bundle: .module) }
                     .keyboardShortcut("-", modifiers: .command)
-                Button("Actual Size") { prefs.resetFontSize() }
+                Button { prefs.resetFontSize() } label: { Text("menu.view.zoomReset", bundle: .module) }
                     .keyboardShortcut("0", modifiers: .command)
 
                 // Phase 15 — theme picker. Sub-menu so the View root
                 // doesn't grow long; checkmark on the active item
                 // works because the prefs object is observed by the
                 // host scene.
-                Menu("Editor Theme") {
+                Menu {
                     ForEach(ThemeID.allCases) { id in
                         Button {
                             prefs.themeID = id
@@ -377,40 +377,44 @@ struct ScribeApp: App {
                             }
                         }
                     }
+                } label: {
+                    Text("menu.view.editorTheme", bundle: .module)
                 }
             }
-            CommandMenu("Go") {
-                Button("Quick Open File…") {
+            CommandMenu(Text("menu.go", bundle: .module)) {
+                Button {
                     QuickOpenController.shared.toggle(workspace: workspace,
                                                       fileIndex: fileIndex,
                                                       outline: outline)
-                }
+                } label: { Text("menu.go.quickOpen", bundle: .module) }
                 .keyboardShortcut("p", modifiers: .command)
 
-                Button("Command Palette…") {
+                Button {
                     PaletteWindowController.shared.toggle(registry: commands)
-                }
+                } label: { Text("menu.go.commandPalette", bundle: .module) }
                 .keyboardShortcut("p", modifiers: [.command, .shift])
 
                 Divider()
 
-                Button("Show Outline") {
+                Button {
                     workspace.sidebarVisible = true
                     workspace.sidebarMode = .outline
-                }
+                } label: { Text("menu.view.showOutline", bundle: .module) }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
             }
-            CommandMenu("Tools") {
-                Button("Compare Files…") {
+            CommandMenu(Text("menu.tools", bundle: .module)) {
+                Button {
                     let session = DiffSession()
                     session.chooseAndCompare()
                     if session.leftURL != nil, session.rightURL != nil {
                         workspace.compareSession = session
                     }
+                } label: {
+                    Text("menu.tools.diff", bundle: .module)
                 }
                 .keyboardShortcut("d", modifiers: [.command, .option])
 
-                Button("Compare with HEAD") {
+                Button {
                     guard let url = workspace.current?.url else { return }
                     let session = DiffSession()
                     session.loadGitHEAD(file: url)
@@ -418,37 +422,39 @@ struct ScribeApp: App {
                     // succeeded — the panel renders the error message
                     // when there's no result.
                     workspace.compareSession = session
+                } label: {
+                    Text("menu.tools.compareHEAD", bundle: .module)
                 }
                 .keyboardShortcut("d", modifiers: [.command, .shift])
                 .disabled(workspace.current?.url == nil)
             }
             CommandGroup(replacing: .textEditing) {
-                Button("Find…") {
+                Button {
                     findState.show(replaceMode: false)
-                }
+                } label: { Text("menu.edit.find", bundle: .module) }
                 .keyboardShortcut("f", modifiers: .command)
 
-                Button("Replace…") {
+                Button {
                     findState.show(replaceMode: true)
-                }
+                } label: { Text("menu.edit.replace", bundle: .module) }
                 .keyboardShortcut("f", modifiers: [.command, .option])
 
-                Button("Find Next") {
+                Button {
                     if !findState.isVisible { findState.show(replaceMode: false) }
                     findState.commands.send(.findNext)
-                }
+                } label: { Text("menu.edit.findNext", bundle: .module) }
                 .keyboardShortcut("g", modifiers: .command)
 
-                Button("Find Previous") {
+                Button {
                     if !findState.isVisible { findState.show(replaceMode: false) }
                     findState.commands.send(.findPrev)
-                }
+                } label: { Text("menu.edit.findPrev", bundle: .module) }
                 .keyboardShortcut("g", modifiers: [.command, .shift])
 
-                Button("Use Selection for Find") {
+                Button {
                     findState.show(replaceMode: false)
                     findState.commands.send(.useSelection)
-                }
+                } label: { Text("menu.edit.useSelection", bundle: .module) }
                 .keyboardShortcut("e", modifiers: .command)
 
                 Divider()
@@ -460,16 +466,16 @@ struct ScribeApp: App {
                 // Menu view nests inside CommandGroup just fine —
                 // it ends up as an NSMenu submenu in the bridged
                 // AppKit menubar.
-                Menu("Multi-Cursor") {
+                Menu {
                     // Horizontal multi-cursor (Phase 20).
-                    Button("Select Next Occurrence") {
+                    Button {
                         findState.commands.send(.selectNextOccurrence)
-                    }
+                    } label: { Text("menu.edit.selectNext", bundle: .module) }
                     .keyboardShortcut("d", modifiers: .command)
 
-                    Button("Select All Occurrences") {
+                    Button {
                         findState.commands.send(.selectAllOccurrences)
-                    }
+                    } label: { Text("menu.edit.selectAll.occ", bundle: .module) }
                     .keyboardShortcut("l", modifiers: [.command, .shift])
 
                     // Phase 22 — skip the current ⌘D selection and jump
@@ -478,9 +484,9 @@ struct ScribeApp: App {
                     // can't express (single-key only). ⌃⌘D is the
                     // closest unused single shortcut on Scribe's
                     // existing key map.
-                    Button("Skip Next Occurrence") {
+                    Button {
                         findState.commands.send(.skipAndSelectNextOccurrence)
-                    }
+                    } label: { Text("menu.edit.skipNext", bundle: .module) }
                     .keyboardShortcut("d", modifiers: [.command, .control])
 
                     Divider()
@@ -488,14 +494,14 @@ struct ScribeApp: App {
                     // Phase 21 — vertical multi-cursor. ⌥⌘↑/⌥⌘↓
                     // matches VSCode + Sublime; on Sublime it's
                     // ⌃⇧↑/↓ but the ⌥⌘ pair feels more macOS-native.
-                    Button("Add Cursor Above") {
+                    Button {
                         findState.commands.send(.addCaretAbove)
-                    }
+                    } label: { Text("menu.edit.cursorAbove", bundle: .module) }
                     .keyboardShortcut(.upArrow, modifiers: [.command, .option])
 
-                    Button("Add Cursor Below") {
+                    Button {
                         findState.commands.send(.addCaretBelow)
-                    }
+                    } label: { Text("menu.edit.cursorBelow", bundle: .module) }
                     .keyboardShortcut(.downArrow, modifiers: [.command, .option])
 
                     Divider()
@@ -507,21 +513,23 @@ struct ScribeApp: App {
                     // is for users who want to type / arrow into a
                     // rectangle without holding a modifier the
                     // whole time.
-                    Button("Toggle Column Selection Mode") {
+                    Button {
                         findState.commands.send(.toggleColumnSelectionMode)
-                    }
+                    } label: { Text("menu.edit.columnSelect", bundle: .module) }
                     .keyboardShortcut("8", modifiers: [.command, .shift])
 
-                    Button("Single Cursor") {
+                    Button {
                         findState.commands.send(.collapseToSingleCursor)
-                    }
+                    } label: { Text("menu.edit.singleCursor", bundle: .module) }
                     // ⌃⇧Esc — plain Esc is reserved for "hide find bar".
                     .keyboardShortcut(.escape, modifiers: [.control, .shift])
+                } label: {
+                    Text("menu.edit.multiCursor", bundle: .module)
                 }
 
                 Divider()
 
-                Button("Find in Files…") {
+                Button {
                     workspace.sidebarVisible = true
                     workspace.sidebarMode = .search
                     // Phase 18: prefill the query with the live editor
@@ -546,14 +554,14 @@ struct ScribeApp: App {
                                                      into: findInFiles)
                         }
                     }
-                }
+                } label: { Text("menu.edit.findInFiles", bundle: .module) }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
 
                 Divider()
 
-                Button("Hide Find Bar") {
+                Button {
                     findState.hide()
-                }
+                } label: { Text("menu.edit.hideFindBar", bundle: .module) }
                 .keyboardShortcut(.escape, modifiers: [])
             }
         }
@@ -570,9 +578,9 @@ private struct RecentFilesMenu: View {
     let workspace: Workspace
 
     var body: some View {
-        Menu("Open Recent") {
+        Menu {
             if prefs.recentFiles.isEmpty {
-                Text("No Recent Files")
+                Text("menu.file.noRecentFiles", bundle: .module)
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(prefs.recentFiles, id: \.self) { url in
@@ -581,8 +589,12 @@ private struct RecentFilesMenu: View {
                     }
                 }
                 Divider()
-                Button("Clear Menu") { prefs.clearRecent() }
+                Button {
+                    prefs.clearRecent()
+                } label: { Text("menu.file.openRecentClear", bundle: .module) }
             }
+        } label: {
+            Text("menu.file.openRecent", bundle: .module)
         }
     }
 }
@@ -592,9 +604,9 @@ private struct RecentFoldersMenu: View {
     let workspace: Workspace
 
     var body: some View {
-        Menu("Open Recent Folder") {
+        Menu {
             if prefs.recentFolders.isEmpty {
-                Text("No Recent Folders")
+                Text("menu.file.noRecentFolders", bundle: .module)
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(prefs.recentFolders, id: \.self) { url in
@@ -603,8 +615,12 @@ private struct RecentFoldersMenu: View {
                     }
                 }
                 Divider()
-                Button("Clear Menu") { prefs.clearRecentFolders() }
+                Button {
+                    prefs.clearRecentFolders()
+                } label: { Text("menu.file.openRecentClear", bundle: .module) }
             }
+        } label: {
+            Text("menu.file.openRecentFolder", bundle: .module)
         }
     }
 }

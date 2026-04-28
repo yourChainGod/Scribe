@@ -50,7 +50,7 @@ struct MainWindow: View {
                           ? "sidebar.left"
                           : "sidebar.leading")
                 }
-                .help(workspace.sidebarVisible ? "Hide Sidebar" : "Show Sidebar")
+                .help(L10n.t("toolbar.toggleSidebar"))
             }
 
             // — File ops group — square.and.pencil for new comes
@@ -62,17 +62,17 @@ struct MainWindow: View {
                 Button { workspace.newDocument() } label: {
                     Image(systemName: "square.and.pencil")
                 }
-                .help("New Tab (⌘N)")
+                .help(L10n.t("toolbar.newFile") + " (⌘N)")
 
                 Button { workspace.openDocument() } label: {
                     Image(systemName: "folder")
                 }
-                .help("Open… (⌘O)")
+                .help(L10n.t("toolbar.openFile") + " (⌘O)")
 
                 Button { workspace.saveCurrent() } label: {
                     Image(systemName: "tray.and.arrow.down")
                 }
-                .help("Save (⌘S)")
+                .help(L10n.t("toolbar.save") + " (⌘S)")
                 .disabled(workspace.current == nil)
             }
 
@@ -85,7 +85,7 @@ struct MainWindow: View {
                 } label: {
                     Image(systemName: "magnifyingglass")
                 }
-                .help("Find (⌘F)")
+                .help(L10n.t("toolbar.find") + " (⌘F)")
                 .disabled(workspace.current == nil)
 
                 Button {
@@ -111,7 +111,7 @@ struct MainWindow: View {
                 } label: {
                     Image(systemName: "doc.text.magnifyingglass")
                 }
-                .help("Find in Files (⌘⇧F)")
+                .help(L10n.t("toolbar.findInFiles") + " (⌘⇧F)")
                 .disabled(workspace.folderRoot == nil)
 
                 Button {
@@ -119,7 +119,7 @@ struct MainWindow: View {
                 } label: {
                     Image(systemName: "rectangle.split.2x1")
                 }
-                .help("Compare Files (⌥⌘D)")
+                .help(L10n.t("toolbar.compare") + " (⌥⌘D)")
             }
 
             // — View / zoom group — on the far right because
@@ -128,7 +128,7 @@ struct MainWindow: View {
                 Button { prefs.zoomOut() } label: {
                     Image(systemName: "minus.magnifyingglass")
                 }
-                .help("Zoom Out (⌘-)")
+                .help(L10n.t("toolbar.zoomOut") + " (⌘-)")
                 .disabled(prefs.fontSize <= EditorPreferences.fontSizeMin)
 
                 // Compact font-size readout. Tertiary-coloured so
@@ -141,12 +141,12 @@ struct MainWindow: View {
                     .foregroundStyle(.tertiary)
                     .monospacedDigit()
                     .frame(minWidth: 18)
-                    .help("Editor font size")
+                    .help(L10n.t("toolbar.zoomReset"))
 
                 Button { prefs.zoomIn() } label: {
                     Image(systemName: "plus.magnifyingglass")
                 }
-                .help("Zoom In (⌘+)")
+                .help(L10n.t("toolbar.zoomIn") + " (⌘+)")
                 .disabled(prefs.fontSize >= EditorPreferences.fontSizeMax)
             }
         }

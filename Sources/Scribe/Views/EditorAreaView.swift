@@ -51,16 +51,24 @@ private struct WelcomeView: View {
             Image(systemName: "square.and.pencil")
                 .font(.system(size: 56, weight: .ultraLight))
                 .foregroundStyle(.tertiary)
-            Text("Scribe")
+            Text("welcome.title", bundle: .module)
                 .font(.system(size: 28, weight: .light))
-            Text("A native macOS text editor.")
+            Text("welcome.subtitle", bundle: .module)
                 .font(.callout)
                 .foregroundStyle(.secondary)
             HStack(spacing: 10) {
-                Button("New") { workspace.newDocument() }
-                    .keyboardShortcut("n")
-                Button("Open…") { workspace.openDocument() }
-                    .keyboardShortcut("o")
+                Button {
+                    workspace.newDocument()
+                } label: {
+                    Text("welcome.button.new", bundle: .module)
+                }
+                .keyboardShortcut("n")
+                Button {
+                    workspace.openDocument()
+                } label: {
+                    Text("welcome.button.open", bundle: .module)
+                }
+                .keyboardShortcut("o")
             }
             .controlSize(.large)
             .padding(.top, 4)
@@ -73,7 +81,7 @@ private struct WelcomeView: View {
     /// scannable; the full set lives in Settings → Recent Files.
     private var recentList: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Recent")
+            Text("welcome.recent.header", bundle: .module)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
                 .padding(.leading, 4)

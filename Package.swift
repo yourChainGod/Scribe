@@ -3,6 +3,12 @@ import PackageDescription
 
 let package = Package(
     name: "Scribe",
+    // Phase 27 — base locale for the bundled .strings catalogue. SwiftUI
+    // resolves `Text("…")` / `LocalizedStringKey` against the matching
+    // `<lang>.lproj/Localizable.strings` we ship under
+    // Sources/Scribe/Resources, and falls back to this default when a
+    // user's preferred language has no translation.
+    defaultLocalization: "en",
     platforms: [
         .macOS(.v14)   // bumped from v13 in Phase 3 for SwiftUI onKeyPress + onChange(of:_:_)
     ],
@@ -99,7 +105,14 @@ let package = Package(
         .executableTarget(
             name: "Scribe",
             dependencies: ["Scintilla", "Lexilla"],
-            path: "Sources/Scribe"
+            path: "Sources/Scribe",
+            // Process the Resources/ subtree so SwiftPM picks up the
+            // .lproj catalogues (en + zh-Hans) and copies them into
+            // the executable's bundle. SwiftUI's automatic
+            // LocalizedStringKey lookup walks Bundle.module for them.
+            resources: [
+                .process("Resources")
+            ]
         ),
         .testTarget(
             name: "ScribeTests",

@@ -80,7 +80,7 @@ enum LexerCatalog {
         ]
     )
 
-    static let plain = LexerDescriptor(display: "Plain Text", lexillaName: "", keywords: [])
+    static let plain = LexerDescriptor(display: L10n.t("lexer.plainText"), lexillaName: "", keywords: [])
 
     /// Catalog shown in the status-bar language menu. Add a new entry here
     /// to make it user-selectable.

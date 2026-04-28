@@ -1,0 +1,268 @@
+/*
+  Localizable.strings
+  Scribe — base English catalogue.
+
+  Convention: keys mirror the UI surface they appear on. We use
+  semantic keys ("welcome.title") rather than the English text
+  itself so the en value can be tweaked for tone without breaking
+  every translation downstream.
+*/
+
+// MARK: - Welcome view (empty editor canvas)
+
+"welcome.title"          = "Scribe";
+"welcome.subtitle"       = "A native macOS text editor.";
+"welcome.button.new"     = "New";
+"welcome.button.open"    = "Open…";
+"welcome.recent.header"  = "Recent";
+
+// MARK: - Sidebar
+
+"sidebar.mode.files"     = "Files";
+"sidebar.mode.search"    = "Search";
+"sidebar.mode.outline"   = "Outline";
+"sidebar.section.open"        = "OPEN";
+"sidebar.section.workspace"   = "WORKSPACE";
+"sidebar.action.openFolder"   = "Open Folder…";
+"sidebar.action.newFile"      = "New File";
+"sidebar.outline.header"      = "OUTLINE";
+"sidebar.outline.parsing"     = "Parsing…";
+"sidebar.outline.empty"       = "No symbols in this file";
+"sidebar.outline.noDocument"  = "No document open";
+
+// MARK: - Tabs
+
+"tab.untitled"            = "Untitled";
+"tab.untitled.numbered"   = "Untitled %lld";
+
+// MARK: - Status bar
+
+"status.ready"        = "Ready";
+"status.modified"     = "Modified";
+"status.lineCol"      = "Ln %lld, Col %lld";
+"status.charCount"    = "%lld chars";
+
+"status.menu.syntax"           = "Syntax Highlighting";
+"status.menu.resetAuto"        = "Reset to Auto Detect";
+"status.menu.reopenEncoding"   = "Reopen with Encoding";
+"status.menu.saveEncoding"     = "Save with Encoding";
+
+// MARK: - Lexers
+
+"lexer.plainText"  = "Plain Text";
+
+// MARK: - Toolbar
+
+"toolbar.newFile"        = "New File";
+"toolbar.openFile"       = "Open File";
+"toolbar.openFolder"     = "Open Folder";
+"toolbar.save"           = "Save";
+"toolbar.find"           = "Find";
+"toolbar.findInFiles"    = "Find in Files";
+"toolbar.compare"        = "Compare Files";
+"toolbar.toggleSidebar"  = "Toggle Sidebar";
+"toolbar.zoomOut"        = "Zoom Out";
+"toolbar.zoomIn"         = "Zoom In";
+"toolbar.zoomReset"      = "Reset Zoom";
+
+// MARK: - Find bar (single document)
+
+"findbar.placeholder.find"        = "Find";
+"findbar.placeholder.replace"     = "Replace";
+"findbar.action.next"             = "Next";
+"findbar.action.previous"         = "Previous";
+"findbar.action.replace"          = "Replace";
+"findbar.action.replaceAll"       = "Replace All";
+"findbar.action.close"            = "Close";
+"findbar.history"                 = "Recent — click to reuse";
+"findbar.history.emptySearches"   = "No recent searches";
+"findbar.history.emptyReplacements" = "No recent replacements";
+"findbar.clearHistory"            = "Clear History";
+"findbar.toggleReplace"           = "Toggle Replace";
+"findbar.matches.count"           = "%lld of %lld";
+"findbar.matches.none"            = "No results";
+
+// MARK: - Find-in-Files extras
+
+"finfiles.summary.results"        = "%lld results in %lld files (%lld scanned)";
+"finfiles.summary.replace.scope"  = "Replace will touch %lld matches in %lld files.";
+"finfiles.summary.replace.scope.singular" = "Replace will touch 1 match in %lld files.";
+"finfiles.summary.empty"          = "No results.";
+"finfiles.button.runSearch"       = "Run search (Enter)";
+"finfiles.button.replaceAll"      = "Replace All matches in selected files";
+"finfiles.error.noWorkspace"      = "Open a workspace folder first.";
+
+// MARK: - Diff hunks
+
+"diff.summary.hunks"       = "%lld hunks · %lld additions · %lld deletions";
+"diff.summary.identical"   = "Files are identical";
+"diff.summary.noDiffs"     = "no diffs";
+"diff.summary.diffOf"      = "diff %lld of %lld";
+"diff.button.previous"     = "Previous Diff";
+"diff.button.next"         = "Next Diff";
+
+// MARK: - Context menu (editor)
+
+"context.cut"               = "Cut";
+"context.copy"              = "Copy";
+"context.paste"             = "Paste";
+"context.selectAll"         = "Select All";
+"context.findInFiles"       = "Find in Files";
+"context.revealInFinder"    = "Reveal in Finder";
+"context.copyPath"          = "Copy Path";
+
+// MARK: - Common menu
+
+"menu.file"           = "File";
+"menu.edit"           = "Edit";
+"menu.view"           = "View";
+"menu.go"             = "Go";
+"menu.tools"          = "Tools";
+"menu.window"         = "Window";
+"menu.help"           = "Help";
+
+"menu.file.new"           = "New";
+"menu.file.open"          = "Open…";
+"menu.file.openFolder"    = "Open Folder…";
+"menu.file.openRecent"        = "Open Recent";
+"menu.file.openRecentFolder"  = "Open Recent Folder";
+"menu.file.openRecentClear"   = "Clear Menu";
+"menu.file.noRecentFiles"     = "No Recent Files";
+"menu.file.noRecentFolders"   = "No Recent Folders";
+"menu.file.save"          = "Save";
+"menu.file.saveAs"        = "Save As…";
+"menu.file.close"         = "Close";
+
+"menu.edit.find"          = "Find…";
+"menu.edit.findNext"      = "Find Next";
+"menu.edit.findPrev"      = "Find Previous";
+"menu.edit.replace"       = "Replace…";
+"menu.edit.findInFiles"   = "Find in Files…";
+"menu.edit.multiCursor"   = "Multi-Cursor";
+"menu.edit.selectNext"    = "Select Next Occurrence";
+"menu.edit.selectAll.occ" = "Select All Occurrences";
+"menu.edit.skipNext"      = "Skip Next Occurrence";
+"menu.edit.cursorAbove"   = "Add Cursor Above";
+"menu.edit.cursorBelow"   = "Add Cursor Below";
+"menu.edit.columnSelect"  = "Toggle Column Selection";
+"menu.edit.singleCursor"  = "Single Cursor";
+
+"menu.view.zoomIn"        = "Zoom In";
+"menu.view.zoomOut"       = "Zoom Out";
+"menu.view.zoomReset"     = "Reset Zoom";
+"menu.view.toggleSidebar" = "Toggle Sidebar";
+"menu.view.showOutline"   = "Show Outline";
+"menu.view.showSearch"    = "Show Search";
+"menu.view.compareFiles"  = "Compare Files…";
+"menu.view.theme"         = "Theme";
+
+"menu.go.quickOpen"       = "Quick Open…";
+"menu.go.gotoLine"        = "Go to Line…";
+"menu.go.gotoSymbol"      = "Go to Symbol…";
+"menu.go.commandPalette"  = "Command Palette…";
+
+"menu.tools.diff"         = "Compare Files…";
+"menu.tools.compareHEAD"  = "Compare with HEAD";
+"menu.tools.settings"     = "Settings…";
+
+"menu.view.editorTheme"   = "Editor Theme";
+"menu.edit.useSelection"  = "Use Selection for Find";
+"menu.edit.hideFindBar"   = "Hide Find Bar";
+
+// MARK: - Alerts
+
+"alert.replace.title"          = "Replace %lld matches in %lld files?";
+"alert.replace.title.singular" = "Replace 1 match in %lld files?";
+"alert.replace.subject"        = "“%@” → “%@”.";
+"alert.replace.skipped"        = "\n%lld files deselected and will be skipped.";
+"alert.replace.skipped.singular" = "\n1 file deselected and will be skipped.";
+"alert.replace.unsaved"        = "\n\nUnsaved changes in %@ will be lost.";
+"alert.replace.warning"        = "\nThis cannot be undone from inside Scribe.";
+"alert.button.replace"         = "Replace";
+"alert.button.cancel"          = "Cancel";
+
+"alert.diskChanged.title"      = "“%@” has changed on disk.";
+"alert.diskChanged.body"       = "You have unsaved changes. Reload from disk and lose them, or keep your edits?";
+"alert.button.reload"          = "Reload";
+"alert.button.keepChanges"     = "Keep My Changes";
+
+"alert.reopenEncoding.title"   = "Reopen “%@” with %@?";
+"alert.reopenEncoding.body"    = "Your unsaved changes will be discarded.";
+"alert.button.reopen"          = "Reopen";
+
+"alert.unsaved.title"          = "Save changes to “%@”?";
+"alert.unsaved.body"           = "Your changes will be lost if you don’t save them.";
+"alert.button.save"            = "Save";
+"alert.button.dontSave"        = "Don’t Save";
+
+"error.cannotDecode"           = "Cannot decode file as %@.";
+"error.cannotEncode"           = "Cannot encode text as %@.";
+
+// MARK: - Tabs context
+
+"tabContext.close"          = "Close";
+"tabContext.closeOthers"    = "Close Others";
+"tabContext.closeAll"       = "Close All";
+"tabContext.revealInFinder" = "Reveal in Finder";
+"tabContext.copyPath"       = "Copy Path";
+
+// MARK: - Find bar / find-in-files
+
+"find.placeholder"           = "Search";
+"find.replacePlaceholder"    = "Replace";
+"find.option.matchCase"      = "Match Case";
+"find.option.wholeWord"      = "Whole Word";
+"find.option.regex"          = "Regular Expression";
+"find.action.next"           = "Next";
+"find.action.previous"       = "Previous";
+"find.action.replaceAll"     = "Replace All";
+"find.includes.placeholder"  = "files to include";
+"find.excludes.placeholder"  = "files to exclude";
+
+// MARK: - Quick Open / command palette
+
+"palette.placeholder.commands"  = "Type a command";
+"palette.placeholder.files"     = "Search files in %@";
+"palette.placeholder.symbol"    = "Jump to symbol";
+"palette.placeholder.line"      = "Go to line";
+"palette.empty.noCommands"      = "No commands available";
+"palette.empty.noMatches"       = "No matches for “%@”";
+
+// MARK: - Settings
+
+"settings.tab.editor"        = "Editor";
+"settings.tab.appearance"    = "Appearance";
+"settings.tab.about"         = "About";
+"settings.section.font"      = "Font";
+"settings.field.family"      = "Family";
+"settings.field.size"        = "Size";
+"settings.section.indent"    = "Indentation";
+"settings.field.tabWidth"    = "Tab width";
+"settings.field.softTabs"    = "Insert spaces when Tab is pressed";
+"settings.section.recent"    = "Recent Files";
+"settings.action.clear"      = "Clear";
+"settings.appearance.theme"          = "Theme";
+"settings.appearance.section.theme"  = "Editor Theme";
+"settings.appearance.themeFooter"    = "System (auto) follows the macOS light/dark preference. Pinning a specific theme overrides that.";
+"settings.appearance.preview"        = "Preview";
+"settings.font.systemMonospaced"     = "System Monospaced";
+
+"about.tagline"  = "Native macOS text editor";
+"about.version"  = "v1.0 · Phase 25 polish";
+"about.license"  = "GPL-3.0 · aligned with notepad--";
+
+// MARK: - Diff view
+
+"diff.button.openPair"  = "Open Pair…";
+"diff.button.swap"      = "Swap";
+"diff.button.close"     = "Close";
+"diff.empty.title"      = "Compare Files";
+"diff.empty.subtitle"   = "Pick two files to see a side-by-side diff\nwith synchronized scrolling.";
+"diff.empty.button"     = "Choose Files…";
+"diff.status.diffing"   = "Diffing…";
+
+// MARK: - Common
+
+"common.cancel"   = "Cancel";
+"common.ok"       = "OK";
+"common.replace"  = "Replace";

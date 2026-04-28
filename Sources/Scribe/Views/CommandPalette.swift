@@ -17,7 +17,7 @@ import SwiftUI
 
 struct CommandPalette: View {
     @ObservedObject var registry: CommandRegistry
-    var placeholder: String = "Type a command…"
+    var placeholder: String = L10n.t("palette.placeholder.commands")
     /// Pre-fill the search field. Used by automated tests to drive the
     /// panel without simulating keystrokes; production callers leave
     /// it empty.
@@ -30,7 +30,7 @@ struct CommandPalette: View {
     @FocusState private var queryFocused: Bool
 
     init(registry: CommandRegistry,
-         placeholder: String = "Type a command…",
+         placeholder: String = L10n.t("palette.placeholder.commands"),
          initialQuery: String = "",
          onPick: @escaping (ScribeCommand) -> Void,
          onCancel: @escaping () -> Void) {
@@ -114,7 +114,9 @@ struct CommandPalette: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         if matches.isEmpty {
-                            Text(query.isEmpty ? "No commands available" : "No matches for “\(query)”")
+                            Text(query.isEmpty
+                                 ? L10n.t("palette.empty.noCommands")
+                                 : String(format: L10n.t("palette.empty.noMatches"), query as NSString))
                                 .font(.system(size: 12))
                                 .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .center)

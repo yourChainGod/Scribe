@@ -25,7 +25,7 @@ final class Document: ObservableObject, Identifiable {
     /// during makeNSView / updateNSView and cleared after consumption.
     @Published var pendingScrollLine: Int? = nil
 
-    init(title: String = "Untitled", text: String = "", url: URL? = nil) {
+    init(title: String = L10n.t("tab.untitled"), text: String = "", url: URL? = nil) {
         self.title = title
         self.text = text
         self.url = url

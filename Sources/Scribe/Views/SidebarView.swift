@@ -27,19 +27,21 @@ struct SidebarView: View {
 
     private var modeSwitcher: some View {
         HStack(spacing: 2) {
-            modeButton(.files,   system: "folder",                title: "Files")
-            modeButton(.search,  system: "magnifyingglass",       title: "Search")
-            modeButton(.outline, system: "list.bullet.indent",    title: "Outline")
+            modeButton(.files,   system: "folder",                titleKey: "sidebar.mode.files")
+            modeButton(.search,  system: "magnifyingglass",       titleKey: "sidebar.mode.search")
+            modeButton(.outline, system: "list.bullet.indent",    titleKey: "sidebar.mode.outline")
             Spacer()
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
     }
 
-    private func modeButton(_ mode: SidebarMode, system: String, title: String) -> some View {
+    private func modeButton(_ mode: SidebarMode,
+                            system: String,
+                            titleKey: LocalizedStringKey) -> some View {
         ModeSwitcherButton(mode: mode,
                            system: system,
-                           title: title,
+                           titleKey: titleKey,
                            isActive: workspace.sidebarMode == mode,
                            tap: { workspace.sidebarMode = mode })
     }
@@ -50,7 +52,7 @@ struct SidebarView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                     // OPEN section
-                    SectionHeader(title: "OPEN", systemImage: "doc.text")
+                    SectionHeader(titleKey: "sidebar.section.open", systemImage: "doc.text")
                     ForEach(workspace.documents) { doc in
                         DocRow(doc: doc, isSelected: workspace.selectedID == doc.id)
                             .onTapGesture {
@@ -62,7 +64,7 @@ struct SidebarView: View {
 
                     // WORKSPACE section
                     HStack {
-                        SectionHeader(title: "WORKSPACE", systemImage: "folder")
+                        SectionHeader(titleKey: "sidebar.section.workspace", systemImage: "folder")
                         Spacer()
                         if workspace.folderRoot == nil {
                             Button {
@@ -93,7 +95,7 @@ struct SidebarView: View {
                         } label: {
                             HStack {
                                 Image(systemName: "folder.badge.plus")
-                                Text("Open Folder…")
+                                Text("sidebar.action.openFolder", bundle: .module)
                             }
                             .font(.callout)
                             .foregroundStyle(.secondary)
@@ -116,7 +118,7 @@ struct SidebarView: View {
 private struct ModeSwitcherButton: View {
     let mode: SidebarMode
     let system: String
-    let title: String
+    let titleKey: LocalizedStringKey
     let isActive: Bool
     let tap: () -> Void
     @State private var hover = false
@@ -126,7 +128,7 @@ private struct ModeSwitcherButton: View {
             HStack(spacing: 5) {
                 Image(systemName: system)
                     .font(.system(size: 11, weight: isActive ? .semibold : .regular))
-                Text(title)
+                Text(titleKey, bundle: .module)
                     .font(.system(size: 11, weight: isActive ? .semibold : .regular))
             }
             .foregroundStyle(isActive ? Color.primary : Color.secondary)
@@ -158,14 +160,18 @@ private struct ModeSwitcherButton: View {
 }
 
 private struct SectionHeader: View {
-    let title: String
+    let titleKey: LocalizedStringKey
     let systemImage: String
     var body: some View {
-        Label(title, systemImage: systemImage)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+        Label {
+            Text(titleKey, bundle: .module)
+        } icon: {
+            Image(systemName: systemImage)
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
     }
 }
 

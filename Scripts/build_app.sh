@@ -30,6 +30,40 @@ mkdir -p "$APP_DIR/Contents/Resources"
 
 cp "$BIN" "$APP_DIR/Contents/MacOS/Scribe"
 
+# Copy SwiftPM's resource bundle alongside the binary so Bundle.module
+# can locate Resources/ contents (currently the .lproj catalogues for
+# i18n). SwiftPM emits this as `<Module>_<Module>.bundle` next to the
+# binary; we mirror it into Contents/Resources so the .app is a
+# self-contained, double-clickable artefact.
+#
+# Additionally promote the .lproj catalogues to the main Contents/
+# Resources level. Bundle.main's preferredLocalizations is computed
+# against THIS directory, not the nested Scribe_Scribe.bundle —
+# without these copies, AppleLanguages='zh-Hans' silently falls back
+# to en because macOS sees the main bundle as ".lproj-less" and
+# treats it as English-only. The Bundle.module nested copy still
+# serves SwiftUI's actual string lookups.
+SWIFT_BUNDLE="$BUILD_DIR/$TRIPLE/$CONFIG/Scribe_Scribe.bundle"
+if [[ -d "$SWIFT_BUNDLE" ]]; then
+    echo "==> Copying Scribe_Scribe.bundle (nested resources)"
+    cp -R "$SWIFT_BUNDLE" "$APP_DIR/Contents/Resources/"
+
+    echo "==> Promoting .lproj catalogues to main bundle Resources"
+    for LP in "$SWIFT_BUNDLE"/*.lproj; do
+        [[ -d "$LP" ]] || continue
+        # SwiftPM lower-cases regional subtags (zh-Hans -> zh-hans);
+        # restore the canonical Apple form on the main-bundle copy
+        # so NSBundle's locale matcher accepts it.
+        BASE=$(basename "$LP")
+        case "$BASE" in
+            zh-hans.lproj) DEST="zh-Hans.lproj" ;;
+            zh-hant.lproj) DEST="zh-Hant.lproj" ;;
+            *)             DEST="$BASE" ;;
+        esac
+        cp -R "$LP" "$APP_DIR/Contents/Resources/$DEST"
+    done
+fi
+
 # Generate .icns from icon.svg.
 # Three render paths in priority order:
 #   1. AppKit's NSImage(contentsOf:) — system-native SVG via CoreSVG.
@@ -101,6 +135,19 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
     <string>0.1.0</string>
     <key>CFBundleSignature</key>
     <string>????</string>
+    <!-- Phase 27: declare every locale we ship a .lproj for. macOS
+         intersects this list with the user's AppleLanguages
+         preference to pick the runtime locale; an empty / omitted
+         list falls back to development region (English) which is
+         why explicit declaration is required even when the .lproj
+         directories already exist on disk. -->
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>en</string>
+        <string>zh-Hans</string>
+    </array>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>NSHighResolutionCapable</key>

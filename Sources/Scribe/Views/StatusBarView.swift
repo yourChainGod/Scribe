@@ -13,7 +13,7 @@ struct StatusBarView: View {
             if let doc = workspace.current {
                 DocumentStatusItems(doc: doc)
             } else {
-                Text("Ready")
+                Text("status.ready", bundle: .module)
             }
             Spacer()
             if let doc = workspace.current, doc.isDirty {
@@ -21,7 +21,7 @@ struct StatusBarView: View {
                     Circle()
                         .fill(Color.accentColor)
                         .frame(width: 6, height: 6)
-                    Text("Modified")
+                    Text("status.modified", bundle: .module)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -57,16 +57,16 @@ private struct DocumentStatusItems: View {
         StatusBarSeparator()
         lineEndingMenu
         StatusBarSeparator()
-        Text("Ln \(doc.cursorLine), Col \(doc.cursorColumn)")
+        Text(L10n.t("status.lineCol", doc.cursorLine, doc.cursorColumn))
             .monospacedDigit()
         StatusBarSeparator()
-        Text("\(doc.text.count) chars")
+        Text(L10n.t("status.charCount", doc.text.count))
             .monospacedDigit()
     }
 
     private var languageMenu: some View {
         Menu {
-            Section("Syntax Highlighting") {
+            Section {
                 ForEach(LexerCatalog.all, id: \.lexillaName) { lex in
                     Button {
                         // nil ⇒ auto by extension; otherwise pin a specific lexer.
@@ -81,10 +81,16 @@ private struct DocumentStatusItems: View {
                         }
                     }
                 }
+            } header: {
+                Text("status.menu.syntax", bundle: .module)
             }
             if doc.lexerOverride != nil {
                 Divider()
-                Button("Reset to Auto Detect") { doc.lexerOverride = nil }
+                Button {
+                    doc.lexerOverride = nil
+                } label: {
+                    Text("status.menu.resetAuto", bundle: .module)
+                }
             }
         } label: {
             Label(LexerCatalog.descriptor(for: doc).display,
@@ -98,13 +104,15 @@ private struct DocumentStatusItems: View {
     private var encodingMenu: some View {
         Menu {
             if doc.url != nil {
-                Section("Reopen with Encoding") {
+                Section {
                     ForEach(TextEncoding.allCases) { enc in
                         Button(enc.displayName) { workspace.reopen(doc: doc, as: enc) }
                     }
+                } header: {
+                    Text("status.menu.reopenEncoding", bundle: .module)
                 }
             }
-            Section("Save with Encoding") {
+            Section {
                 ForEach(TextEncoding.allCases) { enc in
                     Button {
                         workspace.setEncoding(of: doc, to: enc)
@@ -116,6 +124,8 @@ private struct DocumentStatusItems: View {
                         }
                     }
                 }
+            } header: {
+                Text("status.menu.saveEncoding", bundle: .module)
             }
         } label: {
             Text(doc.encoding.displayName)
