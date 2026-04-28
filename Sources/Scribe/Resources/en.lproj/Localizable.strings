@@ -206,6 +206,13 @@
 "tabContext.revealInFinder" = "Reveal in Finder";
 "tabContext.copyPath"       = "Copy Path";
 
+// MARK: - File tree context
+
+"fileTree.context.open"            = "Open";
+"fileTree.context.revealInFinder"  = "Reveal in Finder";
+"fileTree.context.copyPath"        = "Copy Path";
+"fileTree.context.copyName"        = "Copy Name";
+
 // MARK: - Find bar / find-in-files
 
 "find.placeholder"           = "Search";

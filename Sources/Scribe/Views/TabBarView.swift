@@ -98,6 +98,57 @@ private struct TabItem: View {
         .onHover { hover = $0 }
         .animation(.easeOut(duration: 0.12), value: hover)
         .animation(.easeOut(duration: 0.18), value: isSelected)
+        // Right-click menu — Xcode/VSCode parity. Sourced through
+        // .module so every label resolves through the locale catalogue.
+        .contextMenu {
+            Button {
+                workspace.close(documentID: doc.id)
+            } label: {
+                Text("tabContext.close", bundle: .module)
+            }
+            Button {
+                closeOthers()
+            } label: {
+                Text("tabContext.closeOthers", bundle: .module)
+            }
+            .disabled(workspace.documents.count <= 1)
+            Button {
+                closeAll()
+            } label: {
+                Text("tabContext.closeAll", bundle: .module)
+            }
+            Divider()
+            Button {
+                guard let url = doc.url else { return }
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            } label: {
+                Text("tabContext.revealInFinder", bundle: .module)
+            }
+            .disabled(doc.url == nil)
+            Button {
+                guard let url = doc.url else { return }
+                let pb = NSPasteboard.general
+                pb.clearContents()
+                pb.setString(url.path, forType: .string)
+            } label: {
+                Text("tabContext.copyPath", bundle: .module)
+            }
+            .disabled(doc.url == nil)
+        }
+    }
+
+    private func closeOthers() {
+        // Iterate over a snapshot copy because workspace.close
+        // mutates the underlying array.
+        for other in workspace.documents where other.id != doc.id {
+            workspace.close(documentID: other.id)
+        }
+    }
+
+    private func closeAll() {
+        for d in workspace.documents {
+            workspace.close(documentID: d.id)
+        }
     }
 
     private var backgroundFill: Color {

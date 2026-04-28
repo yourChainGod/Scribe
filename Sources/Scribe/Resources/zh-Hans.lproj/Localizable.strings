@@ -204,6 +204,13 @@
 "tabContext.revealInFinder" = "在访达中显示";
 "tabContext.copyPath"       = "拷贝路径";
 
+// MARK: - File tree context
+
+"fileTree.context.open"            = "打开";
+"fileTree.context.revealInFinder"  = "在访达中显示";
+"fileTree.context.copyPath"        = "拷贝路径";
+"fileTree.context.copyName"        = "拷贝名称";
+
 // MARK: - Find bar / find-in-files
 
 "find.placeholder"           = "搜索";

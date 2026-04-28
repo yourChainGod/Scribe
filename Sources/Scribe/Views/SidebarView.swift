@@ -178,6 +178,7 @@ private struct SectionHeader: View {
 private struct DocRow: View {
     @ObservedObject var doc: Document
     let isSelected: Bool
+    @EnvironmentObject var workspace: Workspace
     @State private var hover = false
 
     var body: some View {
@@ -207,6 +208,49 @@ private struct DocRow: View {
         )
         .contentShape(Rectangle())
         .onHover { hover = $0 }
+        // Right-click on an open-document row mirrors the tab-bar
+        // context menu so the two surfaces don't drift in feature
+        // parity. We share keys via tabContext.* so a translation
+        // change for the tabs propagates here automatically.
+        .contextMenu {
+            Button {
+                workspace.close(documentID: doc.id)
+            } label: {
+                Text("tabContext.close", bundle: .module)
+            }
+            Button {
+                for other in workspace.documents where other.id != doc.id {
+                    workspace.close(documentID: other.id)
+                }
+            } label: {
+                Text("tabContext.closeOthers", bundle: .module)
+            }
+            .disabled(workspace.documents.count <= 1)
+            Button {
+                for d in workspace.documents {
+                    workspace.close(documentID: d.id)
+                }
+            } label: {
+                Text("tabContext.closeAll", bundle: .module)
+            }
+            Divider()
+            Button {
+                guard let url = doc.url else { return }
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            } label: {
+                Text("tabContext.revealInFinder", bundle: .module)
+            }
+            .disabled(doc.url == nil)
+            Button {
+                guard let url = doc.url else { return }
+                let pb = NSPasteboard.general
+                pb.clearContents()
+                pb.setString(url.path, forType: .string)
+            } label: {
+                Text("tabContext.copyPath", bundle: .module)
+            }
+            .disabled(doc.url == nil)
+        }
     }
 
     private func iconName(for lang: String) -> String {

@@ -87,6 +87,40 @@ private struct FileRow: View {
             }
         }
         .animation(.easeOut(duration: 0.12), value: hover)
+        // Right-click — Reveal in Finder + Copy Path are the
+        // two operations users want often enough that we surface
+        // them outside the macOS Edit menu. Keep this minimal;
+        // adding "Rename" / "Delete" requires confirmation flows
+        // we haven't designed yet.
+        .contextMenu {
+            if !node.isDirectory {
+                Button {
+                    workspace.openFile(at: node.url)
+                } label: {
+                    Text("fileTree.context.open", bundle: .module)
+                }
+                Divider()
+            }
+            Button {
+                NSWorkspace.shared.activateFileViewerSelecting([node.url])
+            } label: {
+                Text("fileTree.context.revealInFinder", bundle: .module)
+            }
+            Button {
+                let pb = NSPasteboard.general
+                pb.clearContents()
+                pb.setString(node.url.path, forType: .string)
+            } label: {
+                Text("fileTree.context.copyPath", bundle: .module)
+            }
+            Button {
+                let pb = NSPasteboard.general
+                pb.clearContents()
+                pb.setString(node.url.lastPathComponent, forType: .string)
+            } label: {
+                Text("fileTree.context.copyName", bundle: .module)
+            }
+        }
     }
 
     private var backgroundFill: Color {

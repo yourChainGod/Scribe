@@ -46,9 +46,13 @@ struct MainWindow: View {
                 Button {
                     workspace.sidebarVisible.toggle()
                 } label: {
-                    Image(systemName: workspace.sidebarVisible
-                          ? "sidebar.left"
-                          : "sidebar.leading")
+                    Label {
+                        Text("toolbar.toggleSidebar", bundle: .module)
+                    } icon: {
+                        Image(systemName: workspace.sidebarVisible
+                              ? "sidebar.left"
+                              : "sidebar.leading")
+                    }
                 }
                 .help(L10n.t("toolbar.toggleSidebar"))
             }
@@ -60,17 +64,29 @@ struct MainWindow: View {
             // pair.
             ToolbarItemGroup(placement: .primaryAction) {
                 Button { workspace.newDocument() } label: {
-                    Image(systemName: "square.and.pencil")
+                    Label {
+                        Text("toolbar.newFile", bundle: .module)
+                    } icon: {
+                        Image(systemName: "square.and.pencil")
+                    }
                 }
                 .help(L10n.t("toolbar.newFile") + " (⌘N)")
 
                 Button { workspace.openDocument() } label: {
-                    Image(systemName: "folder")
+                    Label {
+                        Text("toolbar.openFile", bundle: .module)
+                    } icon: {
+                        Image(systemName: "folder")
+                    }
                 }
                 .help(L10n.t("toolbar.openFile") + " (⌘O)")
 
                 Button { workspace.saveCurrent() } label: {
-                    Image(systemName: "tray.and.arrow.down")
+                    Label {
+                        Text("toolbar.save", bundle: .module)
+                    } icon: {
+                        Image(systemName: "tray.and.arrow.down")
+                    }
                 }
                 .help(L10n.t("toolbar.save") + " (⌘S)")
                 .disabled(workspace.current == nil)
@@ -83,7 +99,11 @@ struct MainWindow: View {
                 Button {
                     findState.show(replaceMode: false)
                 } label: {
-                    Image(systemName: "magnifyingglass")
+                    Label {
+                        Text("toolbar.find", bundle: .module)
+                    } icon: {
+                        Image(systemName: "magnifyingglass")
+                    }
                 }
                 .help(L10n.t("toolbar.find") + " (⌘F)")
                 .disabled(workspace.current == nil)
@@ -109,7 +129,11 @@ struct MainWindow: View {
                         }
                     }
                 } label: {
-                    Image(systemName: "doc.text.magnifyingglass")
+                    Label {
+                        Text("toolbar.findInFiles", bundle: .module)
+                    } icon: {
+                        Image(systemName: "doc.text.magnifyingglass")
+                    }
                 }
                 .help(L10n.t("toolbar.findInFiles") + " (⌘⇧F)")
                 .disabled(workspace.folderRoot == nil)
@@ -117,7 +141,11 @@ struct MainWindow: View {
                 Button {
                     startCompare()
                 } label: {
-                    Image(systemName: "rectangle.split.2x1")
+                    Label {
+                        Text("toolbar.compare", bundle: .module)
+                    } icon: {
+                        Image(systemName: "rectangle.split.2x1")
+                    }
                 }
                 .help(L10n.t("toolbar.compare") + " (⌥⌘D)")
             }
@@ -126,7 +154,11 @@ struct MainWindow: View {
             // macOS users expect view-state toggles last.
             ToolbarItemGroup(placement: .primaryAction) {
                 Button { prefs.zoomOut() } label: {
-                    Image(systemName: "minus.magnifyingglass")
+                    Label {
+                        Text("toolbar.zoomOut", bundle: .module)
+                    } icon: {
+                        Image(systemName: "minus.magnifyingglass")
+                    }
                 }
                 .help(L10n.t("toolbar.zoomOut") + " (⌘-)")
                 .disabled(prefs.fontSize <= EditorPreferences.fontSizeMin)
@@ -144,7 +176,11 @@ struct MainWindow: View {
                     .help(L10n.t("toolbar.zoomReset"))
 
                 Button { prefs.zoomIn() } label: {
-                    Image(systemName: "plus.magnifyingglass")
+                    Label {
+                        Text("toolbar.zoomIn", bundle: .module)
+                    } icon: {
+                        Image(systemName: "plus.magnifyingglass")
+                    }
                 }
                 .help(L10n.t("toolbar.zoomIn") + " (⌘+)")
                 .disabled(prefs.fontSize >= EditorPreferences.fontSizeMax)
