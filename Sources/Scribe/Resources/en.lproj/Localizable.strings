@@ -81,6 +81,13 @@
 "projectDiff.action.unstageAll"     = "Unstage All";
 "projectDiff.action.stageAll.hint"   = "Stage every change in this file";
 "projectDiff.action.unstageAll.hint" = "Move all staged changes back to the working tree";
+"projectDiff.action.revertHunk"      = "Revert";
+"projectDiff.action.revertHunk.hint" = "Discard this hunk's working-tree changes";
+"projectDiff.revert.confirm.title"   = "Revert hunk?";
+"projectDiff.revert.confirm.message" = "Discard this hunk in %@? There's no undo for working-tree changes.";
+"sourceControl.alert.revertHunkFailed" = "Couldn’t revert hunk.";
+"projectDiff.action.openInDiff"        = "Open in Project Diff";
+"sourceControl.contextMenu.openFile"   = "Open File";
 "projectDiff.title"                 = "Project Diff";
 "projectDiff.loading"               = "Loading project diff…";
 "projectDiff.empty"                 = "No changes in the working tree.";

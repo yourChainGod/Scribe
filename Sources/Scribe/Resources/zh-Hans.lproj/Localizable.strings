@@ -79,6 +79,13 @@
 "projectDiff.action.unstageAll"     = "全部取消暂存";
 "projectDiff.action.stageAll.hint"   = "暂存当前文件的所有改动";
 "projectDiff.action.unstageAll.hint" = "把当前文件已暂存的改动全部回退到工作树";
+"projectDiff.action.revertHunk"      = "撤销";
+"projectDiff.action.revertHunk.hint" = "丢弃此 hunk 的工作树改动（无法恢复）";
+"projectDiff.revert.confirm.title"   = "撤销 hunk？";
+"projectDiff.revert.confirm.message" = "将永久丢弃 %@ 中此 hunk 的改动，工作树改动无法恢复。";
+"sourceControl.alert.revertHunkFailed" = "撤销失败。";
+"projectDiff.action.openInDiff"        = "在 Project Diff 中打开";
+"sourceControl.contextMenu.openFile"   = "打开文件";
 "projectDiff.title"                 = "Project Diff";
 "projectDiff.loading"               = "正在加载 Project Diff…";
 "projectDiff.empty"                 = "工作树没有任何改动。";

@@ -48,6 +48,26 @@ final class Workspace: ObservableObject {
     /// multibuffer.
     @Published var projectDiffVisible: Bool = false
 
+    /// Phase 35b-4-d — repo-relative path the multibuffer should
+    /// scroll into view on its next render. Used by the sidebar's
+    /// "Open in Project Diff" affordance: clicking on a file row
+    /// opens the multibuffer *and* anchors it to that file so the
+    /// user lands on the right hunks instead of the top of the
+    /// list. ProjectDiffView watches this via `.onChange` and
+    /// resets to `nil` after the scroll completes so a later
+    /// re-trigger of the same path still fires.
+    @Published var projectDiffFocusPath: String? = nil
+
+    /// Phase 35b-4-d — open the Project Diff multibuffer, optionally
+    /// anchored to a specific repo-relative path. Centralised so
+    /// future entry points (command palette, menu bar, keyboard
+    /// shortcut…) all go through the same code path and can't
+    /// drift on the visibility / focus order.
+    func openProjectDiff(focusPath: String? = nil) {
+        projectDiffFocusPath = focusPath
+        projectDiffVisible = true
+    }
+
     /// Phase 18 — last-known selection text from the focused editor.
     /// Non-published on purpose: SCN_UPDATEUI fires on every cursor
     /// move, so a @Published bind would thrash every observer

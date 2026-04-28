@@ -363,12 +363,35 @@ final class GitStatusEngine: ObservableObject {
         handleWriteResult(result, action: .unstageHunk)
     }
 
+    /// Phase 35b-4-d — discard one working-tree hunk (the
+    /// `git checkout -p` selecting-just-this-hunk equivalent).
+    /// `hunk` must originate from a `cached: false` diff because
+    /// its line numbers describe the working tree, and reverse-
+    /// apply on the working tree (no `--cached`) needs that
+    /// context to locate the right slice.
+    ///
+    /// **Destructive**: there is no analogue of `git reflog` for
+    /// working-tree changes — once reverted, the hunk's contents
+    /// are gone. Callers MUST gate this behind a confirmation;
+    /// the engine deliberately doesn't enforce confirmation here
+    /// (the modal lives at the SwiftUI layer where it can pull
+    /// the right localised copy and parent window).
+    func revertHunk(_ hunk: GitClient.Hunk, path: String) async {
+        guard let repo else { return }
+        let patch = hunk.minimalPatch(forFilePath: path)
+        let result = await Task.detached(priority: .userInitiated) {
+            GitClient.applyPatch(patch, repo: repo,
+                                 reverse: true, cached: false)
+        }.value
+        handleWriteResult(result, action: .revertHunk)
+    }
+
     /// Internal — write-op kinds used to label the failure alert.
     /// The `failureKey` indirection feeds L10n at the time the
     /// alert is built so the message follows the system language.
     private enum WriteAction {
         case stage, unstage, discard, commit, fetch, pull, push,
-             stageHunk, unstageHunk, checkout, pushForce
+             stageHunk, unstageHunk, revertHunk, checkout, pushForce
 
         var failureKey: String {
             switch self {
@@ -381,6 +404,7 @@ final class GitStatusEngine: ObservableObject {
             case .push:         return "sourceControl.alert.pushFailed"
             case .stageHunk:    return "sourceControl.alert.stageHunkFailed"
             case .unstageHunk:  return "sourceControl.alert.unstageHunkFailed"
+            case .revertHunk:   return "sourceControl.alert.revertHunkFailed"
             case .checkout:     return "sourceControl.alert.checkoutFailed"
             case .pushForce:    return "sourceControl.alert.pushForceFailed"
             }

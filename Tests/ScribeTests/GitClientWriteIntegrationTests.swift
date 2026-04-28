@@ -727,6 +727,57 @@ final class GitClientWriteIntegrationTests: XCTestCase {
                        "untracked file should not appear in projectDiff: \(entries)")
     }
 
+    // MARK: - Phase 35b-4-d · revert one working-tree hunk
+
+    func test_revertHunk_removesWorkingChange() async throws {
+        // Edit a file (no stage), grab the working hunk, then
+        // revertHunk via the engine. After: working tree clean,
+        // index clean (we never staged), HEAD blob unchanged.
+        try seedFile(name: "README.md",
+                     contents: "line1\nline2-edited\nline3\n")
+        let engine = GitStatusEngine()
+        engine.bind(repo: repoURL)
+        try await waitForEngineLoaded(engine)
+        let hunks = await engine.hunks(forPath: "README.md", cached: false)
+        XCTAssertEqual(hunks.count, 1, "expected one working hunk")
+        await engine.revertHunk(hunks[0], path: "README.md")
+        let workingAfter = await engine.hunks(forPath: "README.md", cached: false)
+        let stagedAfter  = await engine.hunks(forPath: "README.md", cached: true)
+        XCTAssertTrue(workingAfter.isEmpty,
+                      "revert should leave working tree clean: \(workingAfter)")
+        XCTAssertTrue(stagedAfter.isEmpty,
+                      "index untouched, should still match HEAD")
+    }
+
+    func test_applyPatch_workingTreeReverseRemovesEdit() async throws {
+        // Direct GitClient.applyPatch contract test for the
+        // `cached: false` extension landed in Phase 35b-4-d. We
+        // need the patch shape to be exactly what `git diff` emitted
+        // for the working tree, otherwise reverse-apply can't find
+        // the slice.
+        try seedFile(name: "README.md", contents: "edited\n")
+        let diff = GitClient.diffForApply(path: "README.md",
+                                          repo: repoURL,
+                                          cached: false)
+        guard case .diff(let raw) = diff else {
+            XCTFail("expected diff, got: \(diff)"); return
+        }
+        let parsed = GitClient.parseHunks(raw)
+        XCTAssertEqual(parsed.count, 1)
+        let patch = parsed[0].minimalPatch(forFilePath: "README.md")
+        let result = GitClient.applyPatch(patch, repo: repoURL,
+                                          reverse: true, cached: false)
+        XCTAssertEqual(result, .ok)
+        // After reverse-apply the working tree is HEAD again — re-
+        // diff returns nothing.
+        let after = GitClient.diffForApply(path: "README.md",
+                                           repo: repoURL, cached: false)
+        if case .diff(let raw) = after {
+            XCTAssertTrue(raw.isEmpty,
+                          "working tree should be clean: \(raw)")
+        }
+    }
+
     // MARK: - Phase 35b-4-c · path-keyed stage / unstage helpers
 
     func test_stagePath_movesWorkingChangeIntoIndex() async throws {

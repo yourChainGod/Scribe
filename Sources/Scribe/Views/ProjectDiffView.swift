@@ -133,14 +133,52 @@ struct ProjectDiffView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 14) {
-                    ForEach(entries) { entry in
-                        fileSection(entry)
+            // ScrollViewReader gives us programmatic .scrollTo for
+            // the focus-path handoff from the sidebar; per-file
+            // section ids match `entry.id` (== entry.path) so the
+            // proxy can target a specific file without us
+            // maintaining a parallel id table.
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 14) {
+                        ForEach(entries) { entry in
+                            fileSection(entry)
+                                .id(entry.id)
+                        }
                     }
+                    .padding(14)
                 }
-                .padding(14)
+                // Re-fire on every focusPath flip *and* on every
+                // entries refresh — the second trigger covers the
+                // initial load case where focusPath got set first
+                // (sidebar click) but entries hadn't resolved yet.
+                .onChange(of: workspace.projectDiffFocusPath) { _, newPath in
+                    scrollIfNeeded(proxy, target: newPath)
+                }
+                .onChange(of: entries) { _, _ in
+                    scrollIfNeeded(proxy, target: workspace.projectDiffFocusPath)
+                }
             }
+        }
+    }
+
+    /// Animate a scroll to `target`, then nil out the workspace
+    /// flag so a second sidebar click on the *same* file still
+    /// re-triggers (otherwise SwiftUI would coalesce the no-op).
+    private func scrollIfNeeded(_ proxy: ScrollViewProxy,
+                                target: String?) {
+        guard let target,
+              entries.contains(where: { $0.id == target }) else {
+            return
+        }
+        withAnimation(.easeOut(duration: 0.20)) {
+            proxy.scrollTo(target, anchor: .top)
+        }
+        // Drain the focus latch so the same path can be re-targeted
+        // later. Done on the next runloop tick so the animation
+        // above keeps reading the still-set value.
+        DispatchQueue.main.async {
+            workspace.projectDiffFocusPath = nil
         }
     }
 
@@ -256,10 +294,18 @@ struct ProjectDiffView: View {
 
     /// One hunk: header line ("@@ -a,b +c,d @@") + per-line
     /// monospace body coloured by leading char + trailing
-    /// Stage / Unstage button. We render bodyLines verbatim
+    /// action buttons. We render bodyLines verbatim
     /// (preserving the leading ' ' / '+' / '-' so widths line
     /// up between context and changed lines) and tint the row
     /// background to make additions / deletions glanceable.
+    ///
+    /// Working-tree hunks get an extra `Revert` button that
+    /// drops the change (destructive — confirmed via NSAlert
+    /// before it dispatches). Staged hunks don't, because
+    /// "unstage + discard" is what working-tree revert does
+    /// after a stage, and chaining the two is more legible
+    /// than a one-shot "revert from index" that bypasses the
+    /// working tree.
     private func hunkExcerpt(_ hunk: GitClient.Hunk,
                              isStaged: Bool,
                              path: String) -> some View {
@@ -269,6 +315,16 @@ struct ProjectDiffView: View {
                     .font(.system(.caption, design: .monospaced))
                     .foregroundStyle(.secondary)
                 Spacer()
+                if !isStaged {
+                    Button {
+                        revertHunkWithConfirm(hunk, path: path)
+                    } label: {
+                        Text("projectDiff.action.revertHunk", bundle: .module)
+                            .font(.caption.weight(.medium))
+                    }
+                    .buttonStyle(.borderless)
+                    .help(L10n.t("projectDiff.action.revertHunk.hint"))
+                }
                 Button {
                     Task {
                         if isStaged {
@@ -351,5 +407,33 @@ struct ProjectDiffView: View {
         let next = await engine.projectDiff()
         entries = next
         hasLoadedOnce = true
+    }
+
+    // MARK: - Destructive confirmations
+
+    /// Revert one working-tree hunk, after confirmation. We hand-
+    /// roll an NSAlert (rather than `.confirmationDialog`) for
+    /// parity with `SourceControlSidebar.discardWithConfirm`: the
+    /// "Revert" button is marked .destructive and the default-
+    /// Enter focus is on Cancel, so a stray Return doesn't lose
+    /// the user's edits.
+    private func revertHunkWithConfirm(_ hunk: GitClient.Hunk,
+                                       path: String) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = L10n.t("projectDiff.revert.confirm.title")
+        alert.informativeText = String(
+            format: L10n.t("projectDiff.revert.confirm.message"),
+            path
+        )
+        alert.addButton(withTitle: L10n.t("projectDiff.action.revertHunk"))
+        alert.addButton(withTitle: L10n.t("alert.button.cancel"))
+        alert.buttons.first?.hasDestructiveAction = true
+        if alert.runModal() == .alertFirstButtonReturn {
+            Task {
+                await engine.revertHunk(hunk, path: path)
+                await reload()
+            }
+        }
     }
 }

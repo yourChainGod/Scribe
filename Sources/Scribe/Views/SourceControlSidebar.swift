@@ -447,6 +447,24 @@ struct SourceControlSidebar: View {
                 .onTapGesture {
                     workspace.openFile(at: row.url)
                 }
+                // Phase 35b-4-d — right-click jumps to this file
+                // inside the Project Diff multibuffer. We don't
+                // overload click (already opens the file in a tab)
+                // because the two intents are different: click =
+                // edit; right-click → open-in-diff = review.
+                .contextMenu {
+                    Button {
+                        workspace.openProjectDiff(focusPath: row.path)
+                    } label: {
+                        Text("projectDiff.action.openInDiff", bundle: .module)
+                    }
+                    Button {
+                        workspace.openFile(at: row.url)
+                    } label: {
+                        Text("sourceControl.contextMenu.openFile",
+                             bundle: .module)
+                    }
+                }
         }
     }
 

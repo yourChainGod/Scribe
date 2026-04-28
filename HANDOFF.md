@@ -522,25 +522,30 @@ Task { @MainActor [weak self] in
 4. **Snippets v2**：`${1:placeholder}` 跳转 + tab 键从 buffer
    触发（Scintilla autocomplete） + per-language scope。Phase 33
    v1 只做了“静态 body 插入”、“面板选择”、“Settings 管理”。
-5. **Git v2 polish (Phase 35b-4-d)**：in-place 编辑 hunk
+5. **Git v2 polish (Phase 35b-4-e)**：in-place 编辑 hunk
    excerpt（zed 让 user 直接在 diff 面改源文件，目前
-   ProjectDiffView read-only）· 滚动首个 hunk auto-jump ·
-   跨文件 diff search · submodule diff。35b-1/2a/2b/2c 交付
-   读面 + file-level 写面 + commit + remote sync，35b-3 交付
-   per-hunk stage/unstage（chevron 展开 + [+]/[-] 走 `git
-   apply --cached [--reverse]`），35b-4-a 交付分支 picker
-   + push 右键 force-with-lease，35b-4-b 交付 Project Diff
-   multibuffer（read-only excerpts + per-file section + per-
-   hunk Stage/Unstage + Open File 跳转 · 在 `EditorAreaView`
-   通过 `Workspace.projectDiffVisible` flag overlay），35b-
-   4-c 交付 Stage All / Unstage All 整文件按钮（path-keyed
-   `engine.stagePath/unstagePath` helpers + multibuffer 文
-   件 section header 双按钮 + .disabled 跟 hunk 计数）。复
-   用 GitClient.WriteResult · AheadBehind · Hunk +
-   parseHunks + minimalPatch + applyPatch · Branch +
-   parseBranches · checkoutBranch · pushForceWithLease ·
-   ProjectDiffEntry · commit 走 stdin 路径 · GitStatusEngine
-   write helpers + projectDiff + stagePath/unstagePath ·
+   ProjectDiffView read-only）· 跨文件 diff search ·
+   submodule diff · 流式 diff load。35b-1/2a/2b/2c 交付
+   读面 + file-level 写面 + commit + remote sync，35b-3
+   交付 per-hunk stage/unstage（chevron 展开 + [+]/[-] 走
+   `git apply --cached [--reverse]`），35b-4-a 交付分支
+   picker + push 右键 force-with-lease，35b-4-b 交付 Project
+   Diff multibuffer（read-only excerpts + per-file section
+   + per-hunk Stage/Unstage + Open File 跳转 · 在
+   `EditorAreaView` 通过 `Workspace.projectDiffVisible` flag
+   overlay），35b-4-c 交付 Stage All / Unstage All 整文件
+   按钮（path-keyed `engine.stagePath/unstagePath` helpers
+   + multibuffer 文件 section header 双按钮 + .disabled
+   跟 hunk 计数），35b-4-d 交付 Revert Hunk（working hunk
+   destructive button + NSAlert confirm + GitClient.applyPatch
+   扩展 `cached: Bool = true`）+ 侧栏右键 contextMenu「在
+   Project Diff 中打开」（Workspace.projectDiffFocusPath +
+   ScrollViewReader auto-jump）。复用 GitClient.WriteResult
+   · AheadBehind · Hunk + parseHunks + minimalPatch +
+   applyPatch (cached/reverse 三态) · Branch + parseBranches
+   · checkoutBranch · pushForceWithLease · ProjectDiffEntry
+   · commit 走 stdin 路径 · GitStatusEngine write helpers +
+   projectDiff + stagePath/unstagePath + revertHunk ·
    GitDiff Parser/Hunks/Status Parser/AheadBehindParser/
    BranchParser。
 6. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末
@@ -563,13 +568,13 @@ Task { @MainActor [weak self] in
 ```
 Scribe 已从 0 长到 v1.0-rc ——
 SwiftUI Scene + Scintilla 5.6.1 + 8 主题 + 多光标 + 列选 + 全 i18n（en/zh-Hans）·
-Markdown 实时预览（手写转换器 + GFM 表格·task list·footnote + WKWebView）+ Git Gutter（unified-diff parser + Scintilla margin + ⌥⇧↑/↓ hunk 跳转） + Source Control 侧栏（`git status` 读面 · 分段显示 · hover 出 stage/unstage/discard · 行前 chevron 展开 hunk 列表 hover [+]/[-] · 底部 commit 面板 ⌘⏎ + Amend toggle · branch 名 Menu picker（Local/Remote + ✓ + auto-track）· 顶部 ahead/behind capsule + Project Diff multibuffer 入口 + fetch/pull/push 3 按钮 · push 右键出 force-with-lease · pull `--ff-only` 默认) + Project Diff 全工作区视图（read-only excerpts + per-hunk Stage/Unstage + 文件级 Stage All/Unstage All + Open File 跳转 + Done/ESC 关闭） + 代码片段（⌘⇧T 选择器 + Settings 管理 tab） + 大文件 IO（≥ 64 MiB 走 SCI_CREATELOADER/GETTEXTRANGEFULL 分块 + atomic rename + OOM 护栏） + scribe CLI shim（对齐 zed/code/subl），零依赖·
+Markdown 实时预览（手写转换器 + GFM 表格·task list·footnote + WKWebView）+ Git Gutter（unified-diff parser + Scintilla margin + ⌥⇧↑/↓ hunk 跳转） + Source Control 侧栏（`git status` 读面 · 分段显示 · hover 出 stage/unstage/discard · 行前 chevron 展开 hunk 列表 hover [+]/[-] · 行右键「在 Project Diff 中打开」跳 multibuffer 定位 · 底部 commit 面板 ⌘⏎ + Amend toggle · branch 名 Menu picker（Local/Remote + ✓ + auto-track）· 顶部 ahead/behind capsule + Project Diff multibuffer 入口 + fetch/pull/push 3 按钮 · push 右键出 force-with-lease · pull `--ff-only` 默认) + Project Diff 全工作区视图（read-only excerpts + per-hunk Stage/Unstage/Revert · 文件级 Stage All/Unstage All · Open File 跳转 · ScrollViewReader 自动定位 · Done/ESC 关闭） + 代码片段（⌘⇧T 选择器 + Settings 管理 tab） + 大文件 IO（≥ 64 MiB 走 SCI_CREATELOADER/GETTEXTRANGEFULL 分块 + atomic rename + OOM 护栏） + scribe CLI shim（对齐 zed/code/subl），零依赖·
 开 20 MB 文件主线程不卡 · 50 MB typing 不卡（50 ms debounce）·
-Swift 6 strict 0/0 · 295 tests + 4 perf budget · ScintillaCodeEditor.swift
+Swift 6 strict 0/0 · 297 tests + 4 perf budget · ScintillaCodeEditor.swift
 1083 → 385 行 · .app 双击即用 · CI workflow（账单暂停中、`gh workflow disable CI` ）· 4 道闸本地 discipline ·
 README/ROADMAP/HANDOFF 同步到位。
 
-下一拍：Phase 35b-4-d (in-place 编辑 diff hunk excerpt + auto-jump) 或 Phase 35c (inline blame + merge UI) 或换主线 (LargeFile v3 / CLI v2 / Document Map …)。
+下一拍：Phase 35b-4-e (in-place 编辑 diff hunk excerpt + diff search + submodule) 或 Phase 35c (inline blame + merge UI) 或换主线 (LargeFile v3 / CLI v2 / Document Map …)。
 ```
 
 ---

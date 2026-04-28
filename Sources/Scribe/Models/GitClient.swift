@@ -581,15 +581,21 @@ enum GitClient {
         }
     }
 
-    /// Apply `patch` against the repo's *index* (not the working
-    /// tree). `reverse == true` undoes a hunk that's already in the
-    /// index — that's the unstage path. We always go through the
-    /// stdin pipe (`-`) so multi-line / Unicode patches don't
-    /// collide with macOS argv limits.
+    /// Apply `patch` against the repo. By default (`cached == true`)
+    /// the patch lands in the *index* — that's the stage / unstage
+    /// path. Pass `cached: false` to apply against the working tree
+    /// instead, which is what "Revert Hunk" wants (`reverse == true`
+    /// + `cached: false` ⇒ undo the hunk in the working tree as if
+    /// it was never written).
+    ///
+    /// We always pipe the patch through stdin (`-`) so multi-line /
+    /// Unicode bodies don't collide with macOS argv length limits.
     nonisolated static func applyPatch(_ patch: String,
                                        repo: URL,
-                                       reverse: Bool) -> WriteResult {
-        var args: [String] = ["apply", "--cached", "--whitespace=nowarn"]
+                                       reverse: Bool,
+                                       cached: Bool = true) -> WriteResult {
+        var args: [String] = ["apply", "--whitespace=nowarn"]
+        if cached { args.append("--cached") }
         if reverse { args.append("--reverse") }
         args.append("-")    // read patch from stdin
         let result = runWithStdin(args, stdin: patch, cwd: repo)

@@ -1163,11 +1163,67 @@ excerpts)，但每个文件 N 个 hunk 全都得逐个点 Stage/Unstage 才
 scroll 到首个 hunk auto-jump（侧栏点 row 直接定位 multibuffer
 对应文件）· 跨文件 diff search · submodule diff。
 
+## Phase 35b-4-d · Revert Hunk + 侧栏 → multibuffer 定位（2026-04-29）
+
+**背景**：35b-4-c 交付了 Stage All / Unstage All 文件级按钮，
+multibuffer 已具备 commit-prep 价值。但还缺两件：
+（1）丢一个 hunk 的能力（unstage 之后还得手动撤工作树，重复
+劳动）；
+（2）在大工作区里从侧栏直接跳到 multibuffer 的指定文件，避免
+滚屏找。本拍把这两个补上，同时给 GitClient.applyPatch 加
+`cached: Bool = true`，让 working tree apply 不用复制 30 行
+runWithStdin 的逻辑。
+
+**交付**：
+
+- `Sources/Scribe/Models/GitClient.swift` · `applyPatch` 签名扩
+  展为 `(_, repo:, reverse:, cached: Bool = true)`，default 保
+  持原行为；新参数 false 时 `git apply` 不带 `--cached`，落到
+  工作树。stdin pipe 路径不变。
+- `Sources/Scribe/Models/GitStatusEngine.swift` + `func revertHunk
+  (_:path:) async`（reverse + cached:false）· WriteAction
+  `.revertHunk` case → `sourceControl.alert.revertHunkFailed` ·
+  注释强调 destructive、由 view 层做 confirm。
+- `Sources/Scribe/Models/Workspace.swift` + `@Published var
+  projectDiffFocusPath: String? = nil` · `func openProjectDiff
+  (focusPath:)` helper 把 visibility + focus 一次性设进去（避免
+  竞态）。
+- `Sources/Scribe/Views/ProjectDiffView.swift` ·
+  - working hunk excerpt 多挂 [Revert] 按钮（staged 不挂——
+    等价于 unstage 后再 revert，链式更清晰）· `.help` 提示
+    destructive。
+  - `revertHunkWithConfirm(_:path:)` 走 NSAlert（与
+    SourceControlSidebar.discardWithConfirm 相同模板）· 默
+    认 Enter 落到 Cancel · destructive button 高亮。
+  - LazyVStack 包进 ScrollViewReader · `entry.id` 当做
+    section id（== entry.path） · `.onChange(focusPath)` +
+    `.onChange(entries)` 双触发覆盖「focus 早于 entries 解
+    析完」的初次加载场景 · scroll 完 `DispatchQueue.main.async`
+    nil 掉 focus 让同 path 二次点击仍能触发。
+- `Sources/Scribe/Views/SourceControlSidebar.swift` · 文件 row
+  挂 `.contextMenu` 多两项「在 Project Diff 中打开」「打开文
+  件」· 不抢 click（click 仍 = openFile，与已建立 UX 一致）。
+- `Sources/Scribe/Resources/{en,zh-Hans}.lproj/Localizable.strings`
+  + projectDiff.action.revertHunk + .revertHunk.hint +
+  .revert.confirm.title + .revert.confirm.message + .openInDiff
+  + sourceControl.alert.revertHunkFailed +
+  sourceControl.contextMenu.openFile（7 keys × 2 locale）。
+
+**测试**：+2 闸 (总 297)。`GitClientWriteIntegrationTests`
++ `test_revertHunk_removesWorkingChange`（edit 不 stage →
+revertHunk → 工作树/index 都干净）· `test_applyPatch_
+workingTreeReverseRemovesEdit`（直接走 GitClient API pin
+cached:false 契约）。
+
+**未覆盖 (后续)**：in-place 编辑 hunk excerpt（zed 让 user
+直接在 diff 面里改源文件，需 mini editor 集成）· 跨文件 diff
+search · submodule diff · 流式 diff load（>10k 文件工作区）。
+
 ## Phase 35+ · 路线展望
 
 下面是想做的事，按重要度而非时间排。多条路线是 zed 调研后决定插入的。
 
-1. **Git v2 polish (Phase 35b-4-d)**：in-place 编辑 hunk excerpt（zed 风可编辑 diff，目前 ProjectDiffView 仍是 read-only）+ scroll 到首个 hunk auto-jump（侧栏点 row 直接定位 multibuffer 对应文件）+ 跨文件 diff search + submodule diff。Phase 35b-1/2a/2b/2c/3/4-a/4-b/4-c 交付了读面 + file-level 写面 + commit + remote sync + per-hunk stage/unstage + 分支 picker + force-with-lease + Project Diff multibuffer (read-only) + Stage All / Unstage All 闭环。
+1. **Git v2 polish (Phase 35b-4-e)**：in-place 编辑 hunk excerpt（zed 风可编辑 diff，目前 ProjectDiffView 仍是 read-only）+ 跨文件 diff search + submodule diff + 流式 diff load。Phase 35b-1/2a/2b/2c/3/4-a/4-b/4-c/4-d 交付了读面 + file-level 写面 + commit + remote sync + per-hunk stage/unstage + 分支 picker + force-with-lease + Project Diff multibuffer (read-only) + Stage All / Unstage All + Revert Hunk + 侧栏右键跳 multibuffer 闭环。
 2. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末 annotation 显示 author/time/commit、冲突区上方 Accept/Reject 按钮。复用现有 GitClient。
 3. **LargeFile v3 (Phase 34d+)**：中途 cancel save、external-change
    mtime+size detection、SymbolOutline 读 buffer、细粒度 progress。
