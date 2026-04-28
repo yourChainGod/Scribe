@@ -409,6 +409,7 @@ Phase 0.2/0.3 暂未截图。
 | **Phase 28d · Coordinator 拆分** | `d351e8a` | Theme / Find / MultiCursor 三个 same-module extension · 主文件 1083 → 385 (-64%) |
 | **Phase 30 · Markdown 预览** | `f85d550` | 手写 md→HTML 转换器（453 LOC）· WKWebView pane · ⌘⇧V toggle · 26 converter tests · 零依赖 |
 | **Phase 31 · Git Gutter** | `556d2d2` | unified-diff parser 纯函数 · GitGutterEngine 全 workspace 单例 · margin 1 三色 marker · 保存/外部变更 refresh · 11 parser tests · 零依赖 |
+| **Phase 31b · Hunk Nav** | `eeb0adf` | GitGutterHunks 纯函数 group/next/prev · ⌥⇧↓ / ⌥⇧↑ 跳变更块 · 环绕换行 · cursor-在-hunk-内-跳过 语义 · 14 tests |
 
 ### 关键架构变化
 
@@ -472,7 +473,7 @@ Task { @MainActor [weak self] in
 
 `.github/workflows/ci.yml` 在 macos-14 跑：
 
-1. `swift test --parallel` — 150 tests 全绿
+1. `swift test --parallel` — 164 tests 全绿
 2. `swift build -c release` — release 编译 0 error
 3. `swift build -Xswiftc -swift-version -Xswiftc 6` — strict 模式 0 error 0 warning（Vendor/ 除外）
 4. `swift Scripts/check_localization.swift` — en ↔ zh-Hans key 一致 + 无 dangling reference
@@ -505,8 +506,8 @@ Task { @MainActor [weak self] in
 2. **Markdown Preview v2**：表格 / task list / footnote / 代码块语法高亮 /
    mermaid 图。当前 v1 覆盖 CommonMark 子集。
 3. **Git Gutter v2**：buffer-aware（HEAD blob ↔ in-memory text、不需
-   先保存）+ hunk-level navigation ⌥⇧↑/↓ + per-line revert。
-   当前 v1 看磁盘，保存后刷新。
+   先保存）+ per-line revert。hunk 跳转已在 Phase 31b 交付
+   （⌥⇧↓ / ⌥⇧↑）；当前 gutter v1 看磁盘，保存后刷新。
 4. **Phase 32+ 路线**：见 ROADMAP "Phase 32+ 路线展望"（ndd 核心 /
    Document Map / Snippets / HEX View / Sparkle）。
 
@@ -517,9 +518,9 @@ Task { @MainActor [weak self] in
 ```
 Scribe 已从 0 长到 v1.0-rc ——
 SwiftUI Scene + Scintilla 5.6.1 + 8 主题 + 多光标 + 列选 + 全 i18n（en/zh-Hans）·
-Markdown 实时预览（手写转换器 + WKWebView）+ Git Gutter（unified-diff parser + Scintilla margin），零依赖·
+Markdown 实时预览（手写转换器 + WKWebView）+ Git Gutter（unified-diff parser + Scintilla margin + ⌥⇧↑/↓ hunk 跳转），零依赖·
 开 20 MB 文件主线程不卡 · 50 MB typing 不卡（50 ms debounce）·
-Swift 6 strict 0/0 · 150 tests + 4 perf budget · ScintillaCodeEditor.swift
+Swift 6 strict 0/0 · 164 tests + 4 perf budget · ScintillaCodeEditor.swift
 1083 → 385 行 · .app 双击即用 · CI 四道闸 push/PR 都跑 ·
 README/ROADMAP/HANDOFF 同步到位。
 

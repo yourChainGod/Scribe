@@ -508,6 +508,37 @@ repo / read HEAD blob / unified diff）一共 ~30 行 glue。
 吻合。Phase 31b 想做 buffer-aware 的话，HEAD blob ↔ in-memory
 text 用现有 LCS 算（DiffSession 已有）。
 
+## Phase 31b · Git Gutter Hunk Navigation（2026-04-28，commit `eeb0adf`）
+
+**目标**：⌥⇧↓ / ⌥⇧↑ 跳到下一个/上一个 git 变更块。
+顶下环绕换行，清洁文件上 beep 不静默。
+
+**改动**：
+- `Sources/Scribe/Models/GitGutterHunks.swift`（85 行）
+  — `groups(in:)` 合并连续行为 `[ClosedRange<Int>]`；status
+  类型不参与 grouping，相邻 add/modify/delete 合为一个可跳转
+  块（与 VSCode / GitHub 同语义）。`next(after:)` / `previous
+  (before:)` 均以「cursor 在 hunk 内 → 跳过整个 hunk」为
+  主语义（firstIndex(where: contains)），wrap top↔bottom 与
+  Find Next / multi-cursor next match 一致。
+- `Sources/Scribe/Models/FindState.swift`
+  + `Command.gotoNextHunk` / `Command.gotoPrevHunk`。走现有
+  PassthroughSubject 总线，免新增 Combine 订阅。
+- `Sources/Scribe/Views/Scintilla/Coordinator+GitGutter.swift`
+  + `gotoNextHunk(in:)` / `gotoPrevHunk(in:)`。拿 caret 1-based
+  line 调 GitGutterHunks 拿 target 后 `SCI_GOTOLINE` +
+  `SCI_SCROLLCARET`。`doc.gitGutter` 空 → NSSound.beep()。
+- `Sources/Scribe/App/AppCommands.swift`
+  + Tools 菜单 Next/Previous Git Change 菜单项 ⌥⇧↓ / ⌥⇧↑。
+  跳过选 ⌘⌥↓ / ⌘⌥↑ （addCaretBelow/Above）以免冲突。
+- `Sources/Scribe/Resources/{en,zh-Hans}.lproj/Localizable.strings`
+  + `menu.tools.nextHunk` / `menu.tools.prevHunk`
+
+**测试**：`Tests/ScribeTests/GitGutterHunksTests.swift` 14 例覆盖：
+empty / single-line / contiguous / gap-of-1-splits / mixed-shape /
+ascending-sort 合计 6 例 grouping；next()  empty / 跳过-当前hunk /
+before-first / wrap-past-last 4 例；previous() 同样 4 例。
+
 ## Phase 32+ · 路线展望
 
 下面是想做的事，按重要度而非时间排：
@@ -515,7 +546,7 @@ text 用现有 LCS 算（DiffSession 已有）。
 1. **ndd C++ 核心移植**：`Encode.cpp` / `CmpareMode.cpp` / `HEXMode.cpp` / `LargeFile.cpp`
    通过 ObjC++ shim 桥到 Swift；保留 GPL-3.0 copyleft。
 2. **Document Map**：右侧缩略图侧栏（学 npp-mac，仅 SwiftUI）。
-3. **Git Gutter v2**：buffer-aware (HEAD blob ↔ in-memory text，无需先保存) + hunk-level navigation (⌥⇧↑/↓) + per-line revert。
+3. **Git Gutter v2**：buffer-aware (HEAD blob ↔ in-memory text，无需先保存) + per-line revert。跳转已交付。
 4. **Snippets / Templates**：⌘⇧T 弹出 + tab key 触发。
 5. **Markdown Preview v2**：表格 / task list / footnote / mermaid / 代码块语法高亮。
 6. **HEX View**：参考 ndd 的 `HEXMode.cpp`。
