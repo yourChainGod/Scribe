@@ -42,11 +42,14 @@ final class FindInFilesEngine {
     /// 5 MB — Scintilla itself is fine with larger files but our
     /// in-memory match list isn't, and 5 MB covers >99 % of source
     /// files.
-    static let maxBytesPerFile: Int = 5 * 1024 * 1024
+    /// `nonisolated` because `run(_:)` and `scan(_:)` execute off
+    /// the main actor and need to read the cap from inside a detached
+    /// task. Plain `let` constant — safe across actors.
+    nonisolated static let maxBytesPerFile: Int = 5 * 1024 * 1024
 
     /// Hard cap on matches per file — past this point a single
     /// generated file would dominate the result list.
-    static let maxMatchesPerFile: Int = 200
+    nonisolated static let maxMatchesPerFile: Int = 200
 
     // Directory pruning uses IgnoredPaths.shouldSkipDirectory(named:)
     // directly — keeping that in IgnoredPaths means Find-in-Files,
@@ -290,7 +293,13 @@ final class FindInFilesEngine {
         var withMatches = 0
         var pendingFlush = 0
 
-        for case let url as URL in enumerator {
+        // Swift 6 strict concurrency disallows `for case let url as URL
+        // in enumerator` from an async context (`makeIterator` is
+        // `@available(*, unavailable)` for FileManager.DirectoryEnumerator
+        // there). The `nextObject()` loop is the equivalent C-style
+        // walk and is fine in async code.
+        while let next = enumerator.nextObject() {
+            guard let url = next as? URL else { continue }
             if Task.isCancelled { break }
 
             // Directory pruning happens via skipDescendants on the enumerator.

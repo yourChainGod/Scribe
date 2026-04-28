@@ -203,6 +203,11 @@ enum ThemeID: String, CaseIterable, Sendable, Identifiable {
     /// True for the variants that draw light text on a dark
     /// background. Lets surrounding chrome pick the right contrast
     /// for non-Scintilla widgets if it ever needs to.
+    /// `@MainActor` because `.system` consults `NSApp` — Swift 6
+    /// strict concurrency forbids that from a nonisolated context.
+    /// All callers (theme menu, Scintilla coordinator) already run
+    /// on the main actor, so this is a no-cost annotation.
+    @MainActor
     var isDark: Bool {
         switch self {
         case .system:          return NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua

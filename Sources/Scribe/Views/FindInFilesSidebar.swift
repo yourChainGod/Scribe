@@ -524,6 +524,11 @@ private struct MatchRow: View {
 
 // MARK: - Local helpers
 
+// `ToggleStyle.button` and `ButtonStyle.borderless` are main-actor
+// isolated; under Swift 6 strict concurrency the helper has to be
+// `@MainActor` for the call sites (which already run on the main
+// actor) to compile cleanly.
+@MainActor
 @ViewBuilder
 private func optionToggle(_ label: String,
                           help: String,

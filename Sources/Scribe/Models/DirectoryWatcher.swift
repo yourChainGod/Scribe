@@ -30,7 +30,13 @@ import Foundation
 final class DirectoryWatcher {
     private let url: URL
     private let onChange: @MainActor () -> Void
-    private var stream: FSEventStreamRef?
+    /// FSEvents stream — referenced from `deinit` (which is
+    /// nonisolated under Swift 6 strict concurrency) so we mark it
+    /// `nonisolated(unsafe)` and rely on the CF/FSEvents APIs being
+    /// thread-safe. We never mutate `stream` after `start()` returns,
+    /// and the only access from outside the main actor is the
+    /// stop/invalidate/release triplet in `deinit`.
+    nonisolated(unsafe) private var stream: FSEventStreamRef?
     private var debounceTask: Task<Void, Never>?
 
     /// Debounce window between FSEvents callbacks and our `onChange`

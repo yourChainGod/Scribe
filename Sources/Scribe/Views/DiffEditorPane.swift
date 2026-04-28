@@ -285,7 +285,7 @@ struct DiffEditorPane: NSViewRepresentable {
     // MARK: - Coordinator
 
     @MainActor
-    final class Coordinator: NSObject, @preconcurrency ScintillaNotificationProtocol {
+    final class Coordinator: NSObject, ScintillaNotificationProtocol {
         let side: Side
         weak var session: DiffSession?
         var onLineClicked: (Int) -> Void
