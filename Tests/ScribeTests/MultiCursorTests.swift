@@ -43,8 +43,10 @@ final class MultiCursorTests: XCTestCase {
         state.commands.send(.addCaretBelow)
         // Phase 22 — skip-current.
         state.commands.send(.skipAndSelectNextOccurrence)
+        // Phase 23 — column selection toggle.
+        state.commands.send(.toggleColumnSelectionMode)
 
-        XCTAssertEqual(received.count, 6)
+        XCTAssertEqual(received.count, 7)
         // Pattern-match on each case so the compiler catches a
         // future enum-rename.
         for cmd in received {
@@ -54,7 +56,8 @@ final class MultiCursorTests: XCTestCase {
                  .collapseToSingleCursor,
                  .addCaretAbove,
                  .addCaretBelow,
-                 .skipAndSelectNextOccurrence:
+                 .skipAndSelectNextOccurrence,
+                 .toggleColumnSelectionMode:
                 continue
             default:
                 XCTFail("Unexpected command: \(cmd)")

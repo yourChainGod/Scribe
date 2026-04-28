@@ -115,6 +115,23 @@ struct ScribeApp: App {
                         fileIndex.rebuild(at: root)
                     }
                     outline.update(for: workspace.current)
+                    // Phase 23 verification hook: SCRIBE_TEST_RECT_SELECT
+                    // = "<linesDown>:<charsRight>" toggles the doc
+                    // into SC_SEL_RECTANGLE then drives
+                    // LINEDOWNRECTEXTEND × N + CHARRIGHTRECTEXTEND × M
+                    // so the screenshot script can show a real
+                    // rectangle highlight without keystroke synthesis.
+                    if let raw = ProcessInfo.processInfo.environment["SCRIBE_TEST_RECT_SELECT"] {
+                        let parts = raw.split(separator: ":").map(String.init)
+                        let lines = parts.count > 0 ? Int(parts[0]) ?? 0 : 0
+                        let chars = parts.count > 1 ? Int(parts[1]) ?? 0 : 0
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                            findState.commands.send(.toggleColumnSelectionMode)
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                findState.commands.send(.testRectSelectExtend(linesDown: lines, charsRight: chars))
+                            }
+                        }
+                    }
                     // Phase 22 verification hook: SCRIBE_TEST_SKIP_NEXT
                     // = "<needle>" runs ⌘D twice (so two occurrences
                     // are selected), then ⌃⌘D once (skip current,
@@ -477,6 +494,17 @@ struct ScribeApp: App {
                     findState.commands.send(.skipAndSelectNextOccurrence)
                 }
                 .keyboardShortcut("d", modifiers: [.command, .control])
+
+                // Phase 23 — column / rectangular selection toggle.
+                // ⌘⇧8 matches VSCode + IntelliJ. Independent of the
+                // ⇧⌥+arrow chord (Scintilla cocoa default → rect
+                // extend) — the toggle is for users who want to
+                // type / arrow into a rectangle without holding
+                // a modifier the whole time.
+                Button("Toggle Column Selection Mode") {
+                    findState.commands.send(.toggleColumnSelectionMode)
+                }
+                .keyboardShortcut("8", modifiers: [.command, .shift])
 
                 Divider()
 

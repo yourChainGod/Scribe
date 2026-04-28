@@ -78,12 +78,20 @@ final class FindState: ObservableObject {
         case addCaretBelow
         // Phase 22 — skip current ⌘D selection and jump to the next.
         case skipAndSelectNextOccurrence
+        // Phase 23 — toggle SC_SEL_STREAM ⇄ SC_SEL_RECTANGLE.
+        case toggleColumnSelectionMode
         /// Test-only: inserts the literal string at every caret via
         /// `SCI_REPLACESEL`. Used by the Phase 21 verification hook
         /// to render visible markers at the multi-caret positions —
         /// keystrokes via NSApp.sendAction don't reach ScintillaView.
         /// Not a user-facing command; the menu doesn't expose it.
         case insertAtCarets(String)
+        /// Test-only: drives `SCI_LINEDOWNRECTEXTEND` /
+        /// `SCI_CHARRIGHTRECTEXTEND` from the verification hook so
+        /// the screenshot script can render a rectangular selection
+        /// without keystroke synthesis through System Events.
+        /// Tuple is (linesDown, charsRight); both can be 0.
+        case testRectSelectExtend(linesDown: Int, charsRight: Int)
     }
     let commands = PassthroughSubject<Command, Never>()
 

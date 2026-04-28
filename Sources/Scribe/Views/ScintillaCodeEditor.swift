@@ -79,6 +79,23 @@ private enum SCI {
     static let SETADDITIONALSELECTIONTYPING:UInt32 = 2565
     static let SETMULTIPASTE:               UInt32 = 2614
     static let SETSELECTIONMODE:            UInt32 = 2422
+    /// Phase 23 — `SCI_GETSELECTIONMODE()` returns the current
+    /// SelectionMode (stream / rectangular / lines / thin).
+    static let GETSELECTIONMODE:            UInt32 = 2423
+    /// Phase 23 — `SCI_CHANGESELECTIONMODE(mode)` switches the
+    /// selection mode without touching MoveExtendsSelection,
+    /// which `SETSELECTIONMODE` would also set. Cleaner for a
+    /// pure toggle.
+    static let CHANGESELECTIONMODE:         UInt32 = 2659
+    /// Phase 23 — keyboard rectangular-extend verbs. Scintilla
+    /// cocoa's default key map already binds ⇧⌥+arrow to these,
+    /// so users get them "for free"; we expose them here so the
+    /// verification hook can drive a rectangle without keystroke
+    /// synthesis through System Events.
+    static let LINEDOWNRECTEXTEND:          UInt32 = 2426
+    static let LINEUPRECTEXTEND:            UInt32 = 2427
+    static let CHARLEFTRECTEXTEND:          UInt32 = 2428
+    static let CHARRIGHTRECTEXTEND:         UInt32 = 2429
     static let GETSELECTIONS:               UInt32 = 2570
     static let CLEARSELECTIONS:             UInt32 = 2571
     static let ADDSELECTION:                UInt32 = 2573
@@ -134,6 +151,14 @@ private enum SC {
     static let MARGIN_NUMBER:    Int = 1
     static let STYLE_DEFAULT:    Int = 32
     static let STYLE_LINENUMBER: Int = 33
+    /// Phase 23 — `SelectionMode` enum values. Stream is the
+    /// default; rectangle is what VSCode calls "Column Selection
+    /// Mode". `lines` and `thin` are exposed by Scintilla but we
+    /// don't bind them in the UI — `lines` doesn't fit the
+    /// macOS editing model, `thin` is a Scintilla-internal
+    /// stepping-stone of `rectangle`.
+    static let SEL_STREAM:    Int = 0
+    static let SEL_RECTANGLE: Int = 1
 }
 
 /// Lexilla SCE_C_* style indices used by the C/C++/JS/Swift lexers
@@ -310,7 +335,10 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                     case .addCaretAbove: self.addCaretAbove()
                     case .addCaretBelow: self.addCaretBelow()
                     case .skipAndSelectNextOccurrence: self.skipAndSelectNextOccurrence()
+                    case .toggleColumnSelectionMode: self.toggleColumnSelectionMode()
                     case .insertAtCarets(let s): self.insertAtCarets(s, in: view)
+                    case let .testRectSelectExtend(d, r):
+                        self.testRectSelectExtend(linesDown: d, charsRight: r, in: view)
                     }
                 }
         }
@@ -913,6 +941,54 @@ struct ScintillaCodeEditor: NSViewRepresentable {
             }
             if !pending.isEmpty {
                 view.message(SCI.SCROLLCARET)
+            }
+        }
+
+        /// ⌘⇧8 / "Toggle Column Selection Mode". Flips the
+        /// document between SC_SEL_STREAM (default — arrows move
+        /// the caret as a single point) and SC_SEL_RECTANGLE
+        /// (arrows extend a rectangular selection block). VSCode
+        /// uses ⌘⇧8 / Cmd+Shift+8 for the same toggle.
+        ///
+        /// Independent of the ⇧⌥+arrow chord that Scintilla cocoa
+        /// maps to Char/LineRectExtend by default — those make a
+        /// rect selection without leaving the toggle on. The
+        /// toggle lets users do a long rectangle edit without
+        /// holding ⇧⌥ for every key.
+        ///
+        /// Returns the new mode (so the menu can update the
+        /// checkmark) or nil if the view is gone.
+        @discardableResult
+        func toggleColumnSelectionMode() -> Int? {
+            guard let view else { return nil }
+            let cur = Int(view.message(SCI.GETSELECTIONMODE))
+            let next = (cur == SC.SEL_STREAM) ? SC.SEL_RECTANGLE : SC.SEL_STREAM
+            // CHANGESELECTIONMODE (vs SETSELECTIONMODE) doesn't
+            // also flip MoveExtendsSelection — we want the
+            // current move-extends preference preserved across
+            // the toggle.
+            view.message(SCI.CHANGESELECTIONMODE, wParam: UInt(next))
+            return next
+        }
+
+        /// Test-only: drive `SCI_LINEDOWNRECTEXTEND` /
+        /// `SCI_CHARRIGHTRECTEXTEND` `linesDown` / `charsRight`
+        /// times so the Phase 23 verification hook can produce a
+        /// visible rectangle without going through System Events.
+        /// In normal use these verbs reach Scintilla via the
+        /// default cocoa key map (⇧⌥+arrow) — the user shouldn't
+        /// need this method.
+        func testRectSelectExtend(linesDown: Int, charsRight: Int, in view: ScintillaView) {
+            // Force caret to absolute doc start before extending so
+            // the resulting rectangle has a known origin. Without
+            // this the screenshot is non-deterministic — the caret
+            // can land anywhere depending on previous state.
+            view.message(SCI.SETSEL, wParam: 0, lParam: 0)
+            for _ in 0..<max(0, linesDown) {
+                view.message(SCI.LINEDOWNRECTEXTEND)
+            }
+            for _ in 0..<max(0, charsRight) {
+                view.message(SCI.CHARRIGHTRECTEXTEND)
             }
         }
 
