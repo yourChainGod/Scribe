@@ -148,9 +148,14 @@ struct ScintillaCodeEditor: NSViewRepresentable {
     @ObservedObject var doc: Document
     @ObservedObject var prefs: EditorPreferences
     @ObservedObject var findState: FindState
+    /// Phase 18 — Workspace receives the live selection text on every
+    /// SCN_UPDATEUI tick so the "Find in Files" command can prefill
+    /// the query from whatever the user just highlighted. We don't
+    /// observe it here; the coordinator only writes to it.
+    @EnvironmentObject var workspace: Workspace
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(doc: doc, prefs: prefs, findState: findState)
+        Coordinator(doc: doc, prefs: prefs, findState: findState, workspace: workspace)
     }
 
     func makeNSView(context: Context) -> ScintillaView {
@@ -177,6 +182,7 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         context.coordinator.doc = doc
         context.coordinator.prefs = prefs
         context.coordinator.findState = findState
+        context.coordinator.workspace = workspace
 
         if view.string() != doc.text {
             context.coordinator.applyText(doc.text, to: view, isExternal: true)
@@ -196,6 +202,11 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         var doc: Document
         var prefs: EditorPreferences
         var findState: FindState
+        /// Workspace receives the live selection text. Held weak —
+        /// Coordinator is owned by the SwiftUI Representable's
+        /// state, Workspace lives at the app root, no retain cycle
+        /// risk but weakness reads cleaner against future refactors.
+        weak var workspace: Workspace?
         weak var view: ScintillaView?
 
         /// `true` while we are pushing doc → view; suppresses the SCN_MODIFIED
@@ -218,10 +229,11 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         private var lastHighlightedFlags: UInt = 0
         private var lastHighlightedDocLength: Int = -1
 
-        init(doc: Document, prefs: EditorPreferences, findState: FindState) {
+        init(doc: Document, prefs: EditorPreferences, findState: FindState, workspace: Workspace? = nil) {
             self.doc = doc
             self.prefs = prefs
             self.findState = findState
+            self.workspace = workspace
             super.init()
         }
 
@@ -614,6 +626,26 @@ struct ScintillaCodeEditor: NSViewRepresentable {
             return max(0, e - s)
         }
 
+        /// Phase 18 — read the current selection as a UTF-8 String,
+        /// suitable for prefilling a Find query. Returns "" when the
+        /// caret has no actual range or the bytes don't decode.
+        /// Multi-line selections are truncated at the first newline
+        /// because Find in Files is a single-line query field.
+        private func currentSelectionText(in view: ScintillaView) -> String {
+            let s = Int(view.message(SCI.GETSELECTIONSTART))
+            let e = Int(view.message(SCI.GETSELECTIONEND))
+            guard e > s, let raw = view.string() else { return "" }
+            let bytes = Array(raw.utf8)
+            guard e <= bytes.count else { return "" }
+            let slice = Array(bytes[s..<e])
+            guard let str = String(data: Data(slice), encoding: .utf8) else { return "" }
+            // Stop at first newline — the Find bar is single-line.
+            if let nl = str.firstIndex(where: { $0.isNewline }) {
+                return String(str[..<nl])
+            }
+            return str
+        }
+
         func adoptSelectionAsQuery(from view: ScintillaView) {
             let s = Int(view.message(SCI.GETSELECTIONSTART))
             let e = Int(view.message(SCI.GETSELECTIONEND))
@@ -710,6 +742,14 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                     let col1  = Int(col)  + 1
                     if doc.cursorLine != line1 { doc.cursorLine = line1 }
                     if doc.cursorColumn != col1 { doc.cursorColumn = col1 }
+                    // Phase 18 — push the live selection to Workspace so
+                    // the "Find in Files" command can prefill its query
+                    // from whatever the user just highlighted. Single-
+                    // line truncation matches what users intuitively
+                    // expect (the Find bar isn't multi-line).
+                    if let workspace {
+                        workspace.activeSelection = currentSelectionText(in: view)
+                    }
                 }
             default:
                 break

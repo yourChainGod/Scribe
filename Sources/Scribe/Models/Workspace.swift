@@ -29,6 +29,14 @@ final class Workspace: ObservableObject {
     /// lifetime; toggling here just shows / hides the screen.
     @Published var compareSession: DiffSession?
 
+    /// Phase 18 — last-known selection text from the focused editor.
+    /// Non-published on purpose: SCN_UPDATEUI fires on every cursor
+    /// move, so a @Published bind would thrash every observer
+    /// (sidebar, status bar, command palette host…) at typing speed.
+    /// "Find in Files" reads this on demand at command-invoke time.
+    /// Empty string ⇒ caret only (no actual text selection).
+    var activeSelection: String = ""
+
     let prefs: EditorPreferences
 
     /// One file-system watcher per open document with a URL. Removed when

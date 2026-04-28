@@ -115,6 +115,16 @@ struct ScribeApp: App {
                         fileIndex.rebuild(at: root)
                     }
                     outline.update(for: workspace.current)
+                    // Phase 18 verification hook: SCRIBE_TEST_FIND_FROM_SELECTION
+                    // primes Workspace.activeSelection so the screenshot
+                    // script can demonstrate the prefill-from-selection
+                    // path without driving an actual SCN_UPDATEUI tick.
+                    if let s = ProcessInfo.processInfo.environment["SCRIBE_TEST_FIND_FROM_SELECTION"],
+                       !s.isEmpty {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                            workspace.activeSelection = s
+                        }
+                    }
                     // Phase 15 verification hook: SCRIBE_TEST_THEME pins
                     // the editor to the named theme at startup so the
                     // screenshot script can grab a single palette
@@ -360,6 +370,28 @@ struct ScribeApp: App {
                 Button("Find in Files…") {
                     workspace.sidebarVisible = true
                     workspace.sidebarMode = .search
+                    // Phase 18: prefill the query with the live editor
+                    // selection (if any) and kick off a search right
+                    // away. Empty selection ⇒ original behaviour
+                    // (focus the input, leave any prior query alone).
+                    let selection = workspace.activeSelection
+                    if !selection.isEmpty {
+                        findInFiles.query = selection
+                        if let root = workspace.folderRoot?.url {
+                            let opts = FindInFilesOptions(
+                                query: selection,
+                                matchCase: findInFiles.matchCase,
+                                wholeWord: findInFiles.wholeWord,
+                                regex: false,                       // literal — selection text shouldn't
+                                                                    // be re-interpreted as regex by accident
+                                includeGlobs: [],
+                                excludeGlobs: []
+                            )
+                            findInFilesEngine.search(options: opts,
+                                                     root: root,
+                                                     into: findInFiles)
+                        }
+                    }
                 }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
 
