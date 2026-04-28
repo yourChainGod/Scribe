@@ -1118,16 +1118,56 @@ mixed 双列 / untracked 过滤) · 加 `waitForEngineLoaded` helper
 refresh 落地。SwiftUI 视图层不写 unit test (与 35b-3-ii 同策
 略，依赖 NSAlert/NSModal/SwiftUI layout)，走人工烟测。
 
-**未覆盖 (后续)**：in-place 编辑 hunk excerpt（zed 让 user
-直接在 diff 面里改源文件）· Stage All / Unstage All 整文件
-按钮 · 多文件选择 · 跨文件 diff search · 滚动到第一个 hunk
-auto-jump · 远程文件 / submodule diff。
+**未覆盖 (Phase 35b-4-c / 35b-4-d / 后续)**：Stage All /
+Unstage All 整文件按钮、in-place 编辑 hunk excerpt（zed 让
+user 直接在 diff 面里改源文件）、scroll 到首个 hunk auto-
+jump、跨文件 diff search、远程文件 / submodule diff。
+
+## Phase 35b-4-c · Project Diff Stage All / Unstage All（2026-04-29）
+
+**背景**：35b-4-b 上线 Project Diff multibuffer (read-only
+excerpts)，但每个文件 N 个 hunk 全都得逐个点 Stage/Unstage 才
+能一次性提交一个文件，体感很糙。本拍补两个文件级按钮把这层
+摩擦磨掉，让 multibuffer 真正能当 commit-prep 工作面用。
+
+**交付**：
+
+- `Sources/Scribe/Models/GitStatusEngine.swift` + `func
+  stagePath(_:) async` / `func unstagePath(_:) async` ·
+  ProjectDiffEntry 只带 path，view 不该知道 GitFileStatus；
+  这两个 helper 内部 `rows.first(where:)` lookup 后调既有
+  `stage(row:)` / `unstage(row:)` · row 不存在 silently
+  return（multibuffer 总是 reload，看不到 stale entry 即可）。
+- `Sources/Scribe/Views/ProjectDiffView.swift` 文件 section
+  header 多两个按钮 [Stage All] [Unstage All]（Open File 按
+  钮左侧）· `entry.workingHunks.isEmpty` / `entry.stagedHunks
+  .isEmpty` 时 `.disabled` 让 row 布局不抖 · `.help` 描述
+  「Stage every change in this file」/「Move all staged changes
+  back to the working tree」。
+- `Sources/Scribe/Resources/{en,zh-Hans}.lproj/Localizable.strings`
+  + projectDiff.action.{stageAll, unstageAll, stageAll.hint,
+  unstageAll.hint}（4 keys × 2 locale）。
+
+**测试**：+3 闸 (总 295)。`GitClientWriteIntegrationTests`
+新增 stagePath / unstagePath / unknown-path 三 case：
+
+- `test_stagePath_movesWorkingChangeIntoIndex`：edit + stagePath
+  后 `git diff` 空、`git diff --cached` 非空。
+- `test_unstagePath_movesIndexChangeBackToWorking`：stage 已落
+  的文件再 unstagePath 后两栏对调。
+- `test_stagePath_isNoOpForUnknownPath`：lookup miss silently
+  return，pin 「不弹 alert」契约。
+
+**未覆盖 (Phase 35b-4-d / 后续)**：in-place 编辑 hunk excerpt
+（zed 让 user 直接在 diff 面里改源文件，需 mini editor 集成）·
+scroll 到首个 hunk auto-jump（侧栏点 row 直接定位 multibuffer
+对应文件）· 跨文件 diff search · submodule diff。
 
 ## Phase 35+ · 路线展望
 
 下面是想做的事，按重要度而非时间排。多条路线是 zed 调研后决定插入的。
 
-1. **Git v2 polish (Phase 35b-4-c)**：in-place 编辑 hunk excerpt（zed 风可编辑 diff，目前 ProjectDiffView 是 read-only）+ Stage All / Unstage All 整文件按钮 + 滚动到首个 hunk auto-jump。Phase 35b-1/2a/2b/2c/3/4-a/4-b 交付了读面 + file-level 写面 + commit + remote sync + per-hunk stage/unstage + 分支 picker + force-with-lease + Project Diff multibuffer (read-only) 闭环。
+1. **Git v2 polish (Phase 35b-4-d)**：in-place 编辑 hunk excerpt（zed 风可编辑 diff，目前 ProjectDiffView 仍是 read-only）+ scroll 到首个 hunk auto-jump（侧栏点 row 直接定位 multibuffer 对应文件）+ 跨文件 diff search + submodule diff。Phase 35b-1/2a/2b/2c/3/4-a/4-b/4-c 交付了读面 + file-level 写面 + commit + remote sync + per-hunk stage/unstage + 分支 picker + force-with-lease + Project Diff multibuffer (read-only) + Stage All / Unstage All 闭环。
 2. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末 annotation 显示 author/time/commit、冲突区上方 Accept/Reject 按钮。复用现有 GitClient。
 3. **LargeFile v3 (Phase 34d+)**：中途 cancel save、external-change
    mtime+size detection、SymbolOutline 读 buffer、细粒度 progress。

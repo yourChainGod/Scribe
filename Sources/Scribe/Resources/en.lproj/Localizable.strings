@@ -77,6 +77,10 @@
 "projectDiff.action.openFile"       = "Open File";
 "projectDiff.action.stageHunk"      = "Stage";
 "projectDiff.action.unstageHunk"    = "Unstage";
+"projectDiff.action.stageAll"       = "Stage All";
+"projectDiff.action.unstageAll"     = "Unstage All";
+"projectDiff.action.stageAll.hint"   = "Stage every change in this file";
+"projectDiff.action.unstageAll.hint" = "Move all staged changes back to the working tree";
 "projectDiff.title"                 = "Project Diff";
 "projectDiff.loading"               = "Loading project diff…";
 "projectDiff.empty"                 = "No changes in the working tree.";

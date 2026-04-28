@@ -727,6 +727,62 @@ final class GitClientWriteIntegrationTests: XCTestCase {
                        "untracked file should not appear in projectDiff: \(entries)")
     }
 
+    // MARK: - Phase 35b-4-c · path-keyed stage / unstage helpers
+
+    func test_stagePath_movesWorkingChangeIntoIndex() async throws {
+        // Edit, no stage. After stagePath, `git diff` (working
+        // vs index) is empty and `git diff --cached` reports the
+        // hunk — i.e. the change has crossed the index.
+        try seedFile(name: "README.md", contents: "edited\n")
+        let engine = GitStatusEngine()
+        engine.bind(repo: repoURL)
+        try await waitForEngineLoaded(engine)
+        await engine.stagePath("README.md")
+        let working = await engine.hunks(forPath: "README.md", cached: false)
+        let staged  = await engine.hunks(forPath: "README.md", cached: true)
+        XCTAssertTrue(working.isEmpty,
+                      "working tree should be clean after stagePath: \(working)")
+        XCTAssertFalse(staged.isEmpty,
+                       "staged column should now hold the hunk")
+    }
+
+    func test_unstagePath_movesIndexChangeBackToWorking() async throws {
+        // Stage a working edit, then unstage by path. After-
+        // wards the index matches HEAD again and the working
+        // tree carries the hunk — symmetric to the stagePath
+        // contract.
+        try seedFile(name: "README.md", contents: "edited\n")
+        XCTAssertEqual(GitClient.stage(path: "README.md", repo: repoURL),
+                       .ok)
+        let engine = GitStatusEngine()
+        engine.bind(repo: repoURL)
+        try await waitForEngineLoaded(engine)
+        await engine.unstagePath("README.md")
+        let working = await engine.hunks(forPath: "README.md", cached: false)
+        let staged  = await engine.hunks(forPath: "README.md", cached: true)
+        XCTAssertFalse(working.isEmpty,
+                       "working tree should hold the hunk after unstagePath")
+        XCTAssertTrue(staged.isEmpty,
+                      "staged column should be clean")
+    }
+
+    func test_stagePath_isNoOpForUnknownPath() async throws {
+        // Lookup miss (path that no row reports) silently
+        // returns. We don't surface an error because the
+        // multibuffer always reloads after the action and a
+        // vanished row simply won't reappear; pinning the
+        // contract here so a later refactor doesn't regress
+        // into popping an alert.
+        try seedFile(name: "README.md", contents: "edited\n")
+        let engine = GitStatusEngine()
+        engine.bind(repo: repoURL)
+        try await waitForEngineLoaded(engine)
+        await engine.stagePath("does/not/exist.txt")
+        // README is still working-only — engine state untouched.
+        let staged = await engine.hunks(forPath: "README.md", cached: true)
+        XCTAssertTrue(staged.isEmpty)
+    }
+
     /// Spin-wait until the engine reports `.loaded`. We use an
     /// active poll rather than wiring up a Combine sink because
     /// `GitStatusEngine.refresh()` always reaches a terminal

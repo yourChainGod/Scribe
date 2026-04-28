@@ -288,6 +288,32 @@ final class GitStatusEngine: ObservableObject {
         return out
     }
 
+    /// Phase 35b-4-c — path-keyed counterpart to `stage(_:)` for the
+    /// Project Diff multibuffer. The view holds `ProjectDiffEntry`
+    /// (path-only) rather than the underlying `GitFileStatus` to
+    /// keep its own data shape lean; this helper does the row
+    /// lookup so the view stays decoupled from the engine's
+    /// internal model. Returns silently when the row is no longer
+    /// present (e.g. concurrent refresh removed it after a commit).
+    func stagePath(_ path: String) async {
+        guard let row = rows.first(where: { $0.path == path }) else {
+            return
+        }
+        await stage(row)
+    }
+
+    /// Phase 35b-4-c — path-keyed counterpart to `unstage(_:)`.
+    /// Same lookup contract as `stagePath` — we deliberately don't
+    /// surface a "row not found" error because the multibuffer
+    /// always reloads after the action regardless of outcome, so
+    /// a vanished row simply won't reappear.
+    func unstagePath(_ path: String) async {
+        guard let row = rows.first(where: { $0.path == path }) else {
+            return
+        }
+        await unstage(row)
+    }
+
     /// Phase 35b-3-ii — fetch hunks for a single file. `cached: false`
     /// returns working-tree-vs-index hunks (the source of "stage
     /// hunk"); `cached: true` returns index-vs-HEAD hunks (the

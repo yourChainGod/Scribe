@@ -75,6 +75,10 @@
 "projectDiff.action.openFile"       = "打开文件";
 "projectDiff.action.stageHunk"      = "暂存";
 "projectDiff.action.unstageHunk"    = "取消暂存";
+"projectDiff.action.stageAll"       = "全部暂存";
+"projectDiff.action.unstageAll"     = "全部取消暂存";
+"projectDiff.action.stageAll.hint"   = "暂存当前文件的所有改动";
+"projectDiff.action.unstageAll.hint" = "把当前文件已暂存的改动全部回退到工作树";
 "projectDiff.title"                 = "Project Diff";
 "projectDiff.loading"               = "正在加载 Project Diff…";
 "projectDiff.empty"                 = "工作树没有任何改动。";

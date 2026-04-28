@@ -162,6 +162,38 @@ struct ProjectDiffView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer()
+                // Stage All — only meaningful when there's at
+                // least one working-tree hunk to promote to the
+                // index. Disabled state keeps the button visible
+                // (so the row layout doesn't reflow when the
+                // last hunk is staged) but obviously inert.
+                Button {
+                    Task {
+                        await engine.stagePath(entry.path)
+                        await reload()
+                    }
+                } label: {
+                    Text("projectDiff.action.stageAll", bundle: .module)
+                        .font(.caption.weight(.medium))
+                }
+                .buttonStyle(.borderless)
+                .disabled(entry.workingHunks.isEmpty)
+                .help(L10n.t("projectDiff.action.stageAll.hint"))
+                // Unstage All — symmetric. Disabled when the
+                // staged column is empty so a stray click can't
+                // no-op into an alert.
+                Button {
+                    Task {
+                        await engine.unstagePath(entry.path)
+                        await reload()
+                    }
+                } label: {
+                    Text("projectDiff.action.unstageAll", bundle: .module)
+                        .font(.caption.weight(.medium))
+                }
+                .buttonStyle(.borderless)
+                .disabled(entry.stagedHunks.isEmpty)
+                .help(L10n.t("projectDiff.action.unstageAll.hint"))
                 Button {
                     workspace.openFile(at: entry.url)
                     workspace.projectDiffVisible = false
