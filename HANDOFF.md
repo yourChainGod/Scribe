@@ -412,6 +412,7 @@ Phase 0.2/0.3 暂未截图。
 | **Phase 31b · Hunk Nav** | `eeb0adf` | GitGutterHunks 纯函数 group/next/prev · ⌥⇧↓ / ⌥⇧↑ 跳变更块 · 环绕换行 · cursor-在-hunk-内-跳过 语义 · 14 tests |
 | **Phase 32 · Markdown v2** | `92201f6` | GFM 表格 (1-line lookahead) · task list `- [ ]/[x]` · footnote `[^id]` 二走扫描 · 18 新 tests · 零依赖 |
 | **CI 修复** | `4808f05` | macos-14 → macos-15 (Xcode 15.4 / Swift 5.10 → Xcode 16+ / Swift 6.0+)。`@preconcurrency` 在 conformance 位置是 SE-0423 (Swift 6.0+)。首个 CI 绿 push |
+| **Phase 33 · Snippets v1** | `5e70a25` | Snippet Codable · SnippetCatalog 单键 UserDefaults JSON · SnippetController 复用 PaletteWindowController · ⌘⇧T 选择器 · Settings tab “输入即存” · 5 个 starter snippets · 9 tests · 零依赖 |
 
 ### 关键架构变化
 
@@ -475,7 +476,7 @@ Task { @MainActor [weak self] in
 
 `.github/workflows/ci.yml` 在 macos-15 跑（commit `4808f05` 后从 macos-14 升级，以匹配 Swift 6.0+ 工具链）：
 
-1. `swift test --parallel` — 182 tests 全绿
+1. `swift test --parallel` — 191 tests 全绿
 2. `swift build -c release` — release 编译 0 error
 3. `swift build -Xswiftc -swift-version -Xswiftc 6` — strict 模式 0 error 0 warning（Vendor/ 除外）
 4. `swift Scripts/check_localization.swift` — en ↔ zh-Hans key 一致 + 无 dangling reference
@@ -510,8 +511,11 @@ Task { @MainActor [weak self] in
 3. **Git Gutter v2**：buffer-aware（HEAD blob ↔ in-memory text、不需
    先保存）+ per-line revert。hunk 跳转已在 Phase 31b 交付
    （⌥⇧↓ / ⌥⇧↑）；当前 gutter v1 看磁盘，保存后刷新。
-4. **Phase 33+ 路线**：见 ROADMAP "Phase 33+ 路线展望"（Snippets /
-   ndd 核心 / Document Map / HEX View / Sparkle）。
+4. **Snippets v2**：`${1:placeholder}` 跳转 + tab 键从 buffer
+   触发（Scintilla autocomplete） + per-language scope。Phase 33
+   v1 只做了“静态 body 插入”、“面板选择”、“Settings 管理”。
+5. **Phase 34+ 路线**：见 ROADMAP "Phase 34+ 路线展望"（ndd
+   核心 / Document Map / HEX View / Sparkle）。
 
 ---
 
@@ -520,13 +524,13 @@ Task { @MainActor [weak self] in
 ```
 Scribe 已从 0 长到 v1.0-rc ——
 SwiftUI Scene + Scintilla 5.6.1 + 8 主题 + 多光标 + 列选 + 全 i18n（en/zh-Hans）·
-Markdown 实时预览（手写转换器 + GFM 表格·task list·footnote + WKWebView）+ Git Gutter（unified-diff parser + Scintilla margin + ⌥⇧↑/↓ hunk 跳转），零依赖·
+Markdown 实时预览（手写转换器 + GFM 表格·task list·footnote + WKWebView）+ Git Gutter（unified-diff parser + Scintilla margin + ⌥⇧↑/↓ hunk 跳转） + 代码片段（⌘⇧T 选择器 + Settings 管理 tab），零依赖·
 开 20 MB 文件主线程不卡 · 50 MB typing 不卡（50 ms debounce）·
-Swift 6 strict 0/0 · 182 tests + 4 perf budget · ScintillaCodeEditor.swift
+Swift 6 strict 0/0 · 191 tests + 4 perf budget · ScintillaCodeEditor.swift
 1083 → 385 行 · .app 双击即用 · CI 四道闸 push/PR 都跑 ·
 README/ROADMAP/HANDOFF 同步到位。
 
-下一拍：Snippets + ndd C++ 核心 + Document Map。
+下一拍：ndd C++ 核心 + Document Map + Snippets v2。
 ```
 
 ---

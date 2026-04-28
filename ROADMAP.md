@@ -583,14 +583,72 @@ before-first / wrap-past-last 4 例；previous() 同样 4 例。
 入）、mermaid（需 mermaid.js）、GFM autolinks、行内 HTML、setext
 headings、引用式链接。都是 v3 画饱。
 
-## Phase 33+ · 路线展望
+## Phase 33 · Snippets v1（2026-04-28，commit `5e70a25`）
+
+**目标**：用户可管理的文本插入模板。⌘⇧T 弹出 fuzzy
+选择器（复用 PaletteWindowController），选中按 Enter 在
+当前 caret 插入 body；多光标下自动多点插入。Settings →
+代码片段 tab 增/删/改，输入即存 UserDefaults。零依赖。
+
+**改动**：
+- `Sources/Scribe/Models/Snippet.swift`（50 行）
+  Codable struct：id / name / prefix / body / description。Sendable
+  跨 actor 传递；Identifiable 为 SwiftUI 列表提供稳定驼峰。
+- `Sources/Scribe/Models/SnippetCatalog.swift`（135 行）
+  `@MainActor ObservableObject`，单键 UserDefaults JSON 存储
+  以原子写避免抖动 save。提供 add/update/remove/
+  resetToStarter；包含 5 个 starter snippets 作为首启动生友型。
+  Corrupt JSON 同样 fallback 到 seed，不会 panic。
+- `Sources/Scribe/Views/SnippetController.swift`（110 行）
+  单例，把 snippets 包装为 `ScribeCommand` 填进私有
+  CommandRegistry，调 `PaletteWindowController.show(...)` 复用
+  现成 fuzzy match UI。多行 body 在 palette 列表以 `head
+  line ↵ +N more` 预览。选中后走 `findState.commands.send
+  (.insertSnippet(body))`。
+- `Sources/Scribe/Models/FindState.swift`
+  + `Command.insertSnippet(String)`。与 test-only 的
+  insertAtCarets 区开，使 case 标签能说明这是面向用户的
+  路径。最终都走同一条 SCI_INSERTTEXT walk。
+- `Sources/Scribe/Views/ScintillaCodeEditor.swift`
+  Coordinator sink 加 case `.insertSnippet → insertAtCarets`。
+  复用现有多光标路径，零成本拿到 multi-cursor 插入能力。
+- `Sources/Scribe/Views/SettingsView.swift`（+220 行）
+  新 `SnippetsSettingsPane`：HStack(侧栏列表, 分隔线, 详情
+  表单)。Add/delete/reset 按钮 + reset 的确认 alert。表单
+  字段全部是 computed `Binding<Snippet>`，插件式走 `catalog
+  .update(...)` “输入即存”。面板宽高 540×380 → 720×460 以容
+  多行 body editor。
+- `Sources/Scribe/App/AppCommands.swift`
+  + Edit 菜单 "Insert Snippet…" ⌘⇧T，在 Find-in-Files 后、
+  Hide Find Bar 前。无 doc 时禁用。`ScribeCommands` 增
+  `snippets: SnippetCatalog` 参数。
+- `Sources/Scribe/ScribeApp.swift`
+  + `@StateObject snippets = SnippetCatalog()` · `.environmentObject
+  (snippets)` 为 MainWindow 与 Settings scene · 给 ScribeCommands
+  传参。
+- `Sources/Scribe/Resources/{en,zh-Hans}.lproj/Localizable.strings`
+  + 21 个新 key：`menu.edit.insertSnippet` · `snippet.palette.*` ·
+  `settings.tab.snippets` · `settings.snippets.*`
+
+**测试**：`SnippetCatalogTests.swift` 9 例：first-run-seeds-defaults
+ / second-instance-loads-persisted / add·update·remove / update-unknown-
+id-noop / reset-replaces-user-snippets / Snippet Codable round-trip
+ / 损坏 JSON fallback 到 seed。使用独立 UserDefaults suite 避免
+跨测试污染。
+
+**不在 v1 范围**：`${1:placeholder}` 占位跳转（需跨 caret 会
+话）、Tab 键从 buffer 文本触发（需 Scintilla autocomplete
+接入）、按语言 scope（现代码片段对所有文档可见）、导入/导出
+JSON 文件（UserDefaults 是唯一存储）。均为 v2 画饱。
+
+## Phase 34+ · 路线展望
 
 下面是想做的事，按重要度而非时间排：
 
-1. **Snippets / Templates**：⌘⇧T 弹出 + tab key 触发。UserDefaults JSON 持久化。
-2. **ndd C++ 核心移植**：`Encode.cpp` / `CmpareMode.cpp` / `HEXMode.cpp` / `LargeFile.cpp`
+1. **ndd C++ 核心移植**：`Encode.cpp` / `CmpareMode.cpp` / `HEXMode.cpp` / `LargeFile.cpp`
    通过 ObjC++ shim 桥到 Swift；保留 GPL-3.0 copyleft。
-3. **Document Map**：右侧缩略图侧栏（学 npp-mac，仅 SwiftUI）。
+2. **Document Map**：右侧缩略图侧栏（学 npp-mac，仅 SwiftUI）。
+3. **Snippets v2**：`${1:placeholder}` 跳转 + tab 键从 buffer 触发（Scintilla autocomplete） + per-language scope。
 4. **Git Gutter v2**：buffer-aware (HEAD blob ↔ in-memory text，无需先保存) + per-line revert。跳转已交付。
 5. **Markdown Preview v3**：代码块语法高亮 + mermaid 图。
 6. **HEX View**：参考 ndd 的 `HEXMode.cpp`。
