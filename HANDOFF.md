@@ -389,25 +389,102 @@ Phase 0.2/0.3 暂未截图。
 
 ---
 
+## 12. Phase 15–29 接力记录（2026-04-28，二轮迭代）
+
+**Phase reached**: 29 · 工程化与文档（CI 四道闸 + README/ROADMAP 同步）  
+**Status**: ✅ Swift 6 strict 全绿 · ✅ 110 tests · ✅ release build · ✅ i18n（en + zh-Hans, 203 keys）
+
+二轮迭代分四块按用户优先级推进：
+
+| 块 | 提交 | 内容 |
+|----|------|------|
+| **Phase 15–24 · 编辑器特性** | `45a02bc → 1a1c376` | 8 主题 / 行级 replace / Find prefill / 多光标（基础 + 垂直 + skip-next）/ 列选择 ⌘⇧8 / Multi-Cursor 子菜单 |
+| **Phase 25 · UI Polish** | `110bf26 → 4367b83` | Toolbar / Sidebar / TabBar / StatusBar / FindBar / FileTree / Outline / Quick Open / Diff / Find-in-Files / Welcome / Settings 视觉一致 |
+| **Phase 26 · App Icon** | `31c0d5a` + `e849215` | 纸笔 + macOS 14 squircle，16/32 px 专门优化 |
+| **Phase 27 · i18n** | `8cb82c2 → 8d01ef3` | en + zh-Hans 双 lproj，全 UI 文案 + 上下文菜单 |
+| **Phase 28 · 稳定性硬化** | `34d8c4b` | Swift 6 strict 0/0 · ScribeApp 626 → 144 行 · SCIConstants 抽出 |
+| **Phase 28b · 性能预算** | `7f7689e` | Workspace.openFile 异步化（< 5 ms sync）· updateNSView 短路 · 1/5/20 MB perf fixtures |
+| **Phase 29 · 工程化** | _本提交_ | `.github/workflows/ci.yml` 四道闸 · `check_localization.swift` · `gen_perf_samples.sh` · README 重写 · ROADMAP 追 ADR-006/007 · macOS 14 lockstep |
+
+### 关键架构变化
+
+**App 层拆分**（Phase 28）：
+
+```
+Sources/Scribe/App/
+├── StartupEnvironment.swift  · SCRIBE_AUTO_OPEN/FOLDER/COMPARE 解析
+├── TestHooks.swift           · SCRIBE_TEST_* 截图自动化钩子（8 个）
+└── AppCommands.swift         · ScribeCommands 整菜单栏 + Recent 子菜单
+ScribeApp.swift               · 144 行（Scene declaration + bootstrap）
+```
+
+**Scintilla 层** （Phase 28）：
+
+```
+Sources/Scribe/Views/Scintilla/
+└── SCIConstants.swift        · 所有 SCI_* / SCN_* / SCFIND_* / SCE_* 数值
+ScintillaCodeEditor.swift     · 1083 行（Coordinator 拆分留下次）
+```
+
+**Workspace I/O**（Phase 28b）：
+
+```swift
+// 旧
+let data = try Data(contentsOf: url)        // 主线程 ~500 ms 卡 20 MB
+let format = TextFormatDetector.decode(...) // 主线程
+documents.append(Document(text: format.text, ...))
+
+// 新
+let doc = Document(text: "", isLoading: true)  // 占位，~1 ms
+documents.append(doc); selectedID = doc.id
+Task { @MainActor [weak self] in
+    let result = await Task.detached(priority: .userInitiated) {
+        Workspace.loadAndDecode(at: url)         // nonisolated, off-main
+    }.value
+    self?.applyLoadResult(result, to: doc)
+}
+```
+
+### CI 四道闸（Phase 29）
+
+`.github/workflows/ci.yml` 在 macos-14 跑：
+
+1. `swift test --parallel` — 110 tests 全绿
+2. `swift build -c release` — release 编译 0 error
+3. `swift build -Xswiftc -swift-version -Xswiftc 6` — strict 模式 0 error 0 warning（Vendor/ 除外）
+4. `swift Scripts/check_localization.swift` — en ↔ zh-Hans key 一致 + 无 dangling reference
+
+### 性能数字（Phase 28b 实测）
+
+| 用例 | 主线程 sync 部分 | 总耗时（含异步） |
+|---|---|---|
+| openFile 1 MB | 3 ms | < 50 ms |
+| openFile 5 MB | 1 ms | < 100 ms |
+| openFile 20 MB | 1 ms | < 400 ms |
+| Find-in-Files 全 fixture 扫描 | — | 174 ms |
+
+绝对预算（不用 measure baseline）— ADR-007。
+
+### 下次起手
+
+未做 / 留给下次：
+
+1. **SCN_MODIFIED → doc.text 全 buffer copy**：typing 在 50 MB 文件仍卡。需要 NSMutableString-backed Document 或 throttle。
+2. **Coordinator extension 拆分**：ScintillaCodeEditor.swift 仍 1083 行。要把 Coordinator 内 `private` 改 `internal` 才能 cross-file extension。
+3. **Phase 30+ 路线**：见 ROADMAP "Phase 30+ 路线展望"。
+
+---
+
 ## 11. 一句话总结
 
 ```
-Scribe 已从 0 长到 Phase 1.7a ——
-有窗、有标签、有侧栏、有行号、有暗色、有 .app、有持久化偏好、
-有最近文件、有实时光标、有真正的编码检测、有行尾感知、
-有 17 个单测保住核心、Scintilla 5.6.1 已经接进 SwiftPM target，
-而且——
-SCRIBE_USE_SCINTILLA=1 SCRIBE_AUTO_OPEN=… 跑起来时，
-ScintillaView 已经在 GUI 上真实渲染 Swift 代码 + 中日韩文注释，
-状态栏 299 chars 也对齐。
+Scribe 已从 0 长到 v1.0-rc ——
+SwiftUI Scene + Scintilla 5.6.1 + 8 主题 + 多光标 + 列选 + 全 i18n（en/zh-Hans）·
+开 20 MB 文件主线程不卡 · Swift 6 strict 0/0 · 110 tests + 4 perf budget ·
+.app 双击即用 · CI 四道闸 push/PR 都跑 · README/ROADMAP/HANDOFF 同步到位。
 
-但当前是单向流——doc → view 推得过去，
-view → doc 反向（用户键入回写）还没接，软 Tab/暗色/光标行列都还在 TODO。
-Scribe 默认仍然走旧的 NSTextView CodeEditor，新桥靠 env var 切。
-
-下次开工先看本文件第 7 节"头号事项"——
-按 5 步路线把反向同步、软 Tab、行号 margin、暗色装上，
-然后删 env hatch + 旧 CodeEditor + 调试探针窗口。
+唯一已知漏洞：typing 在多兆字节文件 SCN_MODIFIED 全文 round-trip 仍贵——
+Phase 30+ 第一拍要拆。
 ```
 
 ---

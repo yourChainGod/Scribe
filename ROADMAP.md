@@ -308,3 +308,108 @@ gutter、Command Palette 都要做（见 Phase 6/7/8/3）。
 
 **代价**：失去复用 ndd C++ 业务逻辑的廉价路径——Phase 5 文件比较算法只能 Swift
 重写。但这本身已是 ADR-002 接受的代价。
+
+---
+
+## Phase 15 — 27 · 已完成（集中纪实）
+
+ROADMAP 早期把 1.7b / 1.7c / 1.8 / 2-14 当成串行 phase 推进；实际开发节奏是
+"按用户感知优先"重排过的。下面把 v1.0 之前的所有里程碑列出，按时间倒序：
+
+- ✅ **Phase 27** · i18n 全覆盖（commit `8cb82c2` + `62ff434` + `8d01ef3`）
+  - en + zh-Hans 双 lproj，203 keys，CI 校验
+  - 上下文菜单、Sidebar / TabBar / FileTree / Editor 全部右键支持
+  - Toolbar / FindBar / Find-in-Files / Settings / Welcome / Diff 全本地化
+- ✅ **Phase 26** · App Icon（commit `31c0d5a` + `e849215`）
+  - "纸笔 + macOS 14 squircle"主图；16/32 px 专门优化
+- ✅ **Phase 25** · UI Polish（commit `110bf26` + `b076df3` + `6194c10` + `918ce67` + `4367b83`）
+  - Toolbar / Sidebar / TabBar / StatusBar / FindBar 视觉一致
+  - FileTree / Outline / Quick Open / Diff 内饰
+  - Find-in-Files Sidebar、Welcome 最近文件、Settings 加 Appearance tab + 主题预览
+- ✅ **Phase 24** · Multi-Cursor 子菜单（commit `1a1c376`）
+- ✅ **Phase 23** · 列（矩形）选择 ⌘⇧8（commit `85596cd`）
+- ✅ **Phase 22** · Skip Next Occurrence ⌃⌘D（commit `55823a5`）
+- ✅ **Phase 21** · 垂直多光标 ⌥⌘↑/↓（commit `452be10`）
+- ✅ **Phase 20** · 多光标基础（commit `7a05111`）
+- ✅ **Phase 18** · Find 从 selection 预填（commit `f2b2c38`）
+- ✅ **Phase 17** · 行级 Replace（commit `862364f`）
+- ✅ **Phase 15** · 编辑器主题管理（commit `45a02bc`）— 8 套配色
+
+## Phase 28 · 稳定性硬化（2026-04-28，commit `34d8c4b`）
+
+**目标**：`swift build -Xswiftc -swift-version -Xswiftc 6` 全绿。
+
+- [x] DirectoryWatcher: `nonisolated(unsafe)` FSEventStreamRef，修 deinit
+- [x] FindInFilesEngine: enumerator `nextObject()` 替代 `for case as URL`（async 不可用）；
+      `maxBytesPerFile` / `maxMatchesPerFile` 标 `nonisolated`
+- [x] ThemeManager: `@MainActor var isDark` 修 NSApp 访问
+- [x] DiffEditorPane: 去 `@preconcurrency`
+- [x] FindInFilesSidebar: optionToggle 加 `@MainActor`
+
+**架构修枝**：
+- [x] ScribeApp.swift 626 → 144 行
+- [x] App/StartupEnvironment.swift（SCRIBE_AUTO_*）
+- [x] App/TestHooks.swift（SCRIBE_TEST_*）
+- [x] App/AppCommands.swift（菜单栏整体）
+- [x] Views/Scintilla/SCIConstants.swift（SCI_* / SCN_* 等数值常量）
+
+## Phase 28b · 性能预算（2026-04-28，commit `7f7689e`）
+
+**目标**：20 MB 文件打开不卡 UI；keystroke 不再因主线程对账阻塞。
+
+- [x] **Workspace.openFile 异步化**：占位 Document → `Task.detached(.userInitiated)`
+      读 + 解码 → MainActor 回填。Sync portion < 5 ms 恒定。
+- [x] **updateNSView 短路**：`SCI_GETLENGTH` (O(1)) cheap signature 先比，length
+      相同才付 `view.string()` 的 O(N) 全字符串 round-trip 代价。
+- [x] **Performance 测试 + Fixture**：1 / 5 / 20 MB lorem-ipsum，绝对 wall-clock
+      预算（不用 XCTest measure，避免每机器 baseline 噪音）。
+
+**未完成（next perf 拍）**：
+- [ ] SCN_MODIFIED → doc.text 的全 buffer copy（typing 时主成本）；需要
+      NSMutableString-backed Document 或 throttle/debounce。
+
+## Phase 29 · 工程化与文档（2026-04-28，进行中）
+
+- [x] `.github/workflows/ci.yml` 四道闸：test / release / Swift 6 / strings parity
+- [x] `Scripts/check_localization.swift`（en ↔ zh-Hans + dangling reference）
+- [x] `Scripts/gen_perf_samples.sh`（1/5/20 MB perf fixtures）
+- [x] `Scripts/build_app.sh` LSMinimumSystemVersion 14.0（lockstep with `.macOS(.v14)`）
+- [x] README 重写（badges / features / cheat sheet / architecture / i18n / dev）
+- [x] ROADMAP 节追加（Phase 15-29 集中纪实 + ADR-006）
+
+## Phase 30+ · 路线展望
+
+下面是 v1.0 之后想做的事，按重要度而非时间排：
+
+1. **ndd C++ 核心移植**：`Encode.cpp` / `CmpareMode.cpp` / `HEXMode.cpp` / `LargeFile.cpp`
+   通过 ObjC++ shim 桥到 Swift；保留 GPL-3.0 copyleft。
+2. **SCN_MODIFIED 性能**：让 typing 在 50 MB 文件不卡（perf 第二拍）。
+3. **Document Map**：右侧缩略图侧栏（学 npp-mac，仅 SwiftUI）。
+4. **Function List / Symbol Outline**：当前 Outline 仅识别 Swift / Markdown，扩到 cpp / py / js。
+5. **Git Gutter**：旁注 ▎ ▎ +/- 的行级 git diff（libgit2 还是直接调 `git diff` CLI 待定）。
+6. **Snippets / Templates**：⌘⇧T 弹出 + tab key 触发。
+7. **Markdown Preview**：右侧 split，`WKWebView` 渲染。
+8. **HEX View**：参考 ndd 的 `HEXMode.cpp`。
+9. **官方 disk image** + Sparkle 自动更新。
+
+---
+
+## ADR-006 · Swift 6 严格并发是不退让基线
+**日期**：2026-04-28  
+**触发**：Phase 28 修完一轮严格并发错误。  
+**决策**：CI 强制 `swift build -Xswiftc -swift-version -Xswiftc 6` 全绿（Vendor/ 除外）。  
+**原因**：
+1. 严格并发是 Swift 长期方向，被动跟进迟早要修，不如一次性硬化
+2. 现在的代码量（~30 KLoC）是修战迹 cost 最低的时机
+3. 严格并发暴露的 bug 多数是 latent 的——FSEvents 回调跨线程、`NSApp` 访问跨 actor——这些以后会以 nondeterministic crash 形式爆出来  
+**代价**：偶尔需要额外的 `@MainActor` / `nonisolated` 注解 + `Task` shape 调整。已被 Phase 28 / 28b 验证可控。
+
+## ADR-007 · 性能用绝对预算，不用 baseline
+**日期**：2026-04-28  
+**触发**：写 PerformanceTests.swift 时考虑过 XCTest 的 `measure { }`。  
+**决策**：用 wall-clock 绝对预算（"openFile sync 部分 < 50 ms"），不用 measure baseline。  
+**原因**：
+1. baseline 文件 per-machine，CI runner 与本机硬件差异会让 `measure` 误报
+2. 用户感知的是"没卡"还是"卡了"——绝对阈值正好对应用户体验
+3. 预算超了说明回归，明确不需要解读"95th percentile 多快"  
+**代价**：不能 track 微小渐进改进（measure 能）。可接受——大改进自然会一眼看出。

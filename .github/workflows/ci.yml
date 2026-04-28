@@ -1,0 +1,88 @@
+#
+# Scribe CI — runs on every push to main and on every pull-request.
+#
+# Why four jobs instead of one bigger matrix:
+#   1.  `test`           — unit tests are the hot path; we want fastest
+#                           feedback when something obvious breaks.
+#   2.  `release-build`  — release builds catch -Owholemodule-only
+#                           diagnostics + bundle path issues that
+#                           debug builds miss.
+#   3.  `swift6-strict`  — Phase 28 promised we'd keep this green;
+#                           a separate job makes any regression
+#                           surface immediately in the checks UI.
+#   4.  `localization`   — Localizable.strings parity (en ↔ zh-Hans)
+#                           plus a source-side dangling-reference scan.
+#                           Trivial to fix in review when caught early.
+#
+# All four jobs share the same `macos-14` runner image. Sonoma is the
+# minimum Scribe targets (Package.swift / Info.plist) so any older
+# image would let an accidentally Ventura-incompatible API slip in.
+#
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Shared GitHub-Actions concurrency: cancel an in-flight run when a
+# newer commit lands on the same branch / PR. Saves runner minutes
+# and avoids stale "passed" greens covering rebased work.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: swift test
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: swift --version
+
+      # The package vendors Scintilla 5.6.1 + Lexilla 5.4.5 in
+      # Vendor/scintilla/. No external dependency fetch needed —
+      # `swift test` resolves SwiftPM cache only.
+      - name: swift test
+        run: swift test --parallel
+
+  release-build:
+    name: swift build -c release
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: swift build (release)
+        run: swift build -c release
+
+  swift6-strict:
+    name: swift build (Swift 6 strict)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      # Phase 28 fixed every concurrency diagnostic on Scribe-target
+      # files. We grep + diff to fail loudly on any new error/warning
+      # outside Vendor/ (where we don't own the cocoa bridge code).
+      - name: swift build -swift-version 6
+        run: |
+          set -o pipefail
+          swift build -Xswiftc -swift-version -Xswiftc 6 2>&1 | tee build.log
+          if grep -E ': (error|warning):' build.log | grep -v 'Vendor/' | head -1 | grep -q .; then
+            echo "::error::Swift 6 strict mode produced diagnostics outside Vendor/"
+            grep -E ': (error|warning):' build.log | grep -v 'Vendor/' | head -50
+            exit 1
+          fi
+
+  localization:
+    name: Localizable.strings parity
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Strings consistency
+        run: swift Scripts/check_localization.swift

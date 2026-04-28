@@ -148,8 +148,11 @@ cat > "$APP_DIR/Contents/Info.plist" <<PLIST
         <string>en</string>
         <string>zh-Hans</string>
     </array>
+    <!-- Must stay in lockstep with Package.swift's `.macOS(.v14)` —
+         otherwise the bundle silently lets Sonoma-only SwiftUI APIs
+         (onKeyPress, onChange(of:_:_)) crash at launch on Ventura. -->
     <key>LSMinimumSystemVersion</key>
-    <string>13.0</string>
+    <string>14.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSSupportsAutomaticTermination</key>
