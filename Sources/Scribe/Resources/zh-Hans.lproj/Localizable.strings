@@ -175,7 +175,30 @@
 "menu.view.editorTheme"   = "编辑器主题";
 "menu.view.markdownPreview" = "Markdown 预览";
 "menu.edit.useSelection"  = "用选区作为查找词";
+"menu.edit.insertSnippet" = "插入代码片段…";
 "menu.edit.hideFindBar"   = "隐藏查找栏";
+
+// MARK: - 代码片段面板 / 设置（Phase 33）
+
+"snippet.palette.placeholder"       = "在 %@ 个代码片段中按名称或前缀搜索";
+"snippet.palette.placeholder.empty" = "暂无代码片段——打开 设置 → 代码片段 添加";
+"settings.tab.snippets"             = "代码片段";
+"settings.snippets.section.list"    = "你的代码片段";
+"settings.snippets.empty"           = "尚无代码片段。点击 + 新增。";
+"settings.snippets.field.name"      = "名称";
+"settings.snippets.field.prefix"    = "前缀";
+"settings.snippets.field.body"      = "正文";
+"settings.snippets.field.description" = "说明";
+"settings.snippets.placeholder.name"        = "如 TODO 注释";
+"settings.snippets.placeholder.prefix"      = "如 todo";
+"settings.snippets.placeholder.description" = "可选的一行说明";
+"settings.snippets.action.add"      = "新增代码片段";
+"settings.snippets.action.delete"   = "删除";
+"settings.snippets.action.reset"    = "重置为初始片段";
+"settings.snippets.alert.reset.title"  = "确定要重置所有代码片段为默认值吗？";
+"settings.snippets.alert.reset.body"   = "你自定义的代码片段会被替换为初始集合，此操作无法撤销。";
+"settings.snippets.button.reset"       = "重置";
+"settings.snippets.button.cancel"      = "取消";
 
 // MARK: - Alerts
 

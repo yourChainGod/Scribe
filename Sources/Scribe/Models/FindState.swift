@@ -88,6 +88,14 @@ final class FindState: ObservableObject {
         /// dispatches them without an extra subscription.
         case gotoNextHunk
         case gotoPrevHunk
+        /// Phase 33 — insert a snippet's body at every active caret.
+        /// Reuses the same Scintilla path as `insertAtCarets`; this
+        /// case exists so the menu / palette can dispatch a *user-
+        /// facing* insertion without going through the test-only
+        /// `insertAtCarets` channel below. Multi-line bodies are
+        /// honoured (each caret receives the same multi-line text;
+        /// undo treats the burst as one transaction).
+        case insertSnippet(String)
         /// Test-only: inserts the literal string at every caret via
         /// `SCI_REPLACESEL`. Used by the Phase 21 verification hook
         /// to render visible markers at the multi-caret positions —

@@ -177,7 +177,30 @@
 "menu.view.editorTheme"   = "Editor Theme";
 "menu.view.markdownPreview" = "Markdown Preview";
 "menu.edit.useSelection"  = "Use Selection for Find";
+"menu.edit.insertSnippet" = "Insert Snippet…";
 "menu.edit.hideFindBar"   = "Hide Find Bar";
+
+// MARK: - Snippets palette / settings (Phase 33)
+
+"snippet.palette.placeholder"       = "Search %@ snippets by name or prefix";
+"snippet.palette.placeholder.empty" = "No snippets — open Settings → Snippets to add some";
+"settings.tab.snippets"             = "Snippets";
+"settings.snippets.section.list"    = "Your Snippets";
+"settings.snippets.empty"           = "No snippets yet. Click + to add one.";
+"settings.snippets.field.name"      = "Name";
+"settings.snippets.field.prefix"    = "Prefix";
+"settings.snippets.field.body"      = "Body";
+"settings.snippets.field.description" = "Description";
+"settings.snippets.placeholder.name"        = "e.g. TODO Comment";
+"settings.snippets.placeholder.prefix"      = "e.g. todo";
+"settings.snippets.placeholder.description" = "Optional one-line subtitle";
+"settings.snippets.action.add"      = "Add Snippet";
+"settings.snippets.action.delete"   = "Delete";
+"settings.snippets.action.reset"    = "Reset to Starter Snippets";
+"settings.snippets.alert.reset.title"  = "Reset all snippets to defaults?";
+"settings.snippets.alert.reset.body"   = "Your customised snippets will be replaced with the starter set. This can't be undone.";
+"settings.snippets.button.reset"       = "Reset";
+"settings.snippets.button.cancel"      = "Cancel";
 
 // MARK: - Alerts
 

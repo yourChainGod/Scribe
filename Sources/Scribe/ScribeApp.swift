@@ -23,6 +23,11 @@ struct ScribeApp: App {
     @StateObject private var findInFiles = FindInFilesState()
     @StateObject private var fileIndex = FileIndex()
     @StateObject private var outline = SymbolOutline()
+    /// Phase 33 — user's snippet collection. Owned at the app level
+    /// so the ⌘⇧T palette and the Settings → Snippets tab share
+    /// one source of truth; @Published mutations from the editor
+    /// pane immediately reflect in the picker.
+    @StateObject private var snippets = SnippetCatalog()
     private let findInFilesEngine = FindInFilesEngine()
 
     init() {
@@ -50,6 +55,7 @@ struct ScribeApp: App {
                 .environmentObject(findInFiles)
                 .environmentObject(fileIndex)
                 .environmentObject(outline)
+                .environmentObject(snippets)
                 .frame(minWidth: 900, minHeight: 600)
                 .onAppear(perform: bootstrap)
                 .onChange(of: workspace.documents.map(\.id)) { _, _ in
@@ -92,12 +98,14 @@ struct ScribeApp: App {
                            fileIndex: fileIndex,
                            outline: outline,
                            commands: commands,
+                           snippets: snippets,
                            findInFilesEngine: findInFilesEngine)
         }
 
         Settings {
             SettingsView()
                 .environmentObject(prefs)
+                .environmentObject(snippets)
         }
     }
 

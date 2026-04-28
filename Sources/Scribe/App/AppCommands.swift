@@ -24,6 +24,9 @@ struct ScribeCommands: Commands {
     @ObservedObject var fileIndex: FileIndex
     @ObservedObject var outline: SymbolOutline
     @ObservedObject var commands: CommandRegistry
+    /// Phase 33 — passed through so the Edit → Insert Snippet menu
+    /// can hand the active catalog to SnippetController.
+    @ObservedObject var snippets: SnippetCatalog
     let findInFilesEngine: FindInFilesEngine
 
     var body: some Commands {
@@ -294,6 +297,23 @@ struct ScribeCommands: Commands {
                 }
             } label: { Text("menu.edit.findInFiles", bundle: .module) }
             .keyboardShortcut("f", modifiers: [.command, .shift])
+
+            Divider()
+
+            // Phase 33 — Insert Snippet… ⌘⇧T. Pops the snippet picker
+            // (a CommandPalette over a snippet-derived registry) so
+            // the user can fuzzy-find a template by name or prefix.
+            // The picker dispatches the body through findState.commands
+            // → Coordinator → insertAtCarets, which lands the same
+            // text at every active caret. Disabled when the catalog
+            // is empty *and* there's no document — Settings → Snippets
+            // is the empty-state recovery path.
+            Button {
+                SnippetController.shared.toggle(catalog: snippets,
+                                                findState: findState)
+            } label: { Text("menu.edit.insertSnippet", bundle: .module) }
+            .keyboardShortcut("t", modifiers: [.command, .shift])
+            .disabled(workspace.current == nil)
 
             Divider()
 

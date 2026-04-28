@@ -8,6 +8,7 @@ import AppKit
 
 struct SettingsView: View {
     @EnvironmentObject var prefs: EditorPreferences
+    @EnvironmentObject var snippets: SnippetCatalog
 
     var body: some View {
         TabView {
@@ -27,6 +28,14 @@ struct SettingsView: View {
                         Image(systemName: "paintpalette")
                     }
                 }
+            SnippetsSettingsPane(catalog: snippets)
+                .tabItem {
+                    Label {
+                        Text("settings.tab.snippets", bundle: .module)
+                    } icon: {
+                        Image(systemName: "doc.text.below.ecg")
+                    }
+                }
             AboutPane()
                 .tabItem {
                     Label {
@@ -36,7 +45,11 @@ struct SettingsView: View {
                     }
                 }
         }
-        .frame(width: 540, height: 380)
+        // Phase 33 — wider + slightly taller than the previous panel
+        // to give the multi-line snippet body editor room to breathe.
+        // The other tabs were already comfortable inside the old size,
+        // so they just inherit the extra space without re-layout.
+        .frame(width: 720, height: 460)
     }
 }
 
@@ -211,6 +224,222 @@ private extension Color {
         let g = Double((rgb >> 8)  & 0xFF) / 255
         let b = Double( rgb        & 0xFF) / 255
         self.init(red: r, green: g, blue: b)
+    }
+}
+
+/// Phase 33 — Snippets settings tab. Two-pane layout: a list of
+/// snippet names on the left, an editor form on the right that
+/// pushes every keystroke through `catalog.update(_:)` so the JSON
+/// store on disk stays in lock-step with the UI.
+private struct SnippetsSettingsPane: View {
+    @ObservedObject var catalog: SnippetCatalog
+
+    /// Currently-edited snippet, by id. nil ⇒ no selection (e.g.
+    /// empty catalog or the selected row was just deleted). Survives
+    /// list re-orders because we store the id, not the index.
+    @State private var selectedID: UUID?
+    @State private var showResetAlert = false
+
+    var body: some View {
+        HStack(spacing: 0) {
+            sidebar
+                .frame(width: 220)
+                .background(Color(nsColor: .windowBackgroundColor))
+            Divider()
+            detail
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .onAppear {
+            // Pick the first snippet on first appearance so the user
+            // sees a populated form instead of an empty hint.
+            if selectedID == nil { selectedID = catalog.snippets.first?.id }
+        }
+        .onChange(of: catalog.snippets.map(\.id)) { _, ids in
+            // Selection survives non-destructive edits but needs
+            // recovery after a delete / reset.
+            if let sel = selectedID, !ids.contains(sel) {
+                selectedID = ids.first
+            } else if selectedID == nil {
+                selectedID = ids.first
+            }
+        }
+        .alert(L10n.t("settings.snippets.alert.reset.title"),
+               isPresented: $showResetAlert) {
+            Button(L10n.t("settings.snippets.button.cancel"),
+                   role: .cancel) {}
+            Button(L10n.t("settings.snippets.button.reset"),
+                   role: .destructive) {
+                catalog.resetToStarter()
+                selectedID = catalog.snippets.first?.id
+            }
+        } message: {
+            Text("settings.snippets.alert.reset.body", bundle: .module)
+        }
+    }
+
+    // MARK: - Sidebar
+
+    @ViewBuilder
+    private var sidebar: some View {
+        VStack(spacing: 0) {
+            if catalog.snippets.isEmpty {
+                Text("settings.snippets.empty", bundle: .module)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List(selection: $selectedID) {
+                    ForEach(catalog.snippets) { snippet in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(snippet.name.isEmpty ? "—" : snippet.name)
+                                .font(.system(size: 13, weight: .medium))
+                                .lineLimit(1)
+                            if !snippet.prefix.isEmpty {
+                                Text(snippet.prefix)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        .padding(.vertical, 2)
+                        .tag(snippet.id)
+                    }
+                }
+                .listStyle(.sidebar)
+            }
+
+            Divider()
+
+            HStack(spacing: 6) {
+                Button {
+                    let new = catalog.add(Snippet(
+                        name: L10n.t("settings.snippets.placeholder.name"),
+                        prefix: "",
+                        body: "",
+                        description: ""
+                    ))
+                    selectedID = new.id
+                } label: {
+                    Image(systemName: "plus")
+                        .frame(width: 18, height: 18)
+                }
+                .buttonStyle(.borderless)
+                .help(L10n.t("settings.snippets.action.add"))
+
+                Button {
+                    guard let id = selectedID else { return }
+                    catalog.remove(id: id)
+                } label: {
+                    Image(systemName: "minus")
+                        .frame(width: 18, height: 18)
+                }
+                .buttonStyle(.borderless)
+                .disabled(selectedID == nil)
+                .help(L10n.t("settings.snippets.action.delete"))
+
+                Spacer()
+
+                Button {
+                    showResetAlert = true
+                } label: {
+                    Image(systemName: "arrow.counterclockwise")
+                        .frame(width: 18, height: 18)
+                }
+                .buttonStyle(.borderless)
+                .help(L10n.t("settings.snippets.action.reset"))
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+        }
+    }
+
+    // MARK: - Detail
+
+    @ViewBuilder
+    private var detail: some View {
+        if let id = selectedID, let binding = bindingForSnippet(id: id) {
+            SnippetEditorForm(snippet: binding)
+                .padding(20)
+        } else {
+            Text("settings.snippets.empty", bundle: .module)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    /// Two-way binding into the selected snippet that pushes every
+    /// edit through `catalog.update(_:)`. Returns nil when the id
+    /// isn't in the catalog (race with delete; the .onChange above
+    /// recovers selection on the next tick).
+    private func bindingForSnippet(id: UUID) -> Binding<Snippet>? {
+        guard catalog.snippets.contains(where: { $0.id == id }) else {
+            return nil
+        }
+        return Binding<Snippet>(
+            get: {
+                // Force-unwrap is safe — `contains` confirmed
+                // membership and the catalog can't lose this id
+                // mid-keystroke (mutations are main-actor + we just
+                // checked).
+                catalog.snippets.first(where: { $0.id == id })!
+            },
+            set: { newValue in
+                catalog.update(newValue)
+            }
+        )
+    }
+}
+
+/// Right-pane editor for a single snippet. All fields write straight
+/// through the supplied binding so SnippetCatalog.update fires on
+/// every keystroke; persistence is automatic.
+private struct SnippetEditorForm: View {
+    @Binding var snippet: Snippet
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            field(label: "settings.snippets.field.name",
+                  placeholder: "settings.snippets.placeholder.name",
+                  text: $snippet.name)
+
+            field(label: "settings.snippets.field.prefix",
+                  placeholder: "settings.snippets.placeholder.prefix",
+                  text: $snippet.prefix)
+
+            field(label: "settings.snippets.field.description",
+                  placeholder: "settings.snippets.placeholder.description",
+                  text: $snippet.description)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("settings.snippets.field.body", bundle: .module)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+                TextEditor(text: $snippet.body)
+                    .font(.system(size: 12, design: .monospaced))
+                    .frame(maxWidth: .infinity, minHeight: 200)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .strokeBorder(Color(nsColor: .separatorColor)
+                                            .opacity(0.5), lineWidth: 0.5)
+                    )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func field(label: LocalizedStringKey,
+                       placeholder: String,
+                       text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label, bundle: .module)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+            TextField(L10n.t(placeholder), text: text)
+                .textFieldStyle(.roundedBorder)
+        }
     }
 }
 
