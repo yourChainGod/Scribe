@@ -293,4 +293,224 @@ final class MarkdownConverterTests: XCTestCase {
         XCTAssertTrue(html.hasPrefix("<pre><code>"))
         XCTAssertTrue(html.hasSuffix("</code></pre>\n"))
     }
+
+    // MARK: Phase 32 · GFM tables
+
+    func testBasicTableTwoColumns() {
+        let md = """
+        | Name | Age |
+        | --- | --- |
+        | Alice | 30 |
+        | Bob | 25 |
+        """
+        let html = MarkdownConverter.render(md)
+        XCTAssertTrue(html.contains("<table>"))
+        XCTAssertTrue(html.contains("<thead>"))
+        XCTAssertTrue(html.contains("<th>Name</th>"))
+        XCTAssertTrue(html.contains("<th>Age</th>"))
+        XCTAssertTrue(html.contains("<td>Alice</td>"))
+        XCTAssertTrue(html.contains("<td>30</td>"))
+        XCTAssertTrue(html.hasSuffix("</tbody>\n</table>\n"))
+    }
+
+    func testTableAlignmentColons() {
+        // :--- left, ---: right, :---: center, --- none.
+        let md = """
+        | L | R | C | N |
+        | :--- | ---: | :---: | --- |
+        | a | b | c | d |
+        """
+        let html = MarkdownConverter.render(md)
+        XCTAssertTrue(html.contains("<th style=\"text-align:left\">L</th>"))
+        XCTAssertTrue(html.contains("<th style=\"text-align:right\">R</th>"))
+        XCTAssertTrue(html.contains("<th style=\"text-align:center\">C</th>"))
+        // The "none" cell should NOT carry a style attribute.
+        XCTAssertTrue(html.contains("<th>N</th>"))
+        // Body picks up the same alignment.
+        XCTAssertTrue(html.contains("<td style=\"text-align:right\">b</td>"))
+    }
+
+    func testTableInlineEmphasisInCells() {
+        let md = """
+        | name | note |
+        | --- | --- |
+        | **bold** | `code` |
+        """
+        let html = MarkdownConverter.render(md)
+        XCTAssertTrue(html.contains("<td><strong>bold</strong></td>"))
+        XCTAssertTrue(html.contains("<td><code>code</code></td>"))
+    }
+
+    func testTableShortRowsRightPadded() {
+        // Body rows with fewer cells than the header get empty
+        // <td>s appended so the column count stays uniform.
+        let md = """
+        | a | b | c |
+        | --- | --- | --- |
+        | 1 |
+        """
+        let html = MarkdownConverter.render(md)
+        // First body cell, then two empty placeholders.
+        XCTAssertTrue(html.contains("<tr><td>1</td><td></td><td></td></tr>"))
+    }
+
+    func testTableEndsAtBlankLineThenParagraph() {
+        let md = """
+        | a | b |
+        | --- | --- |
+        | 1 | 2 |
+
+        after
+        """
+        let html = MarkdownConverter.render(md)
+        // Table closes, then a fresh <p>after</p>.
+        XCTAssertTrue(html.contains("</tbody>\n</table>\n<p>after</p>"))
+    }
+
+    func testPipeRowWithoutAlignmentStaysParagraph() {
+        // No alignment row → the pipe line is just text. Output
+        // should be a paragraph with the literal pipes.
+        let md = "| this is | not a table |"
+        let html = MarkdownConverter.render(md)
+        XCTAssertTrue(html.contains("<p>"))
+        XCTAssertTrue(html.contains("| this is | not a table |"))
+        XCTAssertFalse(html.contains("<table>"))
+    }
+
+    func testBlockquoteWithPipeStaysBlockquote() {
+        // A `>` line containing a `|` must remain a blockquote,
+        // not get hijacked by the table-stash gate.
+        let md = "> | inside | quote |"
+        let html = MarkdownConverter.render(md)
+        XCTAssertTrue(html.contains("<blockquote>"))
+        XCTAssertFalse(html.contains("<table>"))
+    }
+
+    // MARK: Phase 32 · Task lists
+
+    func testTaskListUnchecked() {
+        let md = "- [ ] todo"
+        let html = MarkdownConverter.render(md)
+        XCTAssertTrue(html.contains("<li class=\"task-list-item\">"))
+        XCTAssertTrue(html.contains("<input type=\"checkbox\" disabled/> todo"))
+        XCTAssertFalse(html.contains("checked"))
+    }
+
+    func testTaskListChecked() {
+        let md = "- [x] done"
+        let html = MarkdownConverter.render(md)
+        XCTAssertTrue(html.contains("<input type=\"checkbox\" disabled checked/> done"))
+    }
+
+    func testTaskListUppercaseXAlsoChecked() {
+        let md = "- [X] also done"
+        let html = MarkdownConverter.render(md)
+        XCTAssertTrue(html.contains("checked"))
+    }
+
+    func testTaskListMixedWithRegularItems() {
+        let md = """
+        - regular
+        - [ ] todo
+        - [x] done
+        """
+        let html = MarkdownConverter.render(md)
+        XCTAssertTrue(html.contains("<li>regular</li>"))
+        XCTAssertTrue(html.contains("<li class=\"task-list-item\">"))
+        XCTAssertTrue(html.contains("checked"))
+    }
+
+    func testTaskListInlineEmphasisInContent() {
+        let md = "- [ ] **bold** task"
+        let html = MarkdownConverter.render(md)
+        XCTAssertTrue(html.contains("<input type=\"checkbox\" disabled/> "
+                                    + "<strong>bold</strong> task"))
+    }
+
+    // MARK: Phase 32 · Footnotes
+
+    func testSingleFootnote() {
+        let md = """
+        Body with[^a] note.
+
+        [^a]: definition text
+        """
+        let html = MarkdownConverter.render(md)
+        // Inline ref is numbered [1] and links to fn-a.
+        XCTAssertTrue(html.contains(
+            "<sup class=\"footnote-ref\"><a href=\"#fn-a\" id=\"fnref-a\">[1]</a></sup>"
+        ))
+        // Trailing footnotes section appears with the def text and
+        // a back-ref anchor.
+        XCTAssertTrue(html.contains("<section class=\"footnotes\">"))
+        XCTAssertTrue(html.contains("<li id=\"fn-a\">definition text"))
+        XCTAssertTrue(html.contains("<a href=\"#fnref-a\" class=\"footnote-back\""))
+    }
+
+    func testTwoFootnotesNumberedInOrder() {
+        let md = """
+        First[^foo] then[^bar] then[^foo] again.
+
+        [^bar]: bee
+        [^foo]: eff
+        """
+        let html = MarkdownConverter.render(md)
+        // foo encountered first → [1]; bar second → [2]; second foo
+        // reuses [1]. Definition order in the source doesn't change
+        // numbering — encounter order in the body does.
+        XCTAssertTrue(html.contains("href=\"#fn-foo\" id=\"fnref-foo\">[1]"))
+        XCTAssertTrue(html.contains("href=\"#fn-bar\" id=\"fnref-bar\">[2]"))
+        // foo definition listed before bar in the trailing <ol>.
+        if let fooPos = html.range(of: "id=\"fn-foo\""),
+           let barPos = html.range(of: "id=\"fn-bar\"") {
+            XCTAssertLessThan(fooPos.lowerBound, barPos.lowerBound)
+        } else {
+            XCTFail("Expected both footnote li ids in the rendered output")
+        }
+    }
+
+    func testFootnoteRefWithoutDefStaysLiteral() {
+        // No def for ^missing → the ref stays as the literal text
+        // and no footnotes section is emitted.
+        let md = "see[^missing] note"
+        let html = MarkdownConverter.render(md)
+        XCTAssertTrue(html.contains("see[^missing] note"))
+        XCTAssertFalse(html.contains("<section class=\"footnotes\">"))
+    }
+
+    func testFootnoteDefWithoutRefIsDropped() {
+        // No reference points at the def → no section in output,
+        // and the def line is consumed (not rendered as a paragraph).
+        let md = """
+        plain paragraph
+
+        [^orphan]: forgotten
+        """
+        let html = MarkdownConverter.render(md)
+        XCTAssertFalse(html.contains("forgotten"))
+        XCTAssertFalse(html.contains("<section class=\"footnotes\">"))
+        XCTAssertTrue(html.contains("<p>plain paragraph</p>"))
+    }
+
+    func testFootnoteWithEmphasisInDef() {
+        let md = """
+        ref[^x]
+
+        [^x]: with **bold** word
+        """
+        let html = MarkdownConverter.render(md)
+        XCTAssertTrue(html.contains("<li id=\"fn-x\">with <strong>bold</strong> word"))
+    }
+
+    // MARK: Pipe row at EOF
+
+    func testPendingPipeRowAtEOFFallsBackToParagraph() {
+        // No alignment row arrives — the stashed line should be
+        // emitted as a paragraph at EOF, not silently dropped.
+        let md = "| just text |"
+        let html = MarkdownConverter.render(md)
+        XCTAssertTrue(html.contains("<p>"))
+        XCTAssertTrue(html.contains("| just text |"))
+        XCTAssertFalse(html.contains("<table>"))
+    }
 }

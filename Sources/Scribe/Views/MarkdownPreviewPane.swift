@@ -162,6 +162,54 @@ struct MarkdownPreviewPane: NSViewRepresentable {
             margin: 22px 0;
           }
           img { max-width: 100%; border-radius: 4px; }
+          /* Phase 32 — GFM tables. The converter emits inline
+             text-align styles per cell when the alignment row asks
+             for them, so all we have to ship here is the chrome. */
+          table {
+            border-collapse: collapse;
+            margin: 14px 0;
+            display: block;
+            overflow-x: auto;
+          }
+          th, td {
+            border: 1px solid \(border);
+            padding: 6px 12px;
+          }
+          th {
+            background: \(codeBg);
+            font-weight: 600;
+          }
+          tbody tr:nth-child(2n) { background: \(isDark ? "#22272d" : "#f6f8fa"); }
+          /* Phase 32 — task lists. Indent the list visually so the
+             checkbox sits inline with the text and the bullet
+             disappears (the checkbox replaces it). */
+          li.task-list-item {
+            list-style: none;
+            margin-left: -1.4em;
+          }
+          li.task-list-item input[type="checkbox"] {
+            margin-right: 6px;
+            vertical-align: middle;
+          }
+          /* Phase 32 — footnotes. Visually distinct trailing block
+             with a back-reference glyph that matches GitHub's. */
+          section.footnotes {
+            font-size: 0.9em;
+            color: \(muted);
+            margin-top: 28px;
+          }
+          section.footnotes hr {
+            margin: 14px 0;
+          }
+          sup.footnote-ref a {
+            text-decoration: none;
+            padding: 0 2px;
+          }
+          a.footnote-back {
+            text-decoration: none;
+            margin-left: 4px;
+            color: \(link);
+          }
           ::selection {
             background: \(isDark ? "#264f78" : "#cce5ff");
           }
