@@ -1376,19 +1376,65 @@ parser），后续 35c-ii 接 Scintilla EOLAnnotation 渲染、
 
 **未覆盖 (Phase 35c-ii)**：Scintilla EOLAnnotation 接入
 （`SCI_EOLANNOTATIONSETTEXT` 渲染当前 caret 行尾）+ caret
-line change hook + 时间相对化 ("3 days ago" / "刚刚")
-helper + hover tooltip 出 commit summary + 失败 / 未跟踪 /
-未保存 silent skip。
+line change hook + GitBlameEngine + hover tooltip 出 commit
+summary + 失败 / 未跟踪 / 未保存 silent skip。
 
 **未覆盖 (Phase 35c-iii)**：Settings 开关（默认关 / 开 /
 仅当前光标行 / 全部行）+ i18n + 文档同步。
+
+## Phase 35c-ii-α · 相对时间 helper（2026-04-29）
+
+**背景**：35c-ii 准备接 Scintilla EOL annotation 渲染 inline
+blame，但 caret label 需要把 BlameLine.authorTime 这个 Unix
+epoch 转成 zed 风格的 "3 days ago" / "刚刚"。本拍先把这个
+公共 utility 单独切下来：纯函数 + 6 i18n keys + 9 单元，零
+SwiftUI / Scintilla / Engine 依赖，下一拍直接调用即可。
+
+**交付**：
+
+- `Sources/Scribe/Models/RelativeTime.swift` (new) ·
+  - `enum RelativeTime` 单方法 `describe(epoch:now:) ->
+    String`，6 个 bucket：< 60s ⇒ "just now"、< 60min ⇒
+    "%d minutes ago"、< 24h ⇒ "%d hours ago"、< 30d ⇒ "%d
+    days ago"、< 12mo ⇒ "%d months ago"、else ⇒ "%d years
+    ago"。
+  - 走 Foundation `Calendar.current.dateComponents(...)` 让
+    leap-year / 月长差异由用户 locale 决定，不写死月长 30
+    天。
+  - 未来 epoch（clock skew / rebase fudging）coerce 到
+    "just now"，避免负数计数显示。
+  - 不复合（不输出 "1 hour 5 minutes ago"），让 EOL
+    annotation 保持 chip-sized。
+- `Sources/Scribe/Resources/{en,zh-Hans}.lproj/Localizable.strings`
+  + relativeTime.{justNow, minutes, hours, days, months,
+  years}（6 keys × 2 locale）。
+  - en：`%d minutes ago` 复数形 · zh：`%d 分钟前` 中文无
+    复数。
+- `Tests/ScribeTests/RelativeTimeTests.swift` (new, 9 测试) ·
+  - bucket 边界单调性：59s 和 30s 同 just-now / 60s 翻 minute
+    bucket / 23h vs 24h / 29d vs 31d / 11mo vs 13mo。
+  - 同 bucket 抖动：90s/95s/119s 都是 "1 minute ago"。
+  - 未来 epoch clamp 到 just-now。
+  - %d 格式占位符存在性：`describe(secondsAgo: 7*60).contains
+    ("7")` 防止 i18n 翻译漏掉计数。
+  - 测试不 hardcode literal text 避免 system locale flake。
+
+**测试**：+9 闸 (309 → 318)。pure unit，无 git / 无 fixture。
+
+**未覆盖 (Phase 35c-ii-β)**：GitBlameEngine actor (per-URL
+[Int: BlameLine] cache + invalidate on save + Workspace
+绑定)。
+
+**未覆盖 (Phase 35c-ii-γ)**：Coordinator+InlineBlame
+Scintilla EOLAnnotation 集成 + caret line change hook +
+hover tooltip。
 
 ## Phase 35+ · 路线展望
 
 下面是想做的事，按重要度而非时间排。多条路线是 zed 调研后决定插入的。
 
 1. **Git v2 polish (Phase 35b-4-g)**：in-place 编辑 hunk excerpt（zed 风可编辑 diff，目前 ProjectDiffView 仍是 read-only）+ submodule diff + 流式 diff load。Phase 35b-1/2a/2b/2c/3/4-a/4-b/4-c/4-d/4-e/4-f 交付了读面 + file-level 写面 + commit + remote sync + per-hunk stage/unstage + 分支 picker + force-with-lease + Project Diff multibuffer (read-only) + Stage All / Unstage All + Revert Hunk + 侧栏右键跳 multibuffer + ⌘F 跨文件 search + ⌘G/⇧⌘G 行级 next/prev 闭环。
-2. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末 annotation 显示 author/time/commit、冲突区上方 Accept/Reject 按钮。35c-i 已交付数据层（GitClient.blame + parseBlamePorcelain + BlameLine + BlameResult），35c-ii 接 Scintilla EOLAnnotation + caret hook + tooltip，35c-iii 加 Settings 开关 + i18n。
+2. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末 annotation 显示 author/time/commit、冲突区上方 Accept/Reject 按钮。35c-i 已交付数据层（GitClient.blame + parseBlamePorcelain + BlameLine + BlameResult），35c-ii-α 已交付 RelativeTime helper（"3 days ago"/"刚刚" 6 buckets），35c-ii-β 接 GitBlameEngine actor + Workspace 绑定，35c-ii-γ 接 Scintilla EOLAnnotation + caret hook + tooltip，35c-iii 加 Settings 开关 + i18n。
 3. **LargeFile v3 (Phase 34d+)**：中途 cancel save、external-change
    mtime+size detection、SymbolOutline 读 buffer、细粒度 progress。
 4. **CLI shim v2 (Phase 35d+)**：IPC fifo 让 `--wait` 不再冷启动、bash/zsh completion、brew formula。

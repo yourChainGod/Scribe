@@ -87,6 +87,14 @@
 "projectDiff.action.openInDiff"        = "在 Project Diff 中打开";
 "sourceControl.contextMenu.openFile"   = "打开文件";
 
+// 相对时间（Phase 35c-ii-α — Inline Blame / 提交日志 …）
+"relativeTime.justNow"  = "刚刚";
+"relativeTime.minutes"  = "%d 分钟前";
+"relativeTime.hours"    = "%d 小时前";
+"relativeTime.days"     = "%d 天前";
+"relativeTime.months"   = "%d 个月前";
+"relativeTime.years"    = "%d 年前";
+
 // Project Diff 搜索栏（Phase 35b-4-e / 35b-4-f）
 "projectDiff.action.search"            = "搜索 diff（⌘F）";
 "projectDiff.action.clearSearch"       = "清空搜索";

@@ -89,6 +89,14 @@
 "projectDiff.action.openInDiff"        = "Open in Project Diff";
 "sourceControl.contextMenu.openFile"   = "Open File";
 
+// Relative time (Phase 35c-ii-α — inline blame, commit log, …)
+"relativeTime.justNow"  = "just now";
+"relativeTime.minutes"  = "%d minutes ago";
+"relativeTime.hours"    = "%d hours ago";
+"relativeTime.days"     = "%d days ago";
+"relativeTime.months"   = "%d months ago";
+"relativeTime.years"    = "%d years ago";
+
 // Project Diff search bar (Phase 35b-4-e / 35b-4-f)
 "projectDiff.action.search"            = "Search diff (⌘F)";
 "projectDiff.action.clearSearch"       = "Clear search";
