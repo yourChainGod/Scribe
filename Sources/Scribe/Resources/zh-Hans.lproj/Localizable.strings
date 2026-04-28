@@ -50,6 +50,16 @@
 "sourceControl.alert.discardFailed" = "放弃改动失败。";
 "alert.button.ok"                = "好";
 
+// commit 面板 + 分支指示 (Phase 35b-2b)
+"sourceControl.branch.detached"        = "（游离 HEAD）";
+"sourceControl.commit.placeholder"     = "提交说明 (⌘⏎ 提交)";
+"sourceControl.commit.placeholder.amend" = "修补说明 (⌘⏎ 提交)";
+"sourceControl.commit.amend"           = "修补";
+"sourceControl.commit.action"          = "提交";
+"sourceControl.commit.amend.action"    = "修补提交";
+"sourceControl.commit.shortcut.hint"   = "⌘⏎ 提交";
+"sourceControl.alert.commitFailed"     = "提交失败。";
+
 // MARK: - Tabs
 
 "tab.untitled"            = "未命名";

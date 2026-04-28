@@ -52,6 +52,16 @@
 "sourceControl.alert.discardFailed" = "Couldn’t discard changes.";
 "alert.button.ok"                = "OK";
 
+// Commit panel + branch indicator (Phase 35b-2b)
+"sourceControl.branch.detached"        = "(detached HEAD)";
+"sourceControl.commit.placeholder"     = "Message (⌘⏎ to commit)";
+"sourceControl.commit.placeholder.amend" = "Amend message (⌘⏎ to commit)";
+"sourceControl.commit.amend"           = "Amend";
+"sourceControl.commit.action"          = "Commit";
+"sourceControl.commit.amend.action"    = "Amend Commit";
+"sourceControl.commit.shortcut.hint"   = "⌘⏎ to commit";
+"sourceControl.alert.commitFailed"     = "Couldn’t commit.";
+
 // MARK: - Tabs
 
 "tab.untitled"            = "Untitled";

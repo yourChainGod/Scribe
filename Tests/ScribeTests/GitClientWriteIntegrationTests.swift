@@ -151,6 +151,111 @@ final class GitClientWriteIntegrationTests: XCTestCase {
                        .ok)
     }
 
+    // MARK: - Phase 35b-2b · commit / branch / amend
+
+    func test_commit_recordsNewHEADAndClearsStaged() async throws {
+        // Stage an edit, commit it, expect a clean working tree and
+        // the new HEAD subject to match what we passed in.
+        try seedFile(name: "README.md", contents: "edited\n")
+        XCTAssertEqual(GitClient.stage(path: "README.md", repo: repoURL),
+                       .ok)
+        let result = GitClient.commit(message: "edit readme",
+                                      repo: repoURL,
+                                      amend: false)
+        XCTAssertEqual(result, .ok, "commit failed: \(result)")
+        XCTAssertTrue(try fetchStatus().isEmpty,
+                      "tree should be clean after commit")
+        XCTAssertEqual(GitClient.headSubject(repo: repoURL),
+                       "edit readme")
+    }
+
+    func test_amend_rewritesHEADWithoutNewCommit() async throws {
+        // Stage a second commit, amend it, then verify only one new
+        // ref exists past the seed commit. We use `git log --oneline`
+        // count as the proxy for "did we accidentally make 2 commits".
+        try seedFile(name: "README.md", contents: "edited\n")
+        XCTAssertEqual(GitClient.stage(path: "README.md", repo: repoURL),
+                       .ok)
+        XCTAssertEqual(GitClient.commit(message: "first edit",
+                                        repo: repoURL,
+                                        amend: false),
+                       .ok)
+        // Now amend.
+        XCTAssertEqual(GitClient.commit(message: "first edit (reworded)",
+                                        repo: repoURL,
+                                        amend: true),
+                       .ok)
+        XCTAssertEqual(GitClient.headSubject(repo: repoURL),
+                       "first edit (reworded)")
+        // Total commits: seed + 1 (amend doesn't bump count).
+        let log = try captureGit(["log", "--oneline"])
+        let lines = log.split(separator: "\n", omittingEmptySubsequences: true)
+        XCTAssertEqual(lines.count, 2,
+                       "amend should not create a new commit; got \(lines)")
+    }
+
+    func test_commit_passesUnicodeAndMultilineMessageThroughStdin() async throws {
+        // Commit messages are piped through stdin specifically so
+        // long / multibyte / multi-line bodies survive intact. Pin
+        // that contract: a Chinese subject + Linux-kernel-style body
+        // round-trips bit-perfect into HEAD.
+        try seedFile(name: "README.md", contents: "edited\n")
+        XCTAssertEqual(GitClient.stage(path: "README.md", repo: repoURL),
+                       .ok)
+        let body = """
+        修复中文路径的渲染
+
+        Closes #123
+        Signed-off-by: Scribe Test <test@scribe.app>
+        """
+        XCTAssertEqual(GitClient.commit(message: body,
+                                        repo: repoURL,
+                                        amend: false),
+                       .ok)
+        XCTAssertEqual(GitClient.headSubject(repo: repoURL), body)
+    }
+
+    func test_currentBranch_returnsSeedBranch() async throws {
+        // Default branch on a fresh `git init` depends on the user's
+        // `init.defaultBranch` config (`main` for modern installs,
+        // `master` for old). Whichever it is, the helper should
+        // round-trip through `git branch --show-current`.
+        let expected = try captureGit(["branch", "--show-current"])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertFalse(expected.isEmpty)
+        XCTAssertEqual(GitClient.currentBranch(repo: repoURL), expected)
+    }
+
+    func test_currentBranch_isNilWhenDetached() async throws {
+        // Move HEAD to the seed commit's SHA so the working state is
+        // detached, then verify currentBranch is nil (the porcelain
+        // returns empty in that mode).
+        let sha = try captureGit(["rev-parse", "HEAD"])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        try runGit(["checkout", "--quiet", sha])
+        XCTAssertNil(GitClient.currentBranch(repo: repoURL))
+    }
+
+    /// Capture stdout from a git invocation. Used by tests that
+    /// need the raw output (commit log, sha, branch lookup) rather
+    /// than just exit-status handling.
+    private func captureGit(_ args: [String]) throws -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        process.arguments = args
+        process.currentDirectoryURL = repoURL
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+        try process.run()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            throw NSError(domain: "git", code: Int(process.terminationStatus))
+        }
+        return String(data: data, encoding: .utf8) ?? ""
+    }
+
     // MARK: - Helpers
 
     /// Run a git invocation against `repoURL`. Throws on non-zero

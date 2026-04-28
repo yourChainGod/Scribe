@@ -18,25 +18,174 @@ struct SourceControlSidebar: View {
     @ObservedObject var engine: GitStatusEngine
     @EnvironmentObject var workspace: Workspace
 
+    /// Phase 35b-2b — commit panel state lives here (not in the
+    /// engine) because it's a *draft* — abandoning the sidebar
+    /// shouldn't mutate the engine's git state. Persisting between
+    /// repos is handled implicitly by SwiftUI keeping `@State`
+    /// alive while the view is in the hierarchy.
+    @State private var commitMessage: String = ""
+    @State private var amend: Bool = false
+
     var body: some View {
-        Group {
-            switch engine.state {
-            case .idle:
-                emptyState(titleKey: "sourceControl.empty.noFolder",
-                           system: "folder")
-            case .notInRepo:
-                emptyState(titleKey: "sourceControl.empty.notInRepo",
-                           system: "exclamationmark.triangle")
-            case .loaded:
-                if engine.rows.isEmpty {
-                    emptyState(titleKey: "sourceControl.empty.clean",
-                               system: "checkmark.seal")
-                } else {
-                    rowList
+        VStack(spacing: 0) {
+            branchHeader
+                .background(Color(nsColor: .controlBackgroundColor))
+            Divider()
+            Group {
+                switch engine.state {
+                case .idle:
+                    emptyState(titleKey: "sourceControl.empty.noFolder",
+                               system: "folder")
+                case .notInRepo:
+                    emptyState(titleKey: "sourceControl.empty.notInRepo",
+                               system: "exclamationmark.triangle")
+                case .loaded:
+                    if engine.rows.isEmpty {
+                        emptyState(titleKey: "sourceControl.empty.clean",
+                                   system: "checkmark.seal")
+                    } else {
+                        rowList
+                    }
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            // Only show commit panel when the engine has a repo —
+            // hiding it for `.idle` / `.notInRepo` keeps the empty
+            // states uncluttered.
+            if engine.state == .loaded {
+                Divider()
+                commitPanel
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    // MARK: - Branch header (Phase 35b-2b)
+
+    /// Slim header showing the current branch. Falls back to a
+    /// detached-HEAD copy when `branch` is nil so the user always
+    /// knows which ref their changes target.
+    private var branchHeader: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "arrow.triangle.branch")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+            Text(engine.branch
+                 ?? L10n.t("sourceControl.branch.detached"))
+                .font(.system(size: 12, weight: .semibold))
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer()
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+    }
+
+    // MARK: - Commit panel (Phase 35b-2b)
+
+    private var commitPanel: some View {
+        let stagedCount = engine.rows.filter { $0.hasStagedChanges }.count
+        // Empty-after-trim is the universal "no message" check;
+        // git's --cleanup=strip would also reject this so we save a
+        // round-trip by disabling the button up front.
+        let hasMessage = !commitMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        // Amend doesn't require staged changes — rewording the
+        // last commit is a perfectly valid use of --amend even on
+        // an otherwise-clean tree.
+        let canCommit = hasMessage && (amend || stagedCount > 0)
+
+        return VStack(alignment: .leading, spacing: 6) {
+            // Use a TextEditor (multi-line) rather than TextField so
+            // a Linux-kernel-style commit body fits without horizontal
+            // scrolling. macOS auto-grows up to maxHeight.
+            TextEditor(text: $commitMessage)
+                .font(.system(size: 12))
+                .frame(minHeight: 56, maxHeight: 120)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .strokeBorder(Color.secondary.opacity(0.25))
+                )
+                .overlay(alignment: .topLeading) {
+                    if commitMessage.isEmpty {
+                        Text(amend
+                             ? L10n.t("sourceControl.commit.placeholder.amend")
+                             : L10n.t("sourceControl.commit.placeholder"))
+                            .font(.system(size: 12))
+                            .foregroundStyle(.tertiary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 12)
+                            .allowsHitTesting(false)
+                    }
+                }
+
+            HStack(spacing: 8) {
+                Toggle(isOn: Binding(
+                    get: { amend },
+                    set: { newValue in
+                        amend = newValue
+                        // Pre-fill on enable; clear on disable. We
+                        // only seed when the textarea is otherwise
+                        // empty so we never overwrite something the
+                        // user already typed.
+                        if newValue, commitMessage.isEmpty,
+                           let subject = engine.headSubject {
+                            commitMessage = subject
+                        } else if !newValue,
+                                  commitMessage == engine.headSubject {
+                            commitMessage = ""
+                        }
+                    }
+                )) {
+                    Text("sourceControl.commit.amend", bundle: .module)
+                        .font(.system(size: 11))
+                }
+                .toggleStyle(.checkbox)
+                Spacer()
+                Button {
+                    Task {
+                        let msg = commitMessage
+                        let isAmend = amend
+                        await engine.commit(message: msg, amend: isAmend)
+                        // Clear the draft only on success-path; the
+                        // engine's NSAlert already informed the user
+                        // about failure and we want them to be able
+                        // to fix + retry without retyping. We can't
+                        // observe success directly, so pivot on the
+                        // refreshed row list: a successful commit
+                        // empties the staged section, and we'd be
+                        // racing the refresh anyway. The UX trade-off
+                        // here is leaving the message text after a
+                        // failed commit, which is what zed does.
+                        await MainActor.run {
+                            // Heuristic: if no error fired (no alert
+                            // was modal'd, which we can't inspect) AND
+                            // the staged count dropped to zero (or
+                            // amend was used), assume success.
+                            let stillStaged = engine.rows.contains { $0.hasStagedChanges }
+                            if !stillStaged || isAmend {
+                                commitMessage = ""
+                                amend = false
+                            }
+                        }
+                    }
+                } label: {
+                    Text(amend
+                         ? "sourceControl.commit.amend.action"
+                         : "sourceControl.commit.action",
+                         bundle: .module)
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .disabled(!canCommit)
+                .keyboardShortcut(.return, modifiers: .command)
+                .help(L10n.t("sourceControl.commit.shortcut.hint"))
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(Color(nsColor: .controlBackgroundColor))
     }
 
     // MARK: - Row list

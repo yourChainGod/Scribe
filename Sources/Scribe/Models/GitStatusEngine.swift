@@ -63,6 +63,23 @@ final class GitStatusEngine: ObservableObject {
     /// row list.
     @Published private(set) var state: State = .idle
 
+    /// Phase 35b-2b — currently-checked-out branch (or `nil` for
+    /// detached HEAD / pre-first-commit repos). Refreshed on every
+    /// `refresh()` cycle alongside the row list because checkout /
+    /// commit / merge all may change the branch and we already have
+    /// the trigger plumbing.
+    @Published private(set) var branch: String?
+
+    /// Phase 35b-2b — subject of the HEAD commit, used to pre-fill
+    /// the message textarea when the user toggles "Amend". Read-
+    /// once on demand rather than tracked continuously: a commit
+    /// changes HEAD but the textarea hides until the user opens it,
+    /// so a stale value here is harmless until they look.
+    var headSubject: String? {
+        guard let repo else { return nil }
+        return GitClient.headSubject(repo: repo)
+    }
+
     /// Currently-bound repo root (the path containing `.git`), or
     /// nil when no folder is open. Plain stored property — URL is
     /// a value type so there's no retain cycle to worry about.
@@ -138,17 +155,34 @@ final class GitStatusEngine: ObservableObject {
         handleWriteResult(result, action: .discard)
     }
 
+    /// Phase 35b-2b — record a commit with `message`. `amend == true`
+    /// rewrites the HEAD commit instead. We don't validate `message`
+    /// up front (empty-string commit, leading-whitespace, etc.) —
+    /// `git commit -F -` already rejects empties with a clear error
+    /// that we surface verbatim, and treating "looks empty after
+    /// trim" as our own validation would diverge from git's
+    /// (`--cleanup=strip` — currently set — strips comments + blank
+    /// lines, so what counts as "empty" depends on git config).
+    func commit(message: String, amend: Bool) async {
+        guard let repo else { return }
+        let result = await Task.detached(priority: .userInitiated) {
+            GitClient.commit(message: message, repo: repo, amend: amend)
+        }.value
+        handleWriteResult(result, action: .commit)
+    }
+
     /// Internal — write-op kinds used to label the failure alert.
     /// The `failureKey` indirection feeds L10n at the time the
     /// alert is built so the message follows the system language.
     private enum WriteAction {
-        case stage, unstage, discard
+        case stage, unstage, discard, commit
 
         var failureKey: String {
             switch self {
             case .stage:   return "sourceControl.alert.stageFailed"
             case .unstage: return "sourceControl.alert.unstageFailed"
             case .discard: return "sourceControl.alert.discardFailed"
+            case .commit:  return "sourceControl.alert.commitFailed"
             }
         }
     }
@@ -174,6 +208,9 @@ final class GitStatusEngine: ObservableObject {
 
     /// Kick a new `git status` cycle. Safe to call repeatedly.
     /// Cancels the previous in-flight task and replaces it.
+    /// Phase 35b-2b — also pulls the current branch in the same
+    /// detached pass so the sidebar's branch indicator tracks
+    /// checkouts and commits without an extra refresh hook.
     func refresh() {
         currentTask?.cancel()
         guard let repo else {
@@ -181,15 +218,20 @@ final class GitStatusEngine: ObservableObject {
             // the sidebar doesn't briefly show stale data after a
             // closeFolder().
             rows = []
+            branch = nil
             state = .idle
             return
         }
 
         currentTask = Task { [weak self] in
-            let result = await Task.detached(priority: .userInitiated) {
-                GitClient.status(repo: repo)
+            let (result, branchName) = await Task.detached(priority: .userInitiated) {
+                () -> (GitClient.StatusResult, String?) in
+                let status = GitClient.status(repo: repo)
+                let br = GitClient.currentBranch(repo: repo)
+                return (status, br)
             }.value
             guard !Task.isCancelled, let self else { return }
+            if self.branch != branchName { self.branch = branchName }
             switch result {
             case .rows(let parsed):
                 if self.rows != parsed { self.rows = parsed }

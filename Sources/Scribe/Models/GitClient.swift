@@ -192,6 +192,57 @@ enum GitClient {
         }
     }
 
+    /// Phase 35b-2b — record a commit. `amend == true` rewrites the
+    /// HEAD commit instead of creating a new one (`git commit
+    /// --amend`). We pass the message via stdin to sidestep argv
+    /// limits + quoting hazards: a commit message can be tens of
+    /// kilobytes (think Linux kernel patches with full changelogs)
+    /// and embedding multi-line text into argv is asking for a
+    /// shell-injection-shaped bug even when we control the spawn.
+    ///
+    /// Why not `-m <msg>`:
+    ///   `-m` joins repeated values into paragraph separators, but
+    ///   a single `-m` with a long body is still passed via argv,
+    ///   capped at ~256 KiB on macOS. `-F -` reads from stdin and
+    ///   has no such cap. zed and the GitHub Desktop both use the
+    ///   stdin path for the same reason.
+    nonisolated static func commit(message: String,
+                                   repo: URL,
+                                   amend: Bool) -> WriteResult {
+        var args = ["commit", "-F", "-", "--cleanup=strip"]
+        if amend { args.append("--amend") }
+        switch runWithStdin(args, stdin: message, cwd: repo) {
+        case .success: return .ok
+        case .failure(let err): return .error(err)
+        }
+    }
+
+    /// Phase 35b-2b — current branch name. `git branch --show-current`
+    /// is the dedicated porcelain for this; it returns empty when
+    /// HEAD is detached, which we surface as nil so the sidebar
+    /// can fall back to the short SHA.
+    nonisolated static func currentBranch(repo: URL) -> String? {
+        switch run(["branch", "--show-current"], cwd: repo) {
+        case .success(let raw):
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        case .failure: return nil
+        }
+    }
+
+    /// Subject (first line) of the HEAD commit. Powers the "Amend"
+    /// toggle: enabling it pre-fills the textarea with the previous
+    /// message so the user can edit instead of retyping. Returns
+    /// nil for an empty repo (no commits yet) or any git error.
+    nonisolated static func headSubject(repo: URL) -> String? {
+        switch run(["log", "-1", "--pretty=%B"], cwd: repo) {
+        case .success(let raw):
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        case .failure: return nil
+        }
+    }
+
     /// Walk parent directories until we find one containing `.git`.
     /// `.git` may be a directory (normal repo) or a regular file
     /// (worktree / submodule pointing back to the gitdir).
@@ -253,6 +304,61 @@ enum GitClient {
         } catch {
             return .failure("Couldn't launch git: \(error.localizedDescription)")
         }
+        let outData = stdout.fileHandleForReading.readDataToEndOfFile()
+        let errData = stderr.fileHandleForReading.readDataToEndOfFile()
+        task.waitUntilExit()
+
+        if task.terminationStatus == 0 {
+            return .success(String(data: outData, encoding: .utf8) ?? "")
+        }
+        let msg = String(data: errData, encoding: .utf8) ?? ""
+        return .failure(msg.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    /// Phase 35b-2b — like `run` but pipes `stdin` into the spawned
+    /// process. Used for `git commit -F -` so the message round-
+    /// trips losslessly even when it's many KiB or contains
+    /// arbitrary multi-byte text. Caller passes the raw message
+    /// string; UTF-8 encoding happens here once.
+    ///
+    /// Why not just expand `run` to take an optional stdin:
+    ///   `run` is on every read code path (status / diff / blob)
+    ///   and adding a parameter would force every existing call
+    ///   to carry an extra `nil`. Splitting keeps the read API
+    ///   pristine.
+    private nonisolated static func runWithStdin(_ args: [String],
+                                                 stdin input: String,
+                                                 cwd: URL) -> RunResult {
+        let task = Process()
+        task.currentDirectoryURL = cwd
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        task.arguments = args
+
+        let stdout = Pipe()
+        let stderr = Pipe()
+        let stdin = Pipe()
+        task.standardOutput = stdout
+        task.standardError = stderr
+        task.standardInput = stdin
+        var env = ProcessInfo.processInfo.environment
+        env["GIT_PAGER"] = "cat"
+        env["GIT_OPTIONAL_LOCKS"] = "0"
+        env["LC_ALL"] = "C"
+        task.environment = env
+
+        do {
+            try task.run()
+        } catch {
+            return .failure("Couldn't launch git: \(error.localizedDescription)")
+        }
+        // Feed the message in, then close the write end so git sees EOF
+        // and stops reading. Closing matters: without it `git commit -F -`
+        // would block forever waiting for more input.
+        if let data = input.data(using: .utf8) {
+            stdin.fileHandleForWriting.write(data)
+        }
+        try? stdin.fileHandleForWriting.close()
+
         let outData = stdout.fileHandleForReading.readDataToEndOfFile()
         let errData = stderr.fileHandleForReading.readDataToEndOfFile()
         task.waitUntilExit()
