@@ -364,11 +364,50 @@ ROADMAP 早期把 1.7b / 1.7c / 1.8 / 2-14 当成串行 phase 推进；实际开
 - [x] **Performance 测试 + Fixture**：1 / 5 / 20 MB lorem-ipsum，绝对 wall-clock
       预算（不用 XCTest measure，避免每机器 baseline 噪音）。
 
-**未完成（next perf 拍）**：
-- [ ] SCN_MODIFIED → doc.text 的全 buffer copy（typing 时主成本）；需要
-      NSMutableString-backed Document 或 throttle/debounce。
+**未完成**：见 Phase 28c。
 
-## Phase 29 · 工程化与文档（2026-04-28，进行中）
+## Phase 28c · SCN_MODIFIED 节流（2026-04-28，commit `56027f7`）
+
+**目标**：50 MB 文件 typing 不卡 — 移除每按键 O(N) view → doc round-trip。
+
+**改动**：
+- `Document.flushPendingEdit: (() -> Void)?` — `@MainActor` 闭包，编辑器
+  Coordinator 在 init 时安装、deinit 留给下一个 Coordinator 覆盖（Swift 6
+  strict deinit 不能 mutate main-actor prop）。
+- `Coordinator.scheduleDocSync()` — 每次 SCN_MODIFIED 取消上一个 Task，
+  起新 50 ms timer；只有 typing 停顿后才付 O(N) `view.string()`。
+- `Coordinator.flushDocSync()` — 立即 drain。`Workspace.write` 与
+  `handleExternalChange` 在读 `doc.text` 前调 `doc.flushPendingEdit?()`。
+- `applyText`（push path）取消 pending pull — 防 stale tick clobber。
+- `doc.isDirty = true` 仍立即触发：title bar dot / 关闭确认 UI 不延迟。
+
+**测试**：`Tests/ScribeTests/DocumentFlushTests.swift` 三例 — nil-by-default、
+fire-and-mutate、replacement-survives-doc-swap。
+
+**为什么 50 ms**：低于 user keystroke perception 阈值（~80 ms），覆盖
+sustained typing burst，可调 `Coordinator.docSyncThrottleNanos`。
+
+## Phase 28d · 跨 file extension 拆分（2026-04-28，commit `d351e8a`）
+
+**目标**：`ScintillaCodeEditor.swift` 1083 行 → 主文件聚焦 lifecycle + sync。
+
+**改动**：
+- `Sources/Scribe/Views/Scintilla/Coordinator+Theme.swift`（134 行）
+  — `applyLexer` / `applyTheme` / `applyLanguageStyles` / `setStyleColor` / `sciColor`
+- `Sources/Scribe/Views/Scintilla/Coordinator+Find.swift`（299 行）
+  — Find/Replace + highlights overlay
+- `Sources/Scribe/Views/Scintilla/Coordinator+MultiCursor.swift`（492 行）
+  — Phase 20 全 multi-caret cluster
+
+**可见性契约**：仅 `currentLexer` / `lastHighlighted{Query,Flags,DocLength}`
+四个 stored property 由 `private` 升 module-internal（同 module extension
+所需）；其余 stored state 维持 `private`。helper functions 用 `fileprivate`
+关掉外部调用面。
+
+**结果**：主文件 1083 → 385 行（-64%）。Coordinator 总 LOC +21%（doc-comments
+解释 visibility 契约的一次性成本）。
+
+## Phase 29 · 工程化与文档（2026-04-28，commit `21e2479`）
 
 - [x] `.github/workflows/ci.yml` 四道闸：test / release / Swift 6 / strings parity
 - [x] `Scripts/check_localization.swift`（en ↔ zh-Hans + dangling reference）
@@ -383,14 +422,13 @@ ROADMAP 早期把 1.7b / 1.7c / 1.8 / 2-14 当成串行 phase 推进；实际开
 
 1. **ndd C++ 核心移植**：`Encode.cpp` / `CmpareMode.cpp` / `HEXMode.cpp` / `LargeFile.cpp`
    通过 ObjC++ shim 桥到 Swift；保留 GPL-3.0 copyleft。
-2. **SCN_MODIFIED 性能**：让 typing 在 50 MB 文件不卡（perf 第二拍）。
-3. **Document Map**：右侧缩略图侧栏（学 npp-mac，仅 SwiftUI）。
-4. **Function List / Symbol Outline**：当前 Outline 仅识别 Swift / Markdown，扩到 cpp / py / js。
-5. **Git Gutter**：旁注 ▎ ▎ +/- 的行级 git diff（libgit2 还是直接调 `git diff` CLI 待定）。
-6. **Snippets / Templates**：⌘⇧T 弹出 + tab key 触发。
-7. **Markdown Preview**：右侧 split，`WKWebView` 渲染。
-8. **HEX View**：参考 ndd 的 `HEXMode.cpp`。
-9. **官方 disk image** + Sparkle 自动更新。
+2. **Document Map**：右侧缩略图侧栏（学 npp-mac，仅 SwiftUI）。
+3. **Function List / Symbol Outline**：当前 Outline 仅识别 Swift / Markdown，扩到 cpp / py / js。
+4. **Git Gutter**：旁注 ▎ ▎ +/- 的行级 git diff（libgit2 还是直接调 `git diff` CLI 待定）。
+5. **Snippets / Templates**：⌘⇧T 弹出 + tab key 触发。
+6. **Markdown Preview**：右侧 split，`WKWebView` 渲染。
+7. **HEX View**：参考 ndd 的 `HEXMode.cpp`。
+8. **官方 disk image** + Sparkle 自动更新。
 
 ---
 

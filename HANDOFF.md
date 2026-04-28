@@ -404,7 +404,9 @@ Phase 0.2/0.3 暂未截图。
 | **Phase 27 · i18n** | `8cb82c2 → 8d01ef3` | en + zh-Hans 双 lproj，全 UI 文案 + 上下文菜单 |
 | **Phase 28 · 稳定性硬化** | `34d8c4b` | Swift 6 strict 0/0 · ScribeApp 626 → 144 行 · SCIConstants 抽出 |
 | **Phase 28b · 性能预算** | `7f7689e` | Workspace.openFile 异步化（< 5 ms sync）· updateNSView 短路 · 1/5/20 MB perf fixtures |
-| **Phase 29 · 工程化** | _本提交_ | `.github/workflows/ci.yml` 四道闸 · `check_localization.swift` · `gen_perf_samples.sh` · README 重写 · ROADMAP 追 ADR-006/007 · macOS 14 lockstep |
+| **Phase 29 · 工程化** | `21e2479` | `.github/workflows/ci.yml` 四道闸 · `check_localization.swift` · `gen_perf_samples.sh` · README 重写 · ROADMAP 追 ADR-006/007 · macOS 14 lockstep |
+| **Phase 28c · SCN_MODIFIED 节流** | `56027f7` | `Document.flushPendingEdit` drain hook · 50 ms debounce · save/echo flush · 113 tests |
+| **Phase 28d · Coordinator 拆分** | `d351e8a` | Theme / Find / MultiCursor 三个 same-module extension · 主文件 1083 → 385 (-64%) |
 
 ### 关键架构变化
 
@@ -418,12 +420,31 @@ Sources/Scribe/App/
 ScribeApp.swift               · 144 行（Scene declaration + bootstrap）
 ```
 
-**Scintilla 层** （Phase 28）：
+**Scintilla 层** （Phase 28 / 28d）：
 
 ```
 Sources/Scribe/Views/Scintilla/
-└── SCIConstants.swift        · 所有 SCI_* / SCN_* / SCFIND_* / SCE_* 数值
-ScintillaCodeEditor.swift     · 1083 行（Coordinator 拆分留下次）
+├── SCIConstants.swift              · 所有 SCI_* / SCN_* / SCFIND_* / SCE_* 数值
+├── Coordinator+Theme.swift         · 134 行 — applyLexer / applyTheme / sciColor
+├── Coordinator+Find.swift          · 299 行 — Find/Replace + highlights overlay
+└── Coordinator+MultiCursor.swift   · 492 行 — Phase 20 multi-caret cluster
+ScintillaCodeEditor.swift           · 385 行（lifecycle + doc/view sync only）
+```
+
+**Throttled doc.text sync**（Phase 28c）：
+
+```swift
+// Coordinator init
+doc.flushPendingEdit = { [weak self] in self?.flushDocSync() }
+
+// SCN_MODIFIED handler
+if !isApplyingExternalUpdate {
+    if !doc.isDirty { doc.isDirty = true }    // immediate
+    scheduleDocSync()                          // 50 ms debounce
+}
+
+// Workspace.write / handleExternalChange  — drain before reading doc.text
+doc.flushPendingEdit?()
 ```
 
 **Workspace I/O**（Phase 28b）：
@@ -467,11 +488,21 @@ Task { @MainActor [weak self] in
 
 ### 下次起手
 
-未做 / 留给下次：
+二轮迭代 Phase 28c + 28d 已把 HANDOFF section 12 列的两件留作清掉：
 
-1. **SCN_MODIFIED → doc.text 全 buffer copy**：typing 在 50 MB 文件仍卡。需要 NSMutableString-backed Document 或 throttle。
-2. **Coordinator extension 拆分**：ScintillaCodeEditor.swift 仍 1083 行。要把 Coordinator 内 `private` 改 `internal` 才能 cross-file extension。
-3. **Phase 30+ 路线**：见 ROADMAP "Phase 30+ 路线展望"。
+- ✅ ~~SCN_MODIFIED 全 buffer copy~~ → Phase 28c 50 ms debounce + flush hook
+- ✅ ~~Coordinator extension 拆分~~ → Phase 28d 三个 same-module extension（主文件 1083 → 385）
+
+**真正剩下的**：
+
+1. **Document storage 仍是 Swift `String`**：debounce 把 typing 痛点压到了
+   "停顿后才付一次 O(N)"，但保存 50 MB 时仍然要 round-trip 一次
+   `view.string()`。要彻底零拷贝得让 Scintilla 直接读 / 写 Document 的
+   backing store（NSMutableString 或 ICU UText）。优先级：低 — 当前
+   实测保存 50 MB ~150 ms，可接受。
+2. **Phase 30+ 路线**：见 ROADMAP "Phase 30+ 路线展望"（ndd 核心 / Document
+   Map / Function List / Git Gutter / Snippets / Markdown Preview /
+   HEX View / Sparkle）。
 
 ---
 
@@ -480,11 +511,12 @@ Task { @MainActor [weak self] in
 ```
 Scribe 已从 0 长到 v1.0-rc ——
 SwiftUI Scene + Scintilla 5.6.1 + 8 主题 + 多光标 + 列选 + 全 i18n（en/zh-Hans）·
-开 20 MB 文件主线程不卡 · Swift 6 strict 0/0 · 110 tests + 4 perf budget ·
-.app 双击即用 · CI 四道闸 push/PR 都跑 · README/ROADMAP/HANDOFF 同步到位。
+开 20 MB 文件主线程不卡 · 50 MB typing 不卡（50 ms debounce）·
+Swift 6 strict 0/0 · 113 tests + 4 perf budget · ScintillaCodeEditor.swift
+1083 → 385 行 · .app 双击即用 · CI 四道闸 push/PR 都跑 ·
+README/ROADMAP/HANDOFF 同步到位。
 
-唯一已知漏洞：typing 在多兆字节文件 SCN_MODIFIED 全文 round-trip 仍贵——
-Phase 30+ 第一拍要拆。
+下一拍：ndd C++ 核心 + Document Map + Function List。
 ```
 
 ---

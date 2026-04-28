@@ -35,6 +35,7 @@ Scribe 是一款 **macOS 原生** 文本与代码编辑器。SwiftUI 主壳 + Sc
 - **行尾自动归一**：LF / CRLF / CR 三选一，状态栏可手动切换。
 - **FSEvents 监听**：磁盘变更自动提示重载或保留。
 - **异步打开**：20 MB 文件不卡 UI（Phase 28b——主线程同步部分恒定 < 5 ms）。
+- **节流编辑**：50 MB 文件 typing 不卡 — SCN_MODIFIED 50 ms debounce（Phase 28c）。
 
 ### 完整本地化
 - **English / 简体中文** 双语包，203 个 key 全覆盖。
@@ -44,7 +45,7 @@ Scribe 是一款 **macOS 原生** 文本与代码编辑器。SwiftUI 主壳 + Sc
 - **零外部 SwiftPM 依赖**。Vendor 中只有 Scintilla + Lexilla（GPL-2 兼容 GPL-3）。
 - **Swift 6 strict concurrency** 全绿，0 error / 0 warning（Vendor/scintilla 除外）。
 - **CI 四道闸**：`swift test` · `swift build -c release` · `swift build -swift-version 6` · Localizable strings 校验。
-- **110 个单元测试** 含 Theme / Lexer / TextFormat / Find-in-Files / Performance。
+- **113 个单元测试** 含 Theme / Lexer / TextFormat / Find-in-Files / Performance / DocumentFlush。
 
 ---
 
@@ -210,7 +211,9 @@ swift Scripts/check_localization.swift
 - ✅ Phase 27：i18n
 - ✅ Phase 28：Swift 6 strict + 架构拆分
 - ✅ Phase 28b：异步 openFile + 性能预算
-- 🔜 Phase 29：CI lockstep + 文档同步（本提交）
+- ✅ Phase 28c：SCN_MODIFIED 50 ms 节流（typing 不卡）
+- ✅ Phase 28d：Coordinator 拆分（主文件 1083 → 385 行）
+- ✅ Phase 29：CI lockstep + 文档同步
 - 🔜 Phase 30+：Phase 2 ndd C++ core（Encode / Diff / Hex / LargeFile）
 
 ---
