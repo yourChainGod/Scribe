@@ -32,6 +32,18 @@ final class Document: ObservableObject, Identifiable {
     /// `Data(contentsOf:)` used to take.
     @Published var isLoading: Bool = false
 
+    /// Phase 28c — drain hook installed by ScintillaCodeEditor.Coordinator
+    /// when it becomes the live editor. Throttled keystroke writes are
+    /// the SCN_MODIFIED → doc.text sync; for multi-MB documents we'd
+    /// otherwise pay an O(N) `view.string()` round-trip per character.
+    /// Code paths that need a *current* `text` (Workspace.save,
+    /// handleExternalChange) call this first to drain any pending
+    /// throttled edit before reading. Optional because new / loading /
+    /// closed documents have no live editor; reads against those see
+    /// the most recent fully-synced value.
+    @MainActor
+    var flushPendingEdit: (() -> Void)?
+
     init(title: String = L10n.t("tab.untitled"), text: String = "", url: URL? = nil) {
         self.title = title
         self.text = text

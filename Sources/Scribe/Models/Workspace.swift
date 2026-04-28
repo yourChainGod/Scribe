@@ -244,6 +244,11 @@ final class Workspace: ObservableObject {
             return
         }
         let decoded = TextFormatDetector.decode(data: data)
+        // Phase 28c — flush throttled edits before the echo check.
+        // The watcher's most common trigger is our own atomic write
+        // landing; if a stale doc.text caused a false mismatch we'd
+        // pop the "reload?" dialog after every save.
+        doc.flushPendingEdit?()
         // Echo from our own write — bytes match what we already have.
         if decoded.text == doc.text { return }
 
@@ -355,6 +360,11 @@ final class Workspace: ObservableObject {
     }
 
     private func write(doc: Document, to url: URL) {
+        // Phase 28c — drain any throttled keystrokes before reading
+        // doc.text. Without this, ⌘S right after a fast typing burst
+        // could write the up-to-50-ms-stale snapshot the editor had
+        // last synced.
+        doc.flushPendingEdit?()
         do {
             guard let payload = TextFormatDetector.encode(
                 doc.text,

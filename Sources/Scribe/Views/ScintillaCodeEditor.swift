@@ -126,16 +126,44 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         private var lastHighlightedFlags: UInt = 0
         private var lastHighlightedDocLength: Int = -1
 
+        /// Phase 28c — debounce handle for the SCN_MODIFIED → doc.text
+        /// sync. Each modification cancels the previous in-flight Task
+        /// and schedules a fresh 50 ms timer; only after the user stops
+        /// typing do we pay the O(N) `view.string()` round-trip. Code
+        /// paths that need an authoritative `doc.text` (save, external
+        /// change check) drain via `flushDocSync()` first.
+        private var pendingDocSync: Task<Void, Never>?
+
+        /// 50 ms feels imperceptible to the user but covers the
+        /// common burst-typing window (sustained typing rarely sees
+        /// keystrokes < 30 ms apart). Lower = stale-text risk before
+        /// save; higher = saves can race ahead of the typist.
+        private static let docSyncThrottleNanos: UInt64 = 50_000_000
+
         init(doc: Document, prefs: EditorPreferences, findState: FindState, workspace: Workspace? = nil) {
             self.doc = doc
             self.prefs = prefs
             self.findState = findState
             self.workspace = workspace
             super.init()
+            // Install the drain hook on the document so save / external-
+            // change paths can pull a fresh snapshot. We capture self
+            // weakly — the hook is removed in deinit but a defensive
+            // weak ref means a stale closure surviving (e.g. after a
+            // doc swap) is a no-op rather than a use-after-free.
+            doc.flushPendingEdit = { [weak self] in self?.flushDocSync() }
         }
 
         deinit {
             appearanceObserver?.invalidate()
+            pendingDocSync?.cancel()
+            // We *don't* clear `doc.flushPendingEdit` here — Swift 6
+            // strict makes deinit nonisolated, and `Document` is
+            // `@MainActor`. The drain closure captures `self` weakly,
+            // so a stale invocation after Coordinator deinit is a
+            // safe no-op rather than a use-after-free. The next
+            // Coordinator that takes over the doc overwrites the hook
+            // in its init.
         }
 
         func attach(view: ScintillaView) {
@@ -182,6 +210,12 @@ struct ScintillaCodeEditor: NSViewRepresentable {
             isApplyingExternalUpdate = isExternal
             view.setString(text)
             isApplyingExternalUpdate = false
+            // applyText is the *push* path (doc → view). Any throttled
+            // pull (view → doc) is now stale — the view's content was
+            // just overwritten. Cancel the pending Task so a delayed
+            // tick can't clobber the freshly-pushed text.
+            pendingDocSync?.cancel()
+            pendingDocSync = nil
         }
 
         func applyFont(prefs: EditorPreferences, to view: ScintillaView) {
@@ -1057,18 +1091,51 @@ struct ScintillaCodeEditor: NSViewRepresentable {
 
         // MARK: view → doc (ScintillaNotificationProtocol)
 
+        /// Schedule (or reschedule) the throttled doc.text pull.
+        /// Each new SCN_MODIFIED cancels the prior in-flight Task so
+        /// only the *last* keystroke in a burst pays the round-trip.
+        /// The Task is `@MainActor`-bound implicitly via Coordinator.
+        private func scheduleDocSync() {
+            pendingDocSync?.cancel()
+            pendingDocSync = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: Coordinator.docSyncThrottleNanos)
+                guard let self, !Task.isCancelled else { return }
+                self.flushDocSync()
+            }
+        }
+
+        /// Drain the pending throttled write — called either by the
+        /// throttle Task firing, or synchronously by callers that
+        /// need an authoritative `doc.text` (Workspace.save,
+        /// handleExternalChange) via `doc.flushPendingEdit?()`.
+        ///
+        /// Reads the entire view buffer; this is the O(N) path we
+        /// were paying *per keystroke* before throttling. Now we
+        /// pay it once per typing pause, which is what the user
+        /// experiences as "the file became saveable".
+        func flushDocSync() {
+            guard let view else { return }
+            pendingDocSync?.cancel()
+            pendingDocSync = nil
+            let newText = view.string() ?? ""
+            if newText != doc.text {
+                doc.text = newText
+            }
+        }
+
         func notification(_ scn: UnsafeMutablePointer<SCNotification>?) {
             guard let scn else { return }
             let code = scn.pointee.nmhdr.code
 
             switch code {
             case SCN.MODIFIED:
-                if !isApplyingExternalUpdate, let view {
-                    let newText = view.string() ?? ""
-                    if newText != doc.text {
-                        doc.text = newText
-                        if !doc.isDirty { doc.isDirty = true }
-                    }
+                if !isApplyingExternalUpdate {
+                    // Mark dirty *immediately* so the title bar dot, tab
+                    // close-confirm, and "unsaved changes" UI react on
+                    // the very first keystroke — only the heavy text
+                    // sync is throttled.
+                    if !doc.isDirty { doc.isDirty = true }
+                    scheduleDocSync()
                 }
             case SCN.UPDATEUI:
                 if let view {
