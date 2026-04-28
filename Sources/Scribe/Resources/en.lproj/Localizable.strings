@@ -24,6 +24,7 @@
 "sidebar.section.open"        = "OPEN";
 "sidebar.section.workspace"   = "WORKSPACE";
 "sidebar.action.openFolder"   = "Open Folder…";
+"sidebar.action.closeFolder"  = "Close Folder";
 "sidebar.action.newFile"      = "New File";
 "sidebar.outline.header"      = "OUTLINE";
 "sidebar.outline.parsing"     = "Parsing…";
@@ -110,6 +111,12 @@
 "context.findInFiles"       = "Find in Files";
 "context.revealInFinder"    = "Reveal in Finder";
 "context.copyPath"          = "Copy Path";
+
+"editor.context.undo"           = "Undo";
+"editor.context.redo"           = "Redo";
+"editor.context.find"           = "Find…";
+"editor.context.revealInFinder" = "Reveal in Finder";
+"editor.context.copyPath"       = "Copy Path";
 
 // MARK: - Common menu
 

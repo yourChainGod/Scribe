@@ -13,6 +13,13 @@ struct MainWindow: View {
     @EnvironmentObject var findInFiles: FindInFilesState
     let findInFilesEngine: FindInFilesEngine
     @State private var dragOver = false
+    /// Visibility binding for `NavigationSplitView`. SwiftUI on macOS
+    /// 14 ships its own toolbar toggle that mutates this state, but
+    /// without an explicit binding our toolbar's `workspace.
+    /// sidebarVisible.toggle()` would be a no-op — the published
+    /// flag had no path back to the layout. We mirror the two so a
+    /// programmatic flip from a Cmd-Palette command still works.
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
         if let session = workspace.compareSession {
@@ -24,19 +31,46 @@ struct MainWindow: View {
         }
     }
 
+    /// Detail pane extracted so the editorLayout can attach
+    /// .onChange / .onAppear modifiers to the NavigationSplitView
+    /// without dropping them onto the inner VStack.
+    private var detailContent: some View {
+        VStack(spacing: 0) {
+            TabBarView()
+            Divider()
+            EditorAreaView()
+            Divider()
+            StatusBarView()
+        }
+        .background(Color(nsColor: .textBackgroundColor))
+    }
+
     private var editorLayout: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView(findInFiles: findInFilesEngine)
                 .navigationSplitViewColumnWidth(min: 200, ideal: 260, max: 380)
         } detail: {
-            VStack(spacing: 0) {
-                TabBarView()
-                Divider()
-                EditorAreaView()
-                Divider()
-                StatusBarView()
+            detailContent
+        }
+        // Keep the workspace flag in lockstep with the column
+        // visibility so command-palette / menu commands that read or
+        // mutate `workspace.sidebarVisible` continue to work.
+        .onAppear {
+            columnVisibility = workspace.sidebarVisible ? .all : .detailOnly
+        }
+        .onChange(of: workspace.sidebarVisible) { _, want in
+            let target: NavigationSplitViewVisibility = want ? .all : .detailOnly
+            if columnVisibility != target {
+                withAnimation(.easeInOut(duration: 0.20)) {
+                    columnVisibility = target
+                }
             }
-            .background(Color(nsColor: .textBackgroundColor))
+        }
+        .onChange(of: columnVisibility) { _, vis in
+            let visible = vis != .detailOnly
+            if workspace.sidebarVisible != visible {
+                workspace.sidebarVisible = visible
+            }
         }
         .toolbar {
             // Sidebar toggle stays anchored on the left, separate
@@ -44,17 +78,27 @@ struct MainWindow: View {
             // tracks the macOS Mail / Xcode convention.
             ToolbarItem(placement: .navigation) {
                 Button {
-                    workspace.sidebarVisible.toggle()
+                    // Use SwiftUI's animated transaction so the
+                    // sidebar slide is one smooth pass instead of
+                    // two — without `.linear(duration: 0.18)` macOS
+                    // 14 sometimes splits the visibility change
+                    // across two render passes which felt janky.
+                    withAnimation(.easeInOut(duration: 0.20)) {
+                        columnVisibility = (columnVisibility == .all)
+                            ? .detailOnly
+                            : .all
+                    }
                 } label: {
                     Label {
                         Text("toolbar.toggleSidebar", bundle: .module)
                     } icon: {
-                        Image(systemName: workspace.sidebarVisible
+                        Image(systemName: columnVisibility == .all
                               ? "sidebar.left"
                               : "sidebar.leading")
                     }
                 }
                 .help(L10n.t("toolbar.toggleSidebar"))
+                .keyboardShortcut("\\", modifiers: .command)
             }
 
             // — File ops group — square.and.pencil for new comes

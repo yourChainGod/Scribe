@@ -22,6 +22,7 @@
 "sidebar.section.open"        = "已打开";
 "sidebar.section.workspace"   = "工作区";
 "sidebar.action.openFolder"   = "打开文件夹…";
+"sidebar.action.closeFolder"  = "关闭文件夹";
 "sidebar.action.newFile"      = "新建文件";
 "sidebar.outline.header"      = "大纲";
 "sidebar.outline.parsing"     = "正在解析…";
@@ -108,6 +109,12 @@
 "context.findInFiles"       = "在文件中查找";
 "context.revealInFinder"    = "在访达中显示";
 "context.copyPath"          = "拷贝路径";
+
+"editor.context.undo"           = "撤销";
+"editor.context.redo"           = "重做";
+"editor.context.find"           = "查找…";
+"editor.context.revealInFinder" = "在访达中显示";
+"editor.context.copyPath"       = "拷贝路径";
 
 // MARK: - Common menu
 

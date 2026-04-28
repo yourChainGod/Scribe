@@ -19,9 +19,80 @@ struct EditorAreaView: View {
                 ScintillaCodeEditor(doc: doc, prefs: prefs, findState: findState)
                     .id(doc.id)
                     .background(Color(nsColor: .textBackgroundColor))
+                    .contextMenu {
+                        editorContextMenu(doc: doc)
+                    }
             }
         } else {
             WelcomeView()
+        }
+    }
+
+    /// Editor right-click menu. Replaces Scintilla's English built-in
+    /// pop-up (suppressed via SCI_USEPOPUP=NEVER in the wrapper).
+    /// Every action is routed through `NSApp.sendAction(_:to:from:)`
+    /// with `to: nil` so the responder chain hits ScintillaView, which
+    /// owns the editor's text. That's the same path the Edit menu's
+    /// system items take, so behaviour stays identical.
+    @ViewBuilder
+    private func editorContextMenu(doc: Document) -> some View {
+        Button {
+            NSApp.sendAction(Selector(("undo:")), to: nil, from: nil)
+        } label: {
+            Text("editor.context.undo", bundle: .module)
+        }
+        Button {
+            NSApp.sendAction(Selector(("redo:")), to: nil, from: nil)
+        } label: {
+            Text("editor.context.redo", bundle: .module)
+        }
+        Divider()
+        Button {
+            NSApp.sendAction(#selector(NSText.cut(_:)), to: nil, from: nil)
+        } label: {
+            Text("context.cut", bundle: .module)
+        }
+        Button {
+            NSApp.sendAction(#selector(NSText.copy(_:)), to: nil, from: nil)
+        } label: {
+            Text("context.copy", bundle: .module)
+        }
+        Button {
+            NSApp.sendAction(#selector(NSText.paste(_:)), to: nil, from: nil)
+        } label: {
+            Text("context.paste", bundle: .module)
+        }
+        Button {
+            NSApp.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: nil)
+        } label: {
+            Text("context.selectAll", bundle: .module)
+        }
+        Divider()
+        // Common editor utilities — find / find-in-files / save —
+        // mirror the same actions accessible from the Edit menu so a
+        // user who right-clicks expecting to "do something here" gets
+        // the same surface.
+        Button {
+            findState.show(replaceMode: false)
+        } label: {
+            Text("editor.context.find", bundle: .module)
+        }
+        if doc.url != nil {
+            Divider()
+            Button {
+                guard let url = doc.url else { return }
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            } label: {
+                Text("editor.context.revealInFinder", bundle: .module)
+            }
+            Button {
+                guard let url = doc.url else { return }
+                let pb = NSPasteboard.general
+                pb.clearContents()
+                pb.setString(url.path, forType: .string)
+            } label: {
+                Text("editor.context.copyPath", bundle: .module)
+            }
         }
     }
 }

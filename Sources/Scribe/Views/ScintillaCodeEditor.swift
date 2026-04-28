@@ -127,6 +127,27 @@ private enum SCI {
     /// the line-end position if the line is shorter. Cleanest way
     /// to project a caret column onto an adjacent line.
     static let FINDCOLUMN:                  UInt32 = 2456
+    /// Phase 27d — disable Scintilla's built-in right-click pop-up so
+    /// SwiftUI's `.contextMenu` modifier on the wrapping view can
+    /// take over. The built-in menu is hard-coded English in
+    /// Vendor/scintilla and can't be themed without forking.
+    /// `SCI_USEPOPUP(SC_POPUP_NEVER)` tells the lexer to leave the
+    /// right-click event alone so the responder chain bubbles up.
+    static let USEPOPUP:                    UInt32 = 2371
+    /// Edit verbs we drive from the SwiftUI replacement context menu.
+    /// Same numeric identifiers Scintilla itself uses internally.
+    static let UNDO:        UInt32 = 2176
+    static let REDO:        UInt32 = 2011
+    static let CUT:         UInt32 = 2177
+    static let COPY:        UInt32 = 2178
+    static let PASTE:       UInt32 = 2179
+    static let CLEAR:       UInt32 = 2180
+    static let SELECTALL:   UInt32 = 2013
+    /// Caret state queries used by the context-menu enable/disable
+    /// logic. Returns 1 / 0 booleans cast as Int.
+    static let CANUNDO:     UInt32 = 2174
+    static let CANREDO:     UInt32 = 2016
+    static let CANPASTE:    UInt32 = 2173
 }
 
 /// Search flags as documented in Scintilla.h.
@@ -237,6 +258,12 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         context.coordinator.applyTheme(to: view)
         context.coordinator.configureMatchIndicator(to: view)
         context.coordinator.configureMultiSelection(to: view)
+        // Suppress the built-in English right-click menu so SwiftUI's
+        // .contextMenu modifier on EditorAreaView can take over. With
+        // SC_POPUP_NEVER the responder chain bubbles the right-click
+        // up to SwiftUI's gesture system, which then renders our
+        // localised menu.
+        view.message(SCI.USEPOPUP, wParam: UInt(0))   // SC_POPUP_NEVER
         return view
     }
 

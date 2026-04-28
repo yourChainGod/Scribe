@@ -53,6 +53,14 @@ struct SidebarView: View {
             VStack(alignment: .leading, spacing: 0) {
                     // OPEN section
                     SectionHeader(titleKey: "sidebar.section.open", systemImage: "doc.text")
+                        .contextMenu {
+                            Button {
+                                workspace.newDocument()
+                            } label: { Text("sidebar.action.newFile", bundle: .module) }
+                            Button {
+                                workspace.openDocument()
+                            } label: { Text("menu.file.open", bundle: .module) }
+                        }
                     ForEach(workspace.documents) { doc in
                         DocRow(doc: doc, isSelected: workspace.selectedID == doc.id)
                             .onTapGesture {
@@ -65,6 +73,21 @@ struct SidebarView: View {
                     // WORKSPACE section
                     HStack {
                         SectionHeader(titleKey: "sidebar.section.workspace", systemImage: "folder")
+                            .contextMenu {
+                                if workspace.folderRoot == nil {
+                                    Button {
+                                        workspace.openFolder()
+                                    } label: { Text("sidebar.action.openFolder", bundle: .module) }
+                                } else {
+                                    Button {
+                                        workspace.openFolder()
+                                    } label: { Text("sidebar.action.openFolder", bundle: .module) }
+                                    Divider()
+                                    Button(role: .destructive) {
+                                        workspace.closeFolder()
+                                    } label: { Text("sidebar.action.closeFolder", bundle: .module) }
+                                }
+                            }
                         Spacer()
                         if workspace.folderRoot == nil {
                             Button {
