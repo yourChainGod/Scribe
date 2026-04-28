@@ -1482,18 +1482,85 @@ hook，下一拍 35c-ii-γ 把 Scintilla EOLAnnotation 接上。
 **测试**：+5 闸 (318 → 323)。real-repo integration，gated
 on `/usr/bin/git`。
 
-**未覆盖 (Phase 35c-ii-γ)**：Coordinator+InlineBlame.swift
-Scintilla `SCI_EOLANNOTATIONSETTEXT` 集成 + caret line
-change hook + 灰色 fg + hover tooltip 出 commit summary +
-未跟踪 / 未保存 silent skip + 多 cursor 仅显示 main caret 行
-blame。
+## Phase 35c-ii-γ · Scintilla EOL annotation 接入 — Inline Blame 招牌闭环（2026-04-29）
+
+**背景**：35c-i 数据层 + 35c-ii-α RelativeTime + 35c-ii-β
+GitBlameEngine 三拍铺垫到位，本拍把 Scintilla
+`SCI_EOLANNOTATIONSETTEXT` 接上。caret 行末出现 zed 风圆角
+chip：`"  Author, 3 days ago • a1b2c3d"`。Inline Blame 招牌
+闭环。
+
+**交付**：
+
+- `Sources/Scribe/Views/Scintilla/SCIConstants.swift` ·
+  - 新 `SCI.EOLANNOTATIONSETTEXT/SETSTYLE/CLEARALL/SETVISIBLE`
+    四个消息号 + `SCI.STYLEGETFORE/STYLESETITALIC` 辅助
+    style 配置。
+  - 新 `SC.EOLANNOTATION_HIDDEN/STANDARD/BOXED/STADIUM` 可见性
+    枚举（STADIUM = 0x100 圆角 chip 形状）。
+  - 新 `SC.STYLE_INLINE_BLAME = 40` 用户区第一个空 style 槽
+    位（Scintilla 32-39 预留 / Lexilla 0-31 占用，40 起安全）。
+- `Sources/Scribe/Views/Scintilla/Coordinator+InlineBlame.swift`
+  (new, ~150 行) ·
+  - `configureInlineBlame(in:)` 一次性 setup：
+    `EOLANNOTATIONSETVISIBLE(STADIUM)` + `STYLESETFORE(40,
+    grey 0x808080)` + `STYLESETITALIC(40, true)`。
+  - `subscribeToInlineBlame(view:)` 装 Combine sink 监听
+    `engine.$blameByURL`，cache mutation 触发 main hop +
+    applyInlineBlame。
+  - `applyInlineBlame(in:)` 核心渲染：`EOLANNOTATIONCLEARALL`
+    清旧 → `GETCURRENTPOS` + `LINEFROMPOSITION` 取 caret
+    line0 → 1-based 转换 → engine.blameLine 取数据 → 跳过
+    nil / `isUncommitted` → `setStringProperty(EOLANNOTATIONSETTEXT,
+    parameter: line0, value: label)` 走 Scintilla cocoa 的
+    NSString → C-string wrapper → `EOLANNOTATIONSETSTYLE(line0,
+    40)` 给 chip 上 italic 灰色 style。
+  - `formatBlameLabel(for:)` 私有：`"  {Author}, {relTime} •
+    {sha7}"` zed 默认布局。两空格 prefix 视觉 padding，
+    7-char SHA 短而精确，summary 留给 hover tooltip
+    （TODO 35c-iii）。
+- `Sources/Scribe/Views/ScintillaCodeEditor.swift` 三处 hook：
+  - `Coordinator.blameSink: AnyCancellable?` 字段 module-
+    internal （Coordinator+InlineBlame.swift 装 + 重置）。
+  - `makeNSView` ⇒ configureInlineBlame +
+    subscribeToInlineBlame + applyInlineBlame（首帧 seed
+    避免空白 UI）。
+  - `updateNSView` ⇒ applyInlineBlame（doc swap selectedID
+    变化时同 view 重渲）。
+  - `notification` SCN.UPDATEUI ⇒ applyInlineBlame（caret
+    每 tick 跟随；O(1) 不必 track 上次 line）。
+
+**关键决策**：
+
+- 仅渲染 main caret 行 — `SCI_GETCURRENTPOS` 自然返主 caret
+  位置；多 cursor 时其他 caret 不显示 chip 避免 overload。
+- "clear-all then maybe-set-one" 而非 track-previous-line：
+  EOLANNOTATIONCLEARALL 是 Scintilla 自带 fast path、最多 1
+  active annotation、无 multi-thread race。
+- uncommitted (all-zeros sentinel) silent skip — 每次新键
+  入都触发会变成视觉噪音。
+- nil URL (untitled) / engine cache 未加载 / blameLine 返
+  nil 都 silent skip — Inline Blame 在 git 没东西可说时保持
+  安静。
+- 灰色硬编码 0x808080 而非 theme.comment — 避免与饱和色
+  comment fg 冲突；35c-iii 可换 per-theme。
+
+**测试**：+0 闸 (323 不变)。view-only Scintilla / SwiftUI
+集成与 35b-3-ii / 35b-4-e 同策略不写单元；底层 Engine /
+Parser / RelativeTime 已被 26 测试 (12 + 9 + 5) 覆盖。
+Manual smoke：开 Scribe 自身 repo 任意 .swift 文件，caret
+行末出 chip。
+
+**未覆盖 (Phase 35c-iii)**：Settings 开关（off / cur-line /
+all-lines + author name → "You" 替换 + summary in tooltip
++ per-theme grey + i18n labels）。
 
 ## Phase 35+ · 路线展望
 
 下面是想做的事，按重要度而非时间排。多条路线是 zed 调研后决定插入的。
 
 1. **Git v2 polish (Phase 35b-4-g)**：in-place 编辑 hunk excerpt（zed 风可编辑 diff，目前 ProjectDiffView 仍是 read-only）+ submodule diff + 流式 diff load。Phase 35b-1/2a/2b/2c/3/4-a/4-b/4-c/4-d/4-e/4-f 交付了读面 + file-level 写面 + commit + remote sync + per-hunk stage/unstage + 分支 picker + force-with-lease + Project Diff multibuffer (read-only) + Stage All / Unstage All + Revert Hunk + 侧栏右键跳 multibuffer + ⌘F 跨文件 search + ⌘G/⇧⌘G 行级 next/prev 闭环。
-2. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末 annotation 显示 author/time/commit、冲突区上方 Accept/Reject 按钮。35c-i 已交付数据层（GitClient.blame + parseBlamePorcelain + BlameLine + BlameResult），35c-ii-α 已交付 RelativeTime helper（"3 days ago"/"刚刚" 6 buckets），35c-ii-β 已交付 GitBlameEngine actor + Workspace 4 处 hook (open / close folder + load + save + external change)，35c-ii-γ 接 Scintilla EOLAnnotation + caret hook + tooltip，35c-iii 加 Settings 开关 + i18n。
+2. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末 annotation 显示 author/time/commit、冲突区上方 Accept/Reject 按钮。35c-i + 35c-ii-α + 35c-ii-β + 35c-ii-γ 已交付完整 Inline Blame：GitClient.blame + parseBlamePorcelain + BlameLine + BlameResult 数据层 · RelativeTime helper（"3 days ago"/"刚刚" 6 buckets） · GitBlameEngine actor + Workspace 6 处 hook (open / close folder + load + plain save + chunked save + external change) · Coordinator+InlineBlame Scintilla `SCI_EOLANNOTATIONSETTEXT` + caret hook + Combine sink + STADIUM 形 grey italic chip。35c-iii 加 Settings 开关（off / cur-line / all-lines） + author "You" 替换 + hover tooltip 出 commit summary + per-theme grey + Merge Conflict Accept/Reject 按钮。
 3. **LargeFile v3 (Phase 34d+)**：中途 cancel save、external-change
    mtime+size detection、SymbolOutline 读 buffer、细粒度 progress。
 4. **CLI shim v2 (Phase 35d+)**：IPC fifo 让 `--wait` 不再冷启动、bash/zsh completion、brew formula。

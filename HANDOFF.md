@@ -572,10 +572,17 @@ Task { @MainActor [weak self] in
    (open / close folder + applyLoadResult + 普通 save +
    chunked save + handleExternalChange) + 5 integration
    测试 (round trip / cache hit / refresh after edit /
-   invalidateAll / untracked-pinned-empty)。35c-ii-γ 接
-   Scintilla `SCI_EOLANNOTATIONSETTEXT` + caret line
-   change hook + hover tooltip + 灰色 fg，35c-iii 加
-   Settings 开关 + i18n。
+   invalidateAll / untracked-pinned-empty)。35c-ii-γ 已
+   交付 Inline Blame UI 闭环：Coordinator+InlineBlame.swift
+   接 Scintilla `SCI_EOLANNOTATIONSETTEXT` + caret line
+   change hook (SCN_UPDATEUI / makeNSView / updateNSView 三
+   入口) + Combine sink 监听 engine.$blameByURL + STADIUM
+   形 grey italic chip + style index 40 + format
+   `"  Author, 3 days ago • a1b2c3d"` zed 默认布局 + nil URL
+   / uncommitted / 无 cache silent skip。35c-iii 加 Settings
+   开关 (off / cur-line / all-lines) + author "You" 替换 +
+   hover tooltip 出 commit summary + per-theme grey + Merge
+   Conflict Accept/Reject 按钮。
 7. **LargeFile v3 (Phase 34d+)**：中途 cancel save UX、external-
    change 大文件 mtime+size diff、SymbolOutline / Markdown
    preview 读大文件 buffer。Phase 34a/34b/34c 交付了加载 +
@@ -599,7 +606,7 @@ Swift 6 strict 0/0 · 323 tests + 4 perf budget · ScintillaCodeEditor.swift
 1083 → 385 行 · .app 双击即用 · CI workflow（账单暂停中、`gh workflow disable CI` ）· 4 道闸本地 discipline ·
 README/ROADMAP/HANDOFF 同步到位。
 
-下一拍：Phase 35c-ii-γ (Coordinator+InlineBlame.swift Scintilla `SCI_EOLANNOTATIONSETTEXT` + caret hook + tooltip) 或 35b-4-g (in-place / submodule / 流式 load) 或换主线 (LargeFile v3 / CLI v2 / Document Map …)。
+下一拍：Phase 35c-iii (Inline Blame Settings 开关 + author "You" + hover tooltip + Merge Conflict Accept/Reject) 或 35b-4-g (in-place / submodule / 流式 load) 或换主线 (LargeFile v3 / CLI v2 / Document Map / v1.0-rc DMG …)。
 ```
 
 ---

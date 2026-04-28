@@ -52,6 +52,15 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         context.coordinator.applyTheme(to: view)
         context.coordinator.configureMatchIndicator(to: view)
         context.coordinator.configureMultiSelection(to: view)
+        // Phase 35c-ii-γ — inline-blame style + visibility +
+        // engine subscription. Three calls because the lifecycle
+        // splits cleanly: configure paints once, subscribe wires
+        // Combine, applyInlineBlame seeds the first frame so a
+        // doc that already has cached blame doesn't need to wait
+        // for a caret tick to show its chip.
+        context.coordinator.configureInlineBlame(in: view)
+        context.coordinator.subscribeToInlineBlame(view: view)
+        context.coordinator.applyInlineBlame(in: view)
         // Suppress the built-in English right-click menu so SwiftUI's
         // .contextMenu modifier on EditorAreaView can take over. With
         // SC_POPUP_NEVER the responder chain bubbles the right-click
@@ -107,6 +116,10 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         context.coordinator.refreshHighlightsIfNeeded()
         context.coordinator.applyGitGutter(in: view)
         context.coordinator.consumePendingScroll(in: view)
+        // Phase 35c-ii-γ — doc swap (selectedID change) reuses
+        // the same view; repaint so the chip tracks the new
+        // file's blame instead of stale rows from the previous tab.
+        context.coordinator.applyInlineBlame(in: view)
     }
 
     // MARK: - Coordinator (Scintilla delegate)
@@ -138,6 +151,15 @@ struct ScintillaCodeEditor: NSViewRepresentable {
 
         /// Combine sink for FindState.commands (Find Next, Replace All, …).
         private var findCommandSink: AnyCancellable?
+
+        /// Phase 35c-ii-γ — Combine sink for `gitBlameEngine.blameByURL`.
+        /// Re-paints the inline-blame chip whenever the engine's
+        /// per-URL cache mutates (request lands, save invalidates,
+        /// folder switch clears). Lives next to findCommandSink so
+        /// the cancellation story is uniform across the coordinator.
+        /// Module-internal so `Coordinator+InlineBlame.swift` can
+        /// install + reset it.
+        var blameSink: AnyCancellable?
 
         /// Snapshot of the find inputs that the current set of indicator
         /// highlights was drawn for. Lets `refreshHighlightsIfNeeded`
@@ -441,6 +463,13 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                     let col1  = Int(col)  + 1
                     if doc.cursorLine != line1 { doc.cursorLine = line1 }
                     if doc.cursorColumn != col1 { doc.cursorColumn = col1 }
+                    // Phase 35c-ii-γ — caret moved to a new line:
+                    // chip needs to follow. Scintilla fires UPDATEUI
+                    // on selection-only changes too, but the
+                    // applyInlineBlame call is O(1) (clear + maybe-
+                    // set) so unconditional re-paint is cheaper than
+                    // tracking whether the line index actually moved.
+                    self.applyInlineBlame(in: view)
                     // Phase 18 — push the live selection to Workspace so
                     // the "Find in Files" command can prefill its query
                     // from whatever the user just highlighted. Single-

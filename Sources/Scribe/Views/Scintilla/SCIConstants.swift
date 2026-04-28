@@ -172,6 +172,31 @@ enum SCI {
     static let SETDOCPOINTER:     UInt32 = 2026
     static let RELEASEDOCUMENT:   UInt32 = 2377
     static let ADDREFDOCUMENT:    UInt32 = 2376
+
+    // Phase 35c-ii-γ — EOL annotations (Scintilla 5.x feature).
+    // Lets us paint a soft trailing label after a line's contents
+    // without pushing the source text around. Used by the inline-
+    // blame UI for the "Author, 3 days ago • SHA" caret label.
+    /// `SCI_EOLANNOTATIONSETTEXT(line, text)` — set the trailing
+    /// annotation for `line` (0-based). Empty string clears it.
+    static let EOLANNOTATIONSETTEXT:    UInt32 = 2740
+    /// `SCI_EOLANNOTATIONSETSTYLE(line, style)` — picks the style
+    /// number to draw the annotation in (separate from the line's
+    /// own lex styles).
+    static let EOLANNOTATIONSETSTYLE:   UInt32 = 2742
+    /// `SCI_EOLANNOTATIONCLEARALL()` — drop every EOL annotation
+    /// in the buffer in one call. Cheaper than walking lines.
+    static let EOLANNOTATIONCLEARALL:   UInt32 = 2744
+    /// `SCI_EOLANNOTATIONSETVISIBLE(visibility)` — global toggle +
+    /// shape selector. We pass `SC.EOLANNOTATION_STADIUM` so the
+    /// label renders as a soft rounded chip à la zed.
+    static let EOLANNOTATIONSETVISIBLE: UInt32 = 2745
+    /// Style getter — used by the theme path to (un)apply colours
+    /// without storing a separate "current foreground" value.
+    static let STYLEGETFORE:            UInt32 = 2481
+    /// Style setter — italic / bold / size for the inline-blame
+    /// chip's typography.
+    static let STYLESETITALIC:          UInt32 = 2053
 }
 
 // MARK: - Search flags
@@ -231,6 +256,22 @@ enum SC {
     /// stepping-stone of `rectangle`.
     static let SEL_STREAM:    Int = 0
     static let SEL_RECTANGLE: Int = 1
+
+    // Phase 35c-ii-γ — EOL annotation visibility / shape constants.
+    // `STADIUM` is the rounded-rectangle shape that reads cleanly
+    // as a "chip" against editor body text — what zed and GitLens
+    // both default to for inline blame.
+    static let EOLANNOTATION_HIDDEN:   Int = 0x000
+    static let EOLANNOTATION_STANDARD: Int = 0x001
+    static let EOLANNOTATION_BOXED:    Int = 0x002
+    static let EOLANNOTATION_STADIUM:  Int = 0x100
+
+    /// Phase 35c-ii-γ — style index reserved for the inline-blame
+    /// EOL annotation. Scintilla's predefined styles run 32–39;
+    /// Lexilla emits 0–31. 40 is the first user-available slot
+    /// for editor-controlled styling, so picking it can't collide
+    /// with any lexer's per-language style indices.
+    static let STYLE_INLINE_BLAME: Int = 40
 }
 
 // MARK: - Lexer style indices
