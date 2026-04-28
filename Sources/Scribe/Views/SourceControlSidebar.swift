@@ -26,6 +26,14 @@ struct SourceControlSidebar: View {
     @State private var commitMessage: String = ""
     @State private var amend: Bool = false
 
+    /// Phase 35b-4-a — branch picker payload. Lives in @State (not
+    /// the engine) because the picker contents are a UI concern;
+    /// the engine doesn't need to track them between operations.
+    /// Reloaded via `.task(id: engine.branch)` whenever the active
+    /// branch flips, so a successful checkout immediately freshens
+    /// the menu's checkmark.
+    @State private var branchList: [GitClient.Branch] = []
+
     var body: some View {
         VStack(spacing: 0) {
             branchHeader
@@ -73,11 +81,26 @@ struct SourceControlSidebar: View {
             Image(systemName: "arrow.triangle.branch")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.secondary)
-            Text(engine.branch
-                 ?? L10n.t("sourceControl.branch.detached"))
-                .font(.system(size: 12, weight: .semibold))
-                .lineLimit(1)
-                .truncationMode(.middle)
+            // Phase 35b-4-a — branch name is a Menu so clicking it
+            // pops the picker. We pre-load branches when the
+            // sidebar mounts and reload whenever `engine.branch`
+            // changes (the user just checked out something new) —
+            // SwiftUI Menu doesn't support lazy content evaluation
+            // at popup time, so we keep the @State warm.
+            Menu {
+                branchPickerContent
+            } label: {
+                Text(engine.branch
+                     ?? L10n.t("sourceControl.branch.detached"))
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .foregroundStyle(.primary)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help(L10n.t("sourceControl.branch.picker.hint"))
             // Ahead/behind chip — only renders when `aheadBehind`
             // is non-nil and not 0/0. Up-to-date state is implicit
             // (no chip = "nothing to report") which keeps the row
@@ -97,15 +120,82 @@ struct SourceControlSidebar: View {
             // Push gets a fill variant when ahead > 0 so it visually
             // signals "you have local commits to publish". A common
             // sidebar UX pattern (zed/GitHub Desktop both do this).
+            // Phase 35b-4-a — right-click reveals the safer
+            // `--force-with-lease` variant. We deliberately don't
+            // expose plain `--force` from the UI; if the lease
+            // rejects the user drops to a terminal.
             remoteButton(systemName: (engine.aheadBehind?.ahead ?? 0) > 0
                             ? "arrow.up.circle.fill"
                             : "arrow.up.circle",
                          titleKey: "sourceControl.action.push") {
                 Task { await engine.push() }
             }
+            .contextMenu {
+                Button(L10n.t("sourceControl.action.pushForce")) {
+                    Task { await engine.pushForceWithLease() }
+                }
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
+        .task(id: engine.branch) {
+            branchList = await engine.branches()
+        }
+    }
+
+    /// Phase 35b-4-a — Menu content for the branch picker.
+    /// Sectioned: current branch first (highlighted with a
+    /// checkmark), then local branches, then remote-tracking
+    /// branches. Empty / loading states render a disabled
+    /// placeholder so the user gets immediate feedback rather
+    /// than a silent no-op menu.
+    @ViewBuilder
+    private var branchPickerContent: some View {
+        if branchList.isEmpty {
+            Text("sourceControl.branch.loading", bundle: .module)
+        } else {
+            let local  = branchList.filter { !$0.isRemote }
+            let remote = branchList.filter {  $0.isRemote }
+            if !local.isEmpty {
+                Section(L10n.t("sourceControl.branch.section.local")) {
+                    ForEach(local, id: \.name) { branch in
+                        branchMenuItem(branch)
+                    }
+                }
+            }
+            if !remote.isEmpty {
+                Section(L10n.t("sourceControl.branch.section.remote")) {
+                    ForEach(remote, id: \.name) { branch in
+                        branchMenuItem(branch)
+                    }
+                }
+            }
+        }
+    }
+
+    /// One entry in the branch menu. Current branch is disabled +
+    /// gets a leading checkmark so the user can see at a glance
+    /// what they're already on; everything else is a clickable
+    /// switch action.
+    private func branchMenuItem(_ branch: GitClient.Branch) -> some View {
+        Button {
+            // No-op when current — disabled below — so this only
+            // fires for actual switches.
+            Task { await engine.checkoutBranch(branch) }
+        } label: {
+            HStack {
+                Image(systemName: branch.isCurrent
+                                  ? "checkmark"
+                                  : "circle.dotted")
+                    .font(.system(size: 9))
+                Text(branch.name)
+                if let upstream = branch.upstream {
+                    Text("→ \(upstream)")
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .disabled(branch.isCurrent)
     }
 
     /// `↑N ↓M` chip rendered next to the branch name. Counts that

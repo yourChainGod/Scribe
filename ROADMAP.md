@@ -1017,11 +1017,57 @@ expand/loading/empty 三态走人工烟测，CI 守 plumbing。
 （zed 风可编辑 diff excerpts）、remote branch picker、
 `--force-with-lease` push UX、inline blame、merge conflict UI。
 
+## Phase 35b-4-a · 分支 picker + force-with-lease（2026-04-29）
+
+**背景**：35b-3 收完 per-hunk staging，Git v2 写面只剩两块：
+切分支 + 安全力推。这两个都是 1 commit 能覆盖的体量，先打这
+拍把 Git v2 闭环到 90%；剩下 Project Diff multibuffer 是 zed
+招牌、复杂度高，单独拍 35b-4-b。
+
+**交付**：
+
+- `Sources/Scribe/Models/GitClient.swift` + `Branch { name,
+  isCurrent, isRemote, upstream }` (Equatable + Hashable +
+  Sendable) · `branches(repo:) -> [Branch]` 走 `git for-each-ref
+  --format=%(refname)|%(HEAD)|%(upstream:short)|%(symref)`
+  refs/heads + refs/remotes 一次拉齐 · `parseBranches(_:)` 纯
+  函数（按 prefix 分类 local/remote、过滤 origin/HEAD 等
+  symref、`*` 标 isCurrent、upstream 短名解码）· `checkoutBranch
+  (_:repo:) -> WriteResult` 走 `git switch <name>`，远程 ref
+  自动剥 `<remote>/` 让 modern git 走 auto-track ·
+  `pushForceWithLease(repo:)` 走 `git push --force-with-lease
+  --quiet`（lease 守门，永不暴露 plain `--force`）。
+- `Sources/Scribe/Models/GitStatusEngine.swift` + `branches()
+  async`、`checkoutBranch(_:) async`、`pushForceWithLease()
+  async` 三入口（detached + handleWriteResult）· WriteAction
+  .{checkout,pushForce} cases。
+- `Sources/Scribe/Views/SourceControlSidebar.swift` 分支名变
+  Menu picker · 分 Local / Remote section · 当前分支 ✓ + 上游
+  `→ origin/main` 显示 + .disabled 防误点 · `.task(id:
+  engine.branch)` 在分支变化时重拉 list · push 按钮挂
+  `.contextMenu` 出 force-with-lease 选项（右键唤出，避免误
+  点强推）。
+- `Sources/Scribe/Resources/{en,zh-Hans}.lproj/Localizable.strings`
+  + sourceControl.branch.{picker.hint, loading, section.local,
+  section.remote} + .action.pushForce + .alert.{checkoutFailed,
+  pushForceFailed}。
+
+**测试**：+15 闸 (总 287)。`GitBranchParserTests` 9 闸纯函数
+（local/remote 分类 · `*` HEAD 标 · upstream 解码 · symref 跳
+过 · empty/malformed/带斜杠 case）· +6 integration 真仓库
+（branches 列出 local+remote 与 upstream · 唯一 isCurrent
+contract · 切本地分支 · 切远程 ref auto-track local · force-
+with-lease 当前 lease 通过 · stale lease 拒绝）。所有
+integration 走 `XCTSkipUnless /usr/bin/git`。
+
+**未覆盖 (Phase 35b-4-b / 35c / 后续)**：Project Diff multibuffer
+（zed 风可编辑 diff excerpts）、inline blame、merge conflict UI。
+
 ## Phase 35+ · 路线展望
 
 下面是想做的事，按重要度而非时间排。多条路线是 zed 调研后决定插入的。
 
-1. **Git v2 (Phase 35b-4)**：Project Diff multibuffer + remote branch picker + `--force-with-lease` push UX。Phase 35b-1/2a/2b/2c/3 交付了读面 + file-level 写面 + commit + remote sync + per-hunk stage/unstage 闭环。
+1. **Git v2 (Phase 35b-4-b)**：Project Diff multibuffer（zed 风可编辑 diff excerpts，跳出侧栏走 editor pane）。Phase 35b-1/2a/2b/2c/3/4-a 交付了读面 + file-level 写面 + commit + remote sync + per-hunk stage/unstage + 分支 picker + force-with-lease 闭环。
 2. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末 annotation 显示 author/time/commit、冲突区上方 Accept/Reject 按钮。复用现有 GitClient。
 3. **LargeFile v3 (Phase 34d+)**：中途 cancel save、external-change
    mtime+size detection、SymbolOutline 读 buffer、细粒度 progress。

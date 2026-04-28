@@ -522,20 +522,23 @@ Task { @MainActor [weak self] in
 4. **Snippets v2**：`${1:placeholder}` 跳转 + tab 键从 buffer
    触发（Scintilla autocomplete） + per-language scope。Phase 33
    v1 只做了“静态 body 插入”、“面板选择”、“Settings 管理”。
-5. **Git v2 (Phase 35b-4)**：Project Diff multibuffer
-   （zed 风可编辑 diff excerpts）、remote branch picker、
-   `--force-with-lease` push UX。Phase 35b-1
-   交付读面（侧栏 · GitStatusParser · 分段），Phase 35b-2a
-   交付 file-level 写面（hover stage/unstage/discard），
-   Phase 35b-2b 交付 commit 面（TextEditor + Amend +
-   branch 指示器），Phase 35b-2c 交付 remote sync（fetch/
-   pull/push + ahead/behind capsule），Phase 35b-3 交付
-   per-hunk stage/unstage（行前 chevron 展开 hunk 列表 +
-   hover [+]/[-] 走 `git apply --cached [--reverse]`）。
-   复用 GitClient.WriteResult · AheadBehind · Hunk +
-   parseHunks + minimalPatch + applyPatch · commit 走
-   stdin 路径 · GitStatusEngine write helpers · GitDiff
-   Parser/Hunks/Status Parser/AheadBehindParser。
+5. **Git v2 (Phase 35b-4-b)**：Project Diff multibuffer
+   （zed 风可编辑 diff excerpts，跳出侧栏走 editor pane）。
+   Phase 35b-1 交付读面（侧栏 · GitStatusParser · 分段），
+   Phase 35b-2a 交付 file-level 写面（hover stage/unstage/
+   discard），Phase 35b-2b 交付 commit 面（TextEditor +
+   Amend + branch 指示器），Phase 35b-2c 交付 remote sync
+   （fetch/pull/push + ahead/behind capsule），Phase 35b-3
+   交付 per-hunk stage/unstage（行前 chevron 展开 hunk 列
+   表 + hover [+]/[-] 走 `git apply --cached [--reverse]`），
+   Phase 35b-4-a 交付分支 picker（Menu 列 Local/Remote +
+   ✓ 当前分支 + auto-track 远程 ref）+ push 右键 force-
+   with-lease。复用 GitClient.WriteResult · AheadBehind ·
+   Hunk + parseHunks + minimalPatch + applyPatch ·
+   Branch + parseBranches · checkoutBranch ·
+   pushForceWithLease · commit 走 stdin 路径 ·
+   GitStatusEngine write helpers · GitDiff Parser/Hunks/
+   Status Parser/AheadBehindParser/BranchParser。
 6. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末
    annotation 显示 author/time/commit · 冲突区上方 Accept/
    Reject 按钮。复用现有 GitClient。
@@ -556,13 +559,13 @@ Task { @MainActor [weak self] in
 ```
 Scribe 已从 0 长到 v1.0-rc ——
 SwiftUI Scene + Scintilla 5.6.1 + 8 主题 + 多光标 + 列选 + 全 i18n（en/zh-Hans）·
-Markdown 实时预览（手写转换器 + GFM 表格·task list·footnote + WKWebView）+ Git Gutter（unified-diff parser + Scintilla margin + ⌥⇧↑/↓ hunk 跳转） + Source Control 侧栏（`git status` 读面 · 分段显示 · hover 出 stage/unstage/discard · 行前 chevron 展开 hunk 列表 hover [+]/[-] · 底部 commit 面板 ⌘⏎ + Amend toggle + branch 指示器 · 顶部 ahead/behind capsule + fetch/pull/push 3 按钮 · pull `--ff-only` 默认) + 代码片段（⌘⇧T 选择器 + Settings 管理 tab） + 大文件 IO（≥ 64 MiB 走 SCI_CREATELOADER/GETTEXTRANGEFULL 分块 + atomic rename + OOM 护栏） + scribe CLI shim（对齐 zed/code/subl），零依赖·
+Markdown 实时预览（手写转换器 + GFM 表格·task list·footnote + WKWebView）+ Git Gutter（unified-diff parser + Scintilla margin + ⌥⇧↑/↓ hunk 跳转） + Source Control 侧栏（`git status` 读面 · 分段显示 · hover 出 stage/unstage/discard · 行前 chevron 展开 hunk 列表 hover [+]/[-] · 底部 commit 面板 ⌘⏎ + Amend toggle · branch 名 Menu picker（Local/Remote + ✓ + auto-track）· 顶部 ahead/behind capsule + fetch/pull/push 3 按钮 · push 右键出 force-with-lease · pull `--ff-only` 默认) + 代码片段（⌘⇧T 选择器 + Settings 管理 tab） + 大文件 IO（≥ 64 MiB 走 SCI_CREATELOADER/GETTEXTRANGEFULL 分块 + atomic rename + OOM 护栏） + scribe CLI shim（对齐 zed/code/subl），零依赖·
 开 20 MB 文件主线程不卡 · 50 MB typing 不卡（50 ms debounce）·
-Swift 6 strict 0/0 · 272 tests + 4 perf budget · ScintillaCodeEditor.swift
-1083 → 385 行 · .app 双击即用 · CI 四道闸 push/PR 都跑 ·
+Swift 6 strict 0/0 · 287 tests + 4 perf budget · ScintillaCodeEditor.swift
+1083 → 385 行 · .app 双击即用 · CI workflow（账单暂停中、`gh workflow disable CI` ）· 4 道闸本地 discipline ·
 README/ROADMAP/HANDOFF 同步到位。
 
-下一拍：Phase 35b-4 (Project Diff multibuffer / remote branch picker / --force-with-lease) 或 Phase 35c (inline blame + merge UI)。
+下一拍：Phase 35b-4-b (Project Diff multibuffer) 或 Phase 35c (inline blame + merge UI) 或换主线 (LargeFile v3 / CLI v2 / Document Map …)。
 ```
 
 ---

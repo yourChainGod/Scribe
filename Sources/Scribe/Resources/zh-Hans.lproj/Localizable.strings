@@ -68,6 +68,15 @@
 "sourceControl.alert.pullFailed"       = "pull 失败。";
 "sourceControl.alert.pushFailed"       = "push 失败。";
 
+// 分支 picker + force-with-lease 推送（Phase 35b-4-a）
+"sourceControl.branch.picker.hint"       = "切换分支";
+"sourceControl.branch.loading"           = "正在加载分支…";
+"sourceControl.branch.section.local"     = "本地";
+"sourceControl.branch.section.remote"    = "远程";
+"sourceControl.action.pushForce"         = "推送（force-with-lease）";
+"sourceControl.alert.checkoutFailed"     = "切换分支失败。";
+"sourceControl.alert.pushForceFailed"    = "推送失败（lease 校验未通过）。";
+
 // 单 hunk 暂存（Phase 35b-3-ii）
 "sourceControl.hunk.expand"             = "展开 hunk";
 "sourceControl.hunk.collapse"           = "收起 hunk";

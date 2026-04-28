@@ -486,6 +486,166 @@ final class GitClientWriteIntegrationTests: XCTestCase {
                        GitClient.AheadBehind(ahead: 0, behind: 0))
     }
 
+    // MARK: - Phase 35b-4-a · branches & force-with-lease
+
+    func test_branches_listsLocalCurrentAndUpstream() async throws {
+        // Bare remote attaches `origin/<seedBranch>` and seed
+        // commits already exist. After attachBareRemote the local
+        // branch tracks origin/<seedBranch>, so `branches(repo:)`
+        // should report:
+        //   - 1 local branch, isCurrent = true, upstream non-nil
+        //   - 1 remote-tracking branch (origin/<seedBranch>),
+        //     isRemote = true
+        // Plus we filter out origin/HEAD (a symref).
+        let bare = try attachBareRemote()
+        defer { try? FileManager.default.removeItem(at: bare) }
+        let seedBranch = try captureGit(["branch", "--show-current"])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let branches = GitClient.branches(repo: repoURL)
+
+        let local = branches.filter { !$0.isRemote }
+        XCTAssertEqual(local.count, 1)
+        XCTAssertEqual(local[0].name, seedBranch)
+        XCTAssertTrue(local[0].isCurrent)
+        XCTAssertEqual(local[0].upstream, "origin/\(seedBranch)")
+
+        let remote = branches.filter { $0.isRemote }
+        // Exactly the one tracking ref, no origin/HEAD symref.
+        XCTAssertEqual(remote.count, 1, "branches: \(branches)")
+        XCTAssertEqual(remote[0].name, "origin/\(seedBranch)")
+        XCTAssertFalse(remote[0].isCurrent)
+    }
+
+    func test_branches_marksOnlyOneCurrent() async throws {
+        // After creating a second local branch (no checkout),
+        // exactly one branch must carry isCurrent. Pin the
+        // %(HEAD) "*"-only contract end-to-end.
+        try runGit(["branch", "feature"])
+        let branches = GitClient.branches(repo: repoURL)
+        let currents = branches.filter { $0.isCurrent }
+        XCTAssertEqual(currents.count, 1)
+        XCTAssertEqual(branches.count, 2,
+                       "expected the new feature branch to appear: \(branches)")
+    }
+
+    func test_checkoutBranch_switchesToLocal() async throws {
+        // Create a local branch, switch to it via GitClient,
+        // verify HEAD moves.
+        try runGit(["branch", "feature"])
+        let target = GitClient.Branch(name: "feature",
+                                      isCurrent: false,
+                                      isRemote: false,
+                                      upstream: nil)
+        XCTAssertEqual(GitClient.checkoutBranch(target, repo: repoURL),
+                       .ok)
+        let now = try captureGit(["branch", "--show-current"])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertEqual(now, "feature")
+    }
+
+    func test_checkoutBranch_remote_autoCreatesTrackingLocal() async throws {
+        // Sibling pushes a new branch "ext-feature" to the bare
+        // remote. After fetch, our repo should see
+        // refs/remotes/origin/ext-feature but NO local
+        // ext-feature. Calling checkoutBranch on the remote ref
+        // should auto-create the local tracking branch.
+        let bare = try attachBareRemote()
+        defer { try? FileManager.default.removeItem(at: bare) }
+
+        // Bring up a sibling that pushes an extra branch.
+        let sibling = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("scribe-git-sibling-\(UUID().uuidString)")
+        try runGitGlobal(["clone", "--quiet", bare.path, sibling.path])
+        defer { try? FileManager.default.removeItem(at: sibling) }
+        try runGitIn(sibling, ["checkout", "-b", "ext-feature"])
+        try "ext\n".write(to: sibling.appendingPathComponent("EXT.txt"),
+                          atomically: true, encoding: .utf8)
+        try runGitIn(sibling, ["add", "EXT.txt"])
+        try runGitIn(sibling, ["-c", "user.email=t@s.app",
+                               "-c", "user.name=T",
+                               "commit", "-m", "ext", "--quiet"])
+        try runGitIn(sibling, ["push", "--quiet", "-u",
+                               "origin", "ext-feature"])
+
+        // Local repo fetches and sees the new remote-tracking ref.
+        XCTAssertEqual(GitClient.fetch(repo: repoURL), .ok)
+        let remoteRef = GitClient.Branch(name: "origin/ext-feature",
+                                         isCurrent: false,
+                                         isRemote: true,
+                                         upstream: nil)
+        XCTAssertEqual(GitClient.checkoutBranch(remoteRef, repo: repoURL),
+                       .ok)
+        // After the auto-tracking switch, HEAD should be on a
+        // local branch named "ext-feature" (not detached, not
+        // origin/ext-feature).
+        let head = try captureGit(["branch", "--show-current"])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertEqual(head, "ext-feature")
+    }
+
+    func test_pushForceWithLease_acceptsWhenLeaseIsCurrent() async throws {
+        // Lease passes when our notion of the remote ref matches
+        // the actual remote ref — the normal "I just pulled and
+        // amended" workflow. Stage an amend on top of the seed
+        // and force-with-lease push it.
+        let bare = try attachBareRemote()
+        defer { try? FileManager.default.removeItem(at: bare) }
+
+        try seedFile(name: "README.md", contents: "amended\n")
+        XCTAssertEqual(GitClient.stage(path: "README.md", repo: repoURL),
+                       .ok)
+        XCTAssertEqual(
+            GitClient.commit(message: "amended", repo: repoURL, amend: true),
+            .ok
+        )
+        // Plain push would be rejected (non-fast-forward) because
+        // amend rewrote history. force-with-lease is the right
+        // tool here.
+        XCTAssertEqual(GitClient.pushForceWithLease(repo: repoURL),
+                       .ok)
+    }
+
+    func test_pushForceWithLease_rejectsWhenLeaseIsStale() async throws {
+        // Lease fails when the remote ref has moved since our
+        // last fetch — a teammate pushed something we haven't
+        // seen yet. Pin the safety contract: the call returns
+        // .error rather than overwriting the teammate's commit.
+        let bare = try attachBareRemote()
+        defer { try? FileManager.default.removeItem(at: bare) }
+        let seedBranch = try captureGit(["branch", "--show-current"])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Sibling pushes a new commit to the remote.
+        let sibling = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("scribe-git-sibling-\(UUID().uuidString)")
+        try runGitGlobal(["clone", "--quiet", bare.path, sibling.path])
+        defer { try? FileManager.default.removeItem(at: sibling) }
+        try "teammate\n".write(to: sibling.appendingPathComponent("README.md"),
+                               atomically: true, encoding: .utf8)
+        try runGitIn(sibling, ["add", "README.md"])
+        try runGitIn(sibling, ["-c", "user.email=t@s.app",
+                               "-c", "user.name=T",
+                               "commit", "-m", "teammate edit", "--quiet"])
+        try runGitIn(sibling, ["push", "--quiet", "origin", seedBranch])
+
+        // We didn't fetch — local origin/<seedBranch> still points
+        // at the seed commit. Now we amend locally and try to
+        // force-with-lease push: lease is stale ⇒ git refuses.
+        try seedFile(name: "README.md", contents: "local\n")
+        XCTAssertEqual(GitClient.stage(path: "README.md", repo: repoURL),
+                       .ok)
+        XCTAssertEqual(
+            GitClient.commit(message: "local edit", repo: repoURL, amend: true),
+            .ok
+        )
+        let result = GitClient.pushForceWithLease(repo: repoURL)
+        guard case .error = result else {
+            XCTFail("expected lease rejection, got: \(result)")
+            return
+        }
+    }
+
     /// Run a git invocation in `cwd`. Used by the pull test which
     /// needs to drive a sibling clone in addition to `repoURL`.
     private func runGitIn(_ cwd: URL, _ args: [String]) throws {

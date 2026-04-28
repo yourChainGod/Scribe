@@ -70,6 +70,15 @@
 "sourceControl.alert.pullFailed"       = "Couldn’t pull.";
 "sourceControl.alert.pushFailed"       = "Couldn’t push.";
 
+// Branch picker + force-with-lease push (Phase 35b-4-a)
+"sourceControl.branch.picker.hint"       = "Switch branch";
+"sourceControl.branch.loading"           = "Loading branches…";
+"sourceControl.branch.section.local"     = "Local";
+"sourceControl.branch.section.remote"    = "Remote";
+"sourceControl.action.pushForce"         = "Push (force-with-lease)";
+"sourceControl.alert.checkoutFailed"     = "Couldn’t switch branch.";
+"sourceControl.alert.pushForceFailed"    = "Couldn’t push (lease rejected).";
+
 // Per-hunk staging (Phase 35b-3-ii)
 "sourceControl.hunk.expand"             = "Show hunks";
 "sourceControl.hunk.collapse"           = "Hide hunks";

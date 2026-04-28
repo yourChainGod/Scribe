@@ -295,6 +295,20 @@ enum GitClient {
         }
     }
 
+    /// Phase 35b-4-a — `git push --force-with-lease`. The lease is
+    /// the safety net: git refuses to push if the remote ref has
+    /// moved since our last fetch, which protects against stomping
+    /// a teammate's commits when an out-of-date local rebase is
+    /// pushed. We deliberately never expose plain `--force` from
+    /// the UI — when force-with-lease itself rejects, the user can
+    /// drop to a terminal and decide explicitly.
+    nonisolated static func pushForceWithLease(repo: URL) -> WriteResult {
+        switch run(["push", "--force-with-lease", "--quiet"], cwd: repo) {
+        case .success: return .ok
+        case .failure(let err): return .error(err)
+        }
+    }
+
     /// `git rev-list --left-right --count HEAD...@{upstream}`. The
     /// porcelain returns `<ahead>\t<behind>\n`. Returns nil when no
     /// upstream is configured (the command exits non-zero with
@@ -325,6 +339,106 @@ enum GitClient {
               let ahead = Int(parts[0]),
               let behind = Int(parts[1]) else { return nil }
         return AheadBehind(ahead: ahead, behind: behind)
+    }
+
+    // MARK: - Phase 35b-4-a · branches & remote-tracking refs
+
+    /// One entry from `branches(repo:)`. Local branches have
+    /// `isRemote == false` and may carry an upstream pointer (the
+    /// short name of `@{upstream}`, e.g. "origin/main"); remote-
+    /// tracking branches have `isRemote == true` and `upstream ==
+    /// nil` (a remote ref doesn't itself track another ref).
+    /// Equatable + Hashable for SwiftUI ForEach without manual ID,
+    /// Sendable so we can hand it across actor boundaries inside
+    /// the engine.
+    struct Branch: Equatable, Hashable, Sendable {
+        var name: String        // "main" or "origin/main"
+        var isCurrent: Bool     // git's HEAD pointer ("*")
+        var isRemote: Bool      // true iff under refs/remotes/
+        var upstream: String?   // local-only: short name of @{upstream}
+    }
+
+    /// `git for-each-ref` over both refs/heads and refs/remotes —
+    /// one process call gets us the full picker payload (local +
+    /// remote-tracking branches, current-branch flag, upstream
+    /// pointers). The pipe-delimited format is safe because git
+    /// rejects `|` in ref names; if a future git relaxes that we
+    /// can switch to ASCII unit-separator (\u{1F}) without
+    /// changing the parser shape.
+    nonisolated static func branches(repo: URL) -> [Branch] {
+        let format = "%(refname)|%(HEAD)|%(upstream:short)|%(symref)"
+        switch run(["for-each-ref",
+                    "--format=" + format,
+                    "refs/heads", "refs/remotes"],
+                   cwd: repo) {
+        case .success(let raw):
+            return parseBranches(raw)
+        case .failure:
+            return []
+        }
+    }
+
+    /// Pure parser for the for-each-ref output above. Filters out
+    /// symbolic refs like `refs/remotes/origin/HEAD` (they alias
+    /// another ref and would just be noise in a picker) and
+    /// classifies the remainder by namespace prefix.
+    nonisolated static func parseBranches(_ raw: String) -> [Branch] {
+        raw.split(separator: "\n", omittingEmptySubsequences: true)
+            .compactMap { line -> Branch? in
+                let parts = line.split(separator: "|",
+                                       maxSplits: 3,
+                                       omittingEmptySubsequences: false)
+                                .map(String.init)
+                guard parts.count >= 3 else { return nil }
+                let refname = parts[0]
+                let isHead = parts[1] == "*"
+                let upstreamRaw = parts[2]
+                let symref = parts.count >= 4 ? parts[3] : ""
+                // Skip symbolic refs (origin/HEAD → origin/main, etc.).
+                guard symref.isEmpty else { return nil }
+                let name: String
+                let isRemote: Bool
+                if refname.hasPrefix("refs/heads/") {
+                    name = String(refname.dropFirst("refs/heads/".count))
+                    isRemote = false
+                } else if refname.hasPrefix("refs/remotes/") {
+                    name = String(refname.dropFirst("refs/remotes/".count))
+                    isRemote = true
+                } else {
+                    return nil
+                }
+                return Branch(name: name,
+                              isCurrent: isHead,
+                              isRemote: isRemote,
+                              upstream: upstreamRaw.isEmpty
+                                        ? nil : upstreamRaw)
+            }
+    }
+
+    /// Switch to a branch. For a local branch this is a plain
+    /// `git switch <name>`. For a remote-tracking branch we strip
+    /// the `<remote>/` prefix and run `git switch <basename>` —
+    /// modern git auto-creates a tracking local branch on a
+    /// unique remote match. If the remote prefix yields a
+    /// duplicate (multiple remotes shadowing the same name) the
+    /// command fails with git's own diagnostic and we surface it
+    /// verbatim; the user can decide explicitly from a terminal.
+    nonisolated static func checkoutBranch(_ branch: Branch,
+                                           repo: URL) -> WriteResult {
+        let target: String
+        if branch.isRemote {
+            // "origin/main" → "main". split(maxSplits: 1) means
+            // a name like "origin/feat/x" still produces "feat/x".
+            target = String(branch.name.split(separator: "/",
+                                              maxSplits: 1)
+                                       .last ?? Substring(branch.name))
+        } else {
+            target = branch.name
+        }
+        switch run(["switch", target], cwd: repo) {
+        case .success: return .ok
+        case .failure(let err): return .error(err)
+        }
     }
 
     // MARK: - Phase 35b-3 · per-hunk staging plumbing

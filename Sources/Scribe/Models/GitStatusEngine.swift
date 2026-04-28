@@ -215,6 +215,41 @@ final class GitStatusEngine: ObservableObject {
         handleWriteResult(result, action: .push)
     }
 
+    /// Phase 35b-4-a — list branches (local + remote-tracking) for
+    /// the picker. Returns an empty array on any git failure so
+    /// the menu just goes empty rather than alert-spamming —
+    /// the user retries by re-opening the menu.
+    func branches() async -> [GitClient.Branch] {
+        guard let repo else { return [] }
+        return await Task.detached(priority: .userInitiated) {
+            GitClient.branches(repo: repo)
+        }.value
+    }
+
+    /// Switch to a branch. Refresh always runs after, regardless
+    /// of outcome — even a failed switch may have side-effected
+    /// (left the index in a partially-checked state) and we want
+    /// the sidebar to reflect ground truth.
+    func checkoutBranch(_ branch: GitClient.Branch) async {
+        guard let repo else { return }
+        let result = await Task.detached(priority: .userInitiated) {
+            GitClient.checkoutBranch(branch, repo: repo)
+        }.value
+        handleWriteResult(result, action: .checkout)
+    }
+
+    /// Phase 35b-4-a — `git push --force-with-lease`. The lease
+    /// guard is non-negotiable from the UI: if it rejects, the
+    /// user gets the verbatim error and decides explicitly from
+    /// a terminal.
+    func pushForceWithLease() async {
+        guard let repo else { return }
+        let result = await Task.detached(priority: .userInitiated) {
+            GitClient.pushForceWithLease(repo: repo)
+        }.value
+        handleWriteResult(result, action: .pushForce)
+    }
+
     /// Phase 35b-3-ii — fetch hunks for a single file. `cached: false`
     /// returns working-tree-vs-index hunks (the source of "stage
     /// hunk"); `cached: true` returns index-vs-HEAD hunks (the
@@ -269,7 +304,7 @@ final class GitStatusEngine: ObservableObject {
     /// alert is built so the message follows the system language.
     private enum WriteAction {
         case stage, unstage, discard, commit, fetch, pull, push,
-             stageHunk, unstageHunk
+             stageHunk, unstageHunk, checkout, pushForce
 
         var failureKey: String {
             switch self {
@@ -282,6 +317,8 @@ final class GitStatusEngine: ObservableObject {
             case .push:         return "sourceControl.alert.pushFailed"
             case .stageHunk:    return "sourceControl.alert.stageHunkFailed"
             case .unstageHunk:  return "sourceControl.alert.unstageHunkFailed"
+            case .checkout:     return "sourceControl.alert.checkoutFailed"
+            case .pushForce:    return "sourceControl.alert.pushForceFailed"
             }
         }
     }
