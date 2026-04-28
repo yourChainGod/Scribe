@@ -26,36 +26,22 @@ struct SidebarView: View {
     // MARK: - Mode switcher
 
     private var modeSwitcher: some View {
-        HStack(spacing: 0) {
-            modeButton(.files,   system: "folder",        title: "Files")
-            modeButton(.search,  system: "magnifyingglass", title: "Search")
-            modeButton(.outline, system: "list.bullet.indent", title: "Outline")
+        HStack(spacing: 2) {
+            modeButton(.files,   system: "folder",                title: "Files")
+            modeButton(.search,  system: "magnifyingglass",       title: "Search")
+            modeButton(.outline, system: "list.bullet.indent",    title: "Outline")
             Spacer()
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
     }
 
     private func modeButton(_ mode: SidebarMode, system: String, title: String) -> some View {
-        let isActive = workspace.sidebarMode == mode
-        return Button {
-            workspace.sidebarMode = mode
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: system)
-                    .font(.system(size: 11))
-                Text(title)
-                    .font(.system(size: 11, weight: isActive ? .semibold : .regular))
-            }
-            .foregroundStyle(isActive ? Color.primary : Color.secondary)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(isActive ? Color.accentColor.opacity(0.18) : Color.clear)
-            )
-        }
-        .buttonStyle(.plain)
+        ModeSwitcherButton(mode: mode,
+                           system: system,
+                           title: title,
+                           isActive: workspace.sidebarMode == mode,
+                           tap: { workspace.sidebarMode = mode })
     }
 
     // MARK: - Files pane
@@ -119,6 +105,54 @@ struct SidebarView: View {
 
                     Spacer(minLength: 16)
             }
+        }
+    }
+}
+
+/// Pulled out so the per-button `@State hover` doesn't get reset
+/// every time the parent re-renders. Sibling buttons get
+/// independent hover lifecycles. Lives outside SidebarView so the
+/// `@State` survives mode switches.
+private struct ModeSwitcherButton: View {
+    let mode: SidebarMode
+    let system: String
+    let title: String
+    let isActive: Bool
+    let tap: () -> Void
+    @State private var hover = false
+
+    var body: some View {
+        Button(action: tap) {
+            HStack(spacing: 5) {
+                Image(systemName: system)
+                    .font(.system(size: 11, weight: isActive ? .semibold : .regular))
+                Text(title)
+                    .font(.system(size: 11, weight: isActive ? .semibold : .regular))
+            }
+            .foregroundStyle(isActive ? Color.primary : Color.secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(backgroundFill)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .onHover { hover = $0 }
+        .animation(.easeOut(duration: 0.12), value: hover)
+        .animation(.easeOut(duration: 0.18), value: isActive)
+    }
+
+    private var backgroundFill: Color {
+        if isActive {
+            // Slightly softer than the previous 18% so the active
+            // pill doesn't fight the surrounding sidebar chrome.
+            return Color.accentColor.opacity(0.14)
+        } else if hover {
+            return Color.primary.opacity(0.06)
+        } else {
+            return Color.clear
         }
     }
 }

@@ -113,18 +113,11 @@ struct FindBar: View {
             .keyboardShortcut("g", modifiers: .command)
             .help("Find Next (⌘G)")
 
-            Button {
-                state.hide()
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.borderless)
-            .keyboardShortcut(.escape, modifiers: [])
-            .help("Close (Esc)")
+            CloseButton(action: state.hide)
+                .keyboardShortcut(.escape, modifiers: [])
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
     }
 
     private var replaceRow: some View {
@@ -170,8 +163,8 @@ struct FindBar: View {
 
             Spacer()
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
     }
 
     // MARK: - History menu
@@ -214,6 +207,30 @@ struct FindBar: View {
         .toggleStyle(.button)
         .buttonStyle(.borderless)
         .help(help)
+    }
+
+    /// Compact circular close button with an explicit hover ring.
+    /// SF Symbol `xmark.circle.fill` alone has no hover affordance,
+    /// so we draw the fill ourselves and react to hover.
+    private struct CloseButton: View {
+        let action: () -> Void
+        @State private var hover = false
+
+        var body: some View {
+            Button(action: action) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(hover ? Color.primary : Color.secondary)
+                    .frame(width: 18, height: 18)
+                    .background(
+                        Circle()
+                            .fill(hover ? Color.primary.opacity(0.10) : Color.clear)
+                    )
+            }
+            .buttonStyle(.plain)
+            .onHover { hover = $0 }
+            .help("Close (Esc)")
+        }
     }
 
     private var statusLabel: some View {

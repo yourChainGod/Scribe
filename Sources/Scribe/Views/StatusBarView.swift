@@ -9,7 +9,7 @@ struct StatusBarView: View {
     @EnvironmentObject var workspace: Workspace
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             if let doc = workspace.current {
                 DocumentStatusItems(doc: doc)
             } else {
@@ -17,17 +17,33 @@ struct StatusBarView: View {
             }
             Spacer()
             if let doc = workspace.current, doc.isDirty {
-                Label("Modified", systemImage: "circle.fill")
-                    .foregroundStyle(Color.accentColor)
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(Color.accentColor)
+                        .frame(width: 6, height: 6)
+                    Text("Modified")
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .font(.system(size: 11))
         .foregroundStyle(.secondary)
         .padding(.horizontal, 12)
-        .frame(height: 24)
+        .frame(height: 26)
         .background(.bar)
     }
+}
 
+/// Hairline vertical separator at the height the status bar uses.
+/// Replaces SwiftUI `Divider` because Divider's auto-coloured fill
+/// is heavier than the surrounding status text — the hairline
+/// reads as a quiet beat between menu items, not a hard wall.
+private struct StatusBarSeparator: View {
+    var body: some View {
+        Rectangle()
+            .fill(Color(nsColor: .separatorColor).opacity(0.6))
+            .frame(width: 1, height: 11)
+    }
 }
 
 private struct DocumentStatusItems: View {
@@ -36,15 +52,16 @@ private struct DocumentStatusItems: View {
 
     var body: some View {
         languageMenu
-        Divider().frame(height: 12)
+        StatusBarSeparator()
         encodingMenu
-        Divider().frame(height: 12)
+        StatusBarSeparator()
         lineEndingMenu
-        Divider().frame(height: 12)
+        StatusBarSeparator()
         Text("Ln \(doc.cursorLine), Col \(doc.cursorColumn)")
             .monospacedDigit()
-        Divider().frame(height: 12)
+        StatusBarSeparator()
         Text("\(doc.text.count) chars")
+            .monospacedDigit()
     }
 
     private var languageMenu: some View {
