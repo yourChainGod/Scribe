@@ -60,6 +60,14 @@
 "sourceControl.commit.shortcut.hint"   = "⌘⏎ 提交";
 "sourceControl.alert.commitFailed"     = "提交失败。";
 
+// 远程同步 (Phase 35b-2c)
+"sourceControl.action.fetch"           = "拉取（fetch）";
+"sourceControl.action.pull"            = "拉取（仅快进）";
+"sourceControl.action.push"            = "推送";
+"sourceControl.alert.fetchFailed"      = "fetch 失败。";
+"sourceControl.alert.pullFailed"       = "pull 失败。";
+"sourceControl.alert.pushFailed"       = "push 失败。";
+
 // MARK: - Tabs
 
 "tab.untitled"            = "未命名";

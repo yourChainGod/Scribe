@@ -59,11 +59,15 @@ struct SourceControlSidebar: View {
         }
     }
 
-    // MARK: - Branch header (Phase 35b-2b)
+    // MARK: - Branch header (Phase 35b-2b/2c)
 
-    /// Slim header showing the current branch. Falls back to a
-    /// detached-HEAD copy when `branch` is nil so the user always
-    /// knows which ref their changes target.
+    /// Slim header: branch name, ahead/behind chip, fetch/pull/push
+    /// triplet. Detached-HEAD copy replaces the branch when nil so
+    /// the user always knows which ref their changes target. Remote
+    /// buttons stay enabled regardless of upstream state — git's
+    /// own error reporting is clearer than any pre-flight check we
+    /// could implement here, and a one-click "see what git says"
+    /// is sometimes the actual debugging step.
     private var branchHeader: some View {
         HStack(spacing: 6) {
             Image(systemName: "arrow.triangle.branch")
@@ -74,10 +78,72 @@ struct SourceControlSidebar: View {
                 .font(.system(size: 12, weight: .semibold))
                 .lineLimit(1)
                 .truncationMode(.middle)
+            // Ahead/behind chip — only renders when `aheadBehind`
+            // is non-nil and not 0/0. Up-to-date state is implicit
+            // (no chip = "nothing to report") which keeps the row
+            // visually quiet 99% of the time.
+            if let ab = engine.aheadBehind, !ab.isUpToDate {
+                aheadBehindChip(ab)
+            }
             Spacer()
+            remoteButton(systemName: "arrow.down.circle",
+                         titleKey: "sourceControl.action.fetch") {
+                Task { await engine.fetch() }
+            }
+            remoteButton(systemName: "arrow.down.to.line",
+                         titleKey: "sourceControl.action.pull") {
+                Task { await engine.pull() }
+            }
+            // Push gets a fill variant when ahead > 0 so it visually
+            // signals "you have local commits to publish". A common
+            // sidebar UX pattern (zed/GitHub Desktop both do this).
+            remoteButton(systemName: (engine.aheadBehind?.ahead ?? 0) > 0
+                            ? "arrow.up.circle.fill"
+                            : "arrow.up.circle",
+                         titleKey: "sourceControl.action.push") {
+                Task { await engine.push() }
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
+    }
+
+    /// `↑N ↓M` chip rendered next to the branch name. Counts that
+    /// are zero are skipped so a "behind only" repo doesn't have
+    /// a stray "↑0".
+    private func aheadBehindChip(_ ab: GitClient.AheadBehind) -> some View {
+        HStack(spacing: 4) {
+            if ab.ahead > 0 {
+                Label("\(ab.ahead)", systemImage: "arrow.up")
+                    .labelStyle(.titleAndIcon)
+            }
+            if ab.behind > 0 {
+                Label("\(ab.behind)", systemImage: "arrow.down")
+                    .labelStyle(.titleAndIcon)
+            }
+        }
+        .font(.system(size: 10, weight: .medium))
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 5)
+        .padding(.vertical, 1)
+        .background(
+            Capsule().fill(Color.secondary.opacity(0.12))
+        )
+    }
+
+    /// Compact icon button for a remote operation. plainButtonStyle
+    /// + bordered control size mirrors the row-action cluster from
+    /// 35b-2a so the visual language stays consistent across the
+    /// sidebar.
+    private func remoteButton(systemName: String,
+                              titleKey: String,
+                              action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 12, weight: .medium))
+        }
+        .buttonStyle(.borderless)
+        .help(L10n.t(titleKey))
     }
 
     // MARK: - Commit panel (Phase 35b-2b)

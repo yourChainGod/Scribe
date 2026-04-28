@@ -243,6 +243,90 @@ enum GitClient {
         }
     }
 
+    // MARK: - Phase 35b-2c · remote sync
+
+    /// Snapshot of "how out-of-sync are we with our upstream".
+    /// Both counts are zero when up-to-date; ahead > 0 means we
+    /// have local commits to publish, behind > 0 means upstream
+    /// has commits we haven't pulled. Diverged → both > 0.
+    struct AheadBehind: Equatable, Sendable {
+        var ahead: Int
+        var behind: Int
+
+        var isUpToDate: Bool { ahead == 0 && behind == 0 }
+        var diverged: Bool   { ahead > 0 && behind > 0 }
+    }
+
+    /// Phase 35b-2c — `git fetch` against the default upstream.
+    /// We don't pass an explicit remote/refspec because that would
+    /// silently bypass the user's `branch.<name>.remote` config; the
+    /// porcelain default is "fetch the upstream of the current
+    /// branch" which is exactly what the sidebar's Fetch button
+    /// should do.
+    nonisolated static func fetch(repo: URL) -> WriteResult {
+        switch run(["fetch", "--quiet"], cwd: repo) {
+        case .success: return .ok
+        case .failure(let err): return .error(err)
+        }
+    }
+
+    /// `git pull --ff-only` — refuses to merge or rebase if local
+    /// has diverged. zed picked this default for the same reason:
+    /// any pull that *isn't* fast-forwardable should be a deliberate
+    /// choice (rebase vs merge), not a button click. The user gets
+    /// a clear "not possible to fast-forward" error and can decide
+    /// from a terminal.
+    nonisolated static func pull(repo: URL) -> WriteResult {
+        switch run(["pull", "--ff-only", "--quiet"], cwd: repo) {
+        case .success: return .ok
+        case .failure(let err): return .error(err)
+        }
+    }
+
+    /// `git push` — pushes the current branch to its upstream. We
+    /// don't pass `--force` or `--force-with-lease`; if the upstream
+    /// rejects the push (non-fast-forward, protected branch, etc.)
+    /// the user sees the error verbatim and can sort it from a
+    /// terminal where the recovery options are richer.
+    nonisolated static func push(repo: URL) -> WriteResult {
+        switch run(["push", "--quiet"], cwd: repo) {
+        case .success: return .ok
+        case .failure(let err): return .error(err)
+        }
+    }
+
+    /// `git rev-list --left-right --count HEAD...@{upstream}`. The
+    /// porcelain returns `<ahead>\t<behind>\n`. Returns nil when no
+    /// upstream is configured (the command exits non-zero with
+    /// "no upstream configured for branch") — the sidebar treats
+    /// nil as "hide the indicator" rather than as an error.
+    nonisolated static func aheadBehind(repo: URL) -> AheadBehind? {
+        switch run(["rev-list", "--left-right", "--count",
+                    "HEAD...@{upstream}"], cwd: repo) {
+        case .success(let raw):
+            return parseAheadBehind(raw)
+        case .failure:
+            return nil
+        }
+    }
+
+    /// Pure parser for the rev-list count output. Split out so it
+    /// can be unit-tested without spawning git: the surface is small
+    /// but easy to get wrong (whitespace separator vs tab, trailing
+    /// newline, leading spaces from git's column alignment).
+    nonisolated static func parseAheadBehind(_ raw: String) -> AheadBehind? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        // git emits counts as `<ahead>\t<behind>` but older versions
+        // align to a fixed column with extra spaces. Use whitespace-
+        // splitting so both shapes parse identically.
+        let parts = trimmed.split(whereSeparator: { $0.isWhitespace })
+        guard parts.count == 2,
+              let ahead = Int(parts[0]),
+              let behind = Int(parts[1]) else { return nil }
+        return AheadBehind(ahead: ahead, behind: behind)
+    }
+
     /// Walk parent directories until we find one containing `.git`.
     /// `.git` may be a directory (normal repo) or a regular file
     /// (worktree / submodule pointing back to the gitdir).

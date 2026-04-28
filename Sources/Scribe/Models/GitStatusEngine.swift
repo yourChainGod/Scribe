@@ -70,6 +70,13 @@ final class GitStatusEngine: ObservableObject {
     /// the trigger plumbing.
     @Published private(set) var branch: String?
 
+    /// Phase 35b-2c — local-vs-upstream divergence. `nil` means
+    /// either no upstream is configured (fresh branch the user
+    /// hasn't pushed yet) or the lookup failed; either way the
+    /// sidebar hides the indicator. Refreshed alongside `branch`
+    /// in the same detached pass.
+    @Published private(set) var aheadBehind: GitClient.AheadBehind?
+
     /// Phase 35b-2b — subject of the HEAD commit, used to pre-fill
     /// the message textarea when the user toggles "Amend". Read-
     /// once on demand rather than tracked continuously: a commit
@@ -171,11 +178,48 @@ final class GitStatusEngine: ObservableObject {
         handleWriteResult(result, action: .commit)
     }
 
+    /// Phase 35b-2c — `git fetch`. Detached pipeline mirrors the
+    /// other write helpers; the only twist is fetch can take
+    /// noticeably longer than a status refresh (network roundtrip),
+    /// so users see the sidebar momentarily show stale data while
+    /// the spinner runs in the toolbar — that's intentional.
+    func fetch() async {
+        guard let repo else { return }
+        let result = await Task.detached(priority: .userInitiated) {
+            GitClient.fetch(repo: repo)
+        }.value
+        handleWriteResult(result, action: .fetch)
+    }
+
+    /// Phase 35b-2c — `git pull --ff-only`. Refusing non-fast-forwards
+    /// at the engine level means the user can never accidentally
+    /// merge from a button click; if the pull fails the alert is
+    /// surfaced verbatim and they decide rebase vs. merge in a
+    /// terminal.
+    func pull() async {
+        guard let repo else { return }
+        let result = await Task.detached(priority: .userInitiated) {
+            GitClient.pull(repo: repo)
+        }.value
+        handleWriteResult(result, action: .pull)
+    }
+
+    /// Phase 35b-2c — `git push`. No `--force` on this path; rejected
+    /// pushes produce a clear stderr (e.g. "non-fast-forward") that
+    /// our alert surfaces unmodified.
+    func push() async {
+        guard let repo else { return }
+        let result = await Task.detached(priority: .userInitiated) {
+            GitClient.push(repo: repo)
+        }.value
+        handleWriteResult(result, action: .push)
+    }
+
     /// Internal — write-op kinds used to label the failure alert.
     /// The `failureKey` indirection feeds L10n at the time the
     /// alert is built so the message follows the system language.
     private enum WriteAction {
-        case stage, unstage, discard, commit
+        case stage, unstage, discard, commit, fetch, pull, push
 
         var failureKey: String {
             switch self {
@@ -183,6 +227,9 @@ final class GitStatusEngine: ObservableObject {
             case .unstage: return "sourceControl.alert.unstageFailed"
             case .discard: return "sourceControl.alert.discardFailed"
             case .commit:  return "sourceControl.alert.commitFailed"
+            case .fetch:   return "sourceControl.alert.fetchFailed"
+            case .pull:    return "sourceControl.alert.pullFailed"
+            case .push:    return "sourceControl.alert.pushFailed"
             }
         }
     }
@@ -208,9 +255,10 @@ final class GitStatusEngine: ObservableObject {
 
     /// Kick a new `git status` cycle. Safe to call repeatedly.
     /// Cancels the previous in-flight task and replaces it.
-    /// Phase 35b-2b — also pulls the current branch in the same
-    /// detached pass so the sidebar's branch indicator tracks
-    /// checkouts and commits without an extra refresh hook.
+    /// Phase 35b-2b/2c — also pulls the current branch + ahead/
+    /// behind counts in the same detached pass so the sidebar
+    /// indicators track checkouts/commits/fetches without extra
+    /// refresh hooks.
     func refresh() {
         currentTask?.cancel()
         guard let repo else {
@@ -219,19 +267,22 @@ final class GitStatusEngine: ObservableObject {
             // closeFolder().
             rows = []
             branch = nil
+            aheadBehind = nil
             state = .idle
             return
         }
 
         currentTask = Task { [weak self] in
-            let (result, branchName) = await Task.detached(priority: .userInitiated) {
-                () -> (GitClient.StatusResult, String?) in
+            let (result, branchName, ab) = await Task.detached(priority: .userInitiated) {
+                () -> (GitClient.StatusResult, String?, GitClient.AheadBehind?) in
                 let status = GitClient.status(repo: repo)
                 let br = GitClient.currentBranch(repo: repo)
-                return (status, br)
+                let ab = GitClient.aheadBehind(repo: repo)
+                return (status, br, ab)
             }.value
             guard !Task.isCancelled, let self else { return }
             if self.branch != branchName { self.branch = branchName }
+            if self.aheadBehind != ab { self.aheadBehind = ab }
             switch result {
             case .rows(let parsed):
                 if self.rows != parsed { self.rows = parsed }

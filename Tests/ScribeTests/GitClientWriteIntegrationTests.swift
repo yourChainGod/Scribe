@@ -236,6 +236,139 @@ final class GitClientWriteIntegrationTests: XCTestCase {
         XCTAssertNil(GitClient.currentBranch(repo: repoURL))
     }
 
+    // MARK: - Phase 35b-2c · push / pull / fetch / aheadBehind
+
+    /// Set up a local bare remote at `remoteURL`, point the test
+    /// repo's `origin` at it, and push the seed commit so an
+    /// upstream tracking ref exists. Returns the bare remote URL
+    /// for cleanup.
+    private func attachBareRemote() throws -> URL {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("scribe-git-remote-\(UUID().uuidString).git")
+        try FileManager.default.createDirectory(at: tmp,
+                                                withIntermediateDirectories: true)
+        // `--initial-branch` keeps the bare remote's HEAD aligned
+        // with whatever the test repo's seed branch is, avoiding
+        // "remote HEAD is ambiguous" warnings on first push.
+        let seedBranch = try captureGit(["branch", "--show-current"])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let bare = Process()
+        bare.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        bare.arguments = ["init", "--bare", "--quiet",
+                          "--initial-branch=\(seedBranch)", tmp.path]
+        try bare.run()
+        bare.waitUntilExit()
+        XCTAssertEqual(bare.terminationStatus, 0)
+
+        try runGit(["remote", "add", "origin", tmp.path])
+        try runGit(["push", "--quiet", "-u", "origin", seedBranch])
+        return tmp
+    }
+
+    func test_aheadBehind_isZeroAfterFreshPush() async throws {
+        let bare = try attachBareRemote()
+        defer { try? FileManager.default.removeItem(at: bare) }
+        let ab = GitClient.aheadBehind(repo: repoURL)
+        XCTAssertEqual(ab, GitClient.AheadBehind(ahead: 0, behind: 0))
+    }
+
+    func test_aheadBehind_isNilWithoutUpstream() async throws {
+        // No remote attached → rev-list errors out → we expect nil
+        // (which the sidebar interprets as "hide the chip").
+        XCTAssertNil(GitClient.aheadBehind(repo: repoURL))
+    }
+
+    func test_push_drainsAheadCount() async throws {
+        let bare = try attachBareRemote()
+        defer { try? FileManager.default.removeItem(at: bare) }
+
+        // Build one local commit on top of the seed.
+        try seedFile(name: "README.md", contents: "edited\n")
+        XCTAssertEqual(GitClient.stage(path: "README.md", repo: repoURL),
+                       .ok)
+        XCTAssertEqual(GitClient.commit(message: "edit",
+                                        repo: repoURL,
+                                        amend: false),
+                       .ok)
+        XCTAssertEqual(GitClient.aheadBehind(repo: repoURL),
+                       GitClient.AheadBehind(ahead: 1, behind: 0))
+
+        // Push and expect ahead → 0.
+        XCTAssertEqual(GitClient.push(repo: repoURL), .ok)
+        XCTAssertEqual(GitClient.aheadBehind(repo: repoURL),
+                       GitClient.AheadBehind(ahead: 0, behind: 0))
+    }
+
+    func test_pull_fastForwardsBehindCount() async throws {
+        let bare = try attachBareRemote()
+        defer { try? FileManager.default.removeItem(at: bare) }
+        let seedBranch = try captureGit(["branch", "--show-current"])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Simulate "another clone pushed a commit" by cloning the
+        // bare remote into a sibling, committing there, and pushing
+        // back. Our local repo will then be 1 behind.
+        let sibling = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("scribe-git-sibling-\(UUID().uuidString)")
+        try runGitGlobal(["clone", "--quiet", bare.path, sibling.path])
+        defer { try? FileManager.default.removeItem(at: sibling) }
+        try "remote-edit\n".write(to: sibling.appendingPathComponent("README.md"),
+                                  atomically: true, encoding: .utf8)
+        try runGitIn(sibling, ["add", "README.md"])
+        try runGitIn(sibling, ["-c", "user.email=t@s.app",
+                               "-c", "user.name=T",
+                               "commit", "-m", "remote edit", "--quiet"])
+        try runGitIn(sibling, ["push", "--quiet", "origin", seedBranch])
+
+        // Local hasn't fetched yet — aheadBehind only updates after
+        // a fetch because that's where the remote-tracking ref moves.
+        XCTAssertEqual(GitClient.fetch(repo: repoURL), .ok)
+        XCTAssertEqual(GitClient.aheadBehind(repo: repoURL),
+                       GitClient.AheadBehind(ahead: 0, behind: 1))
+
+        // Pull (fast-forward) drains behind to 0.
+        XCTAssertEqual(GitClient.pull(repo: repoURL), .ok)
+        XCTAssertEqual(GitClient.aheadBehind(repo: repoURL),
+                       GitClient.AheadBehind(ahead: 0, behind: 0))
+    }
+
+    /// Run a git invocation in `cwd`. Used by the pull test which
+    /// needs to drive a sibling clone in addition to `repoURL`.
+    private func runGitIn(_ cwd: URL, _ args: [String]) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        process.arguments = args
+        process.currentDirectoryURL = cwd
+        let stderr = Pipe()
+        process.standardError = stderr
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            let data = stderr.fileHandleForReading.readDataToEndOfFile()
+            let msg = String(data: data, encoding: .utf8) ?? ""
+            throw NSError(domain: "git", code: Int(process.terminationStatus),
+                          userInfo: [NSLocalizedDescriptionKey: msg])
+        }
+    }
+
+    /// `git <args>` with no cwd — used for `git clone` where the
+    /// destination is the argument rather than the current dir.
+    private func runGitGlobal(_ args: [String]) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        process.arguments = args
+        let stderr = Pipe()
+        process.standardError = stderr
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            let data = stderr.fileHandleForReading.readDataToEndOfFile()
+            let msg = String(data: data, encoding: .utf8) ?? ""
+            throw NSError(domain: "git", code: Int(process.terminationStatus),
+                          userInfo: [NSLocalizedDescriptionKey: msg])
+        }
+    }
+
     /// Capture stdout from a git invocation. Used by tests that
     /// need the raw output (commit log, sha, branch lookup) rather
     /// than just exit-status handling.

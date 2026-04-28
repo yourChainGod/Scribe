@@ -62,6 +62,14 @@
 "sourceControl.commit.shortcut.hint"   = "⌘⏎ to commit";
 "sourceControl.alert.commitFailed"     = "Couldn’t commit.";
 
+// Remote sync (Phase 35b-2c)
+"sourceControl.action.fetch"           = "Fetch";
+"sourceControl.action.pull"            = "Pull (fast-forward only)";
+"sourceControl.action.push"            = "Push";
+"sourceControl.alert.fetchFailed"      = "Couldn’t fetch.";
+"sourceControl.alert.pullFailed"       = "Couldn’t pull.";
+"sourceControl.alert.pushFailed"       = "Couldn’t push.";
+
 // MARK: - Tabs
 
 "tab.untitled"            = "Untitled";
