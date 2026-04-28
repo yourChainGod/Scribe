@@ -32,6 +32,17 @@ enum GitClient {
         case error(String)
     }
 
+    /// Outcome of `status(repo:)`. Phase 35b-1 — Source Control
+    /// sidebar input. `notInRepo` and `error` collapse to "no
+    /// rows" in the UI rather than firing an alert; status fetch is
+    /// a periodic background task and a transient failure shouldn't
+    /// surface.
+    enum StatusResult {
+        case rows([GitFileStatus])
+        case notInRepo
+        case error(String)
+    }
+
     // MARK: - Public
 
     /// Return the textual contents of `file` as it exists in HEAD.
@@ -106,6 +117,35 @@ enum GitClient {
                    cwd: repoRoot) {
         case .success(let out): return .diff(out)
         case .failure(let err): return .error(err)
+        }
+    }
+
+    /// Phase 35b-1 — list every changed file in `repo` for the
+    /// Source Control sidebar. Uses `git status -z --porcelain=v1`:
+    ///   - `-z`         NUL-separated entries, paths round-trip
+    ///                  losslessly even with whitespace.
+    ///   - `--porcelain=v1`  Stable wire format git pins forever.
+    ///   - `--ignored=no`    Skip ignored files; the sidebar would
+    ///                       otherwise drown in `node_modules` /
+    ///                       `.build` rows. v2 lets the user toggle.
+    nonisolated static func status(repo: URL) -> StatusResult {
+        switch run(["status",
+                    "--porcelain=v1",
+                    "-z",
+                    "--ignored=no",
+                    "--untracked-files=all"],
+                   cwd: repo) {
+        case .success(let raw):
+            let rows = GitStatusParser.parse(raw, repoRoot: repo)
+            return .rows(rows)
+        case .failure(let err):
+            // git emits an exit-128 with "fatal: not a git
+            // repository" outside any repo; surface as the
+            // structured case so the UI can render its empty state.
+            if err.lowercased().contains("not a git repository") {
+                return .notInRepo
+            }
+            return .error(err)
         }
     }
 

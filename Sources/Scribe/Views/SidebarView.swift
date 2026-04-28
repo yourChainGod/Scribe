@@ -15,9 +15,10 @@ struct SidebarView: View {
             modeSwitcher
             Divider()
             switch workspace.sidebarMode {
-            case .files:   filesPane
-            case .search:  FindInFilesSidebar(engine: findInFiles)
-            case .outline: OutlineSidebar(outline: outline)
+            case .files:         filesPane
+            case .search:        FindInFilesSidebar(engine: findInFiles)
+            case .outline:       OutlineSidebar(outline: outline)
+            case .sourceControl: SourceControlSidebar(engine: workspace.gitStatusEngine)
             }
         }
         .background(Color(nsColor: .controlBackgroundColor))
@@ -27,9 +28,10 @@ struct SidebarView: View {
 
     private var modeSwitcher: some View {
         HStack(spacing: 2) {
-            modeButton(.files,   system: "folder",                titleKey: "sidebar.mode.files")
-            modeButton(.search,  system: "magnifyingglass",       titleKey: "sidebar.mode.search")
-            modeButton(.outline, system: "list.bullet.indent",    titleKey: "sidebar.mode.outline")
+            modeButton(.files,         system: "folder",                titleKey: "sidebar.mode.files")
+            modeButton(.search,        system: "magnifyingglass",       titleKey: "sidebar.mode.search")
+            modeButton(.outline,       system: "list.bullet.indent",    titleKey: "sidebar.mode.outline")
+            modeButton(.sourceControl, system: "arrow.triangle.branch", titleKey: "sidebar.mode.sourceControl")
             Spacer()
         }
         .padding(.horizontal, 8)

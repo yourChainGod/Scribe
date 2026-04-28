@@ -18,9 +18,10 @@
 
 // MARK: - Sidebar
 
-"sidebar.mode.files"     = "Files";
-"sidebar.mode.search"    = "Search";
-"sidebar.mode.outline"   = "Outline";
+"sidebar.mode.files"          = "Files";
+"sidebar.mode.search"         = "Search";
+"sidebar.mode.outline"        = "Outline";
+"sidebar.mode.sourceControl"  = "Source Control";
 "sidebar.section.open"        = "OPEN";
 "sidebar.section.workspace"   = "WORKSPACE";
 "sidebar.action.openFolder"   = "Open Folder…";
@@ -30,6 +31,15 @@
 "sidebar.outline.parsing"     = "Parsing…";
 "sidebar.outline.empty"       = "No symbols in this file";
 "sidebar.outline.noDocument"  = "No document open";
+
+// Source Control sidebar (Phase 35b-1)
+"sourceControl.empty.noFolder"   = "Open a folder to see Git changes.";
+"sourceControl.empty.notInRepo"  = "This folder isn’t inside a Git repository.";
+"sourceControl.empty.clean"      = "No Git changes — working tree is clean.";
+"sourceControl.section.staged"     = "STAGED";
+"sourceControl.section.changes"    = "CHANGES";
+"sourceControl.section.untracked"  = "UNTRACKED";
+"sourceControl.section.conflicts"  = "CONFLICTS";
 
 // MARK: - Tabs
 

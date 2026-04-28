@@ -10,11 +10,16 @@ import Combine
 import UniformTypeIdentifiers
 
 /// Which mode the side panel is in. Mirrors the VSCode primary side
-/// bar tabs: project tree, search results, symbol outline.
+/// bar tabs: project tree, search results, symbol outline, source
+/// control.
 enum SidebarMode: String {
     case files
     case search
     case outline
+    /// Phase 35b-1 — Source Control panel listing every changed
+    /// file in the workspace's git repo. Read-only in v1; stage /
+    /// unstage / commit affordances land in 35b-2.
+    case sourceControl
 }
 
 @MainActor
@@ -52,6 +57,13 @@ final class Workspace: ObservableObject {
     /// every open tab; only the visible doc has its gutter live, the
     /// rest catch up on next bind / save.
     let gitGutterEngine = GitGutterEngine()
+
+    /// Phase 35b-1 — single shared engine that runs `git status` for
+    /// the workspace's bound folder root. Drives the Source Control
+    /// sidebar; refreshed on save / external file change / folder
+    /// open + close, never on a timer (file system events already
+    /// cover every mutation we care about).
+    let gitStatusEngine = GitStatusEngine()
 
     /// Sink for `selectedID` changes — re-binds the gutter engine to
     /// the newly-selected doc whenever the user switches tabs. Held
@@ -94,6 +106,12 @@ final class Workspace: ObservableObject {
         var isDir: ObjCBool = false
         guard FileManager.default.fileExists(atPath: normalized.path, isDirectory: &isDir),
               isDir.boolValue else { return }
+        // Phase 35b-1 — bind the Source Control engine to whatever
+        // `.git` ancestor this folder sits inside (or itself, if the
+        // folder *is* a repo root). `findRepoRoot` returns nil for
+        // a non-repo folder; the engine handles that as `.notInRepo`
+        // and shows the empty state.
+        gitStatusEngine.bind(repo: GitClient.findRepoRoot(for: normalized))
         let root = FileNode(url: normalized)
         root.isExpanded = true
         root.loadChildren()
@@ -103,6 +121,9 @@ final class Workspace: ObservableObject {
 
     func closeFolder() {
         folderRoot = nil
+        // Phase 35b-1 — clear the Source Control sidebar in lockstep
+        // so it doesn't keep showing rows from the old repo.
+        gitStatusEngine.bind(repo: nil)
     }
 
     var current: Document? {
@@ -327,6 +348,10 @@ final class Workspace: ObservableObject {
         // gutter catches up. Cheap relative to re-decoding the whole
         // file we just did.
         if doc.id == selectedID { gitGutterEngine.refresh() }
+        // Phase 35b-1 — same trigger drives the Source Control
+        // sidebar; an external editor saving a file we have open
+        // changes its git status (added → modified, etc).
+        gitStatusEngine.refresh()
     }
 
     /// Silent re-read of `doc` from disk using its current encoding.
@@ -466,6 +491,10 @@ final class Workspace: ObservableObject {
                     if let self, docRef.id == self.selectedID {
                         self.gitGutterEngine.refresh()
                     }
+                    // Phase 35b-1 — refresh Source Control rows;
+                    // chunked save just rewrote the on-disk bytes
+                    // git compares against.
+                    self?.gitStatusEngine.refresh()
                 } catch {
                     docRef.saveProgress = -1
                     NSAlert(error: error).runModal()
@@ -502,6 +531,8 @@ final class Workspace: ObservableObject {
             // == doc.text` already so handleExternalChange short-
             // circuits, and only this call actually drives the gutter.
             if doc.id == selectedID { gitGutterEngine.refresh() }
+            // Phase 35b-1 — Source Control sidebar same trigger.
+            gitStatusEngine.refresh()
         } catch {
             NSAlert(error: error).runModal()
         }

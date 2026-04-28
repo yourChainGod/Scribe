@@ -16,9 +16,10 @@
 
 // MARK: - Sidebar
 
-"sidebar.mode.files"     = "文件";
-"sidebar.mode.search"    = "搜索";
-"sidebar.mode.outline"   = "大纲";
+"sidebar.mode.files"          = "文件";
+"sidebar.mode.search"         = "搜索";
+"sidebar.mode.outline"        = "大纲";
+"sidebar.mode.sourceControl"  = "源代码管理";
 "sidebar.section.open"        = "已打开";
 "sidebar.section.workspace"   = "工作区";
 "sidebar.action.openFolder"   = "打开文件夹…";
@@ -28,6 +29,15 @@
 "sidebar.outline.parsing"     = "正在解析…";
 "sidebar.outline.empty"       = "此文件没有符号";
 "sidebar.outline.noDocument"  = "未打开文档";
+
+// 源代码管理侧栏 (Phase 35b-1)
+"sourceControl.empty.noFolder"   = "打开一个文件夹后可在此查看 Git 改动。";
+"sourceControl.empty.notInRepo"  = "此文件夹不在 Git 仓库里。";
+"sourceControl.empty.clean"      = "没有 Git 改动 — 工作树干净。";
+"sourceControl.section.staged"     = "已暂存";
+"sourceControl.section.changes"    = "改动";
+"sourceControl.section.untracked"  = "未跟踪";
+"sourceControl.section.conflicts"  = "冲突";
 
 // MARK: - Tabs
 
