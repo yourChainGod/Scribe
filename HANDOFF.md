@@ -417,6 +417,7 @@ Phase 0.2/0.3 暂未截图。
 | **Phase 34b · LargeFile Prod** | `67c7343` | Workspace.openFile size-gate · Coordinator+LargeFile detached pipeline (Int address 跨 actor) · SETDOCPOINTER + RELEASEDOCUMENT cancel · 状态栏 “正在加载大文件…” · 零依赖 |
 | **Phase 34c · LargeFile v2** | `c678b67` | SCI_GETTEXTRANGEFULL ObjC++ shim · ChunkedFileWriter (256 KiB chunk + sibling temp + fsync + atomic rename) · Workspace.write 大文件分流 · updateNSView/flushDocSync OOM 护栏 · 状态栏 save banner + ByteCountFormatter charCount · 6 tests |
 | **Phase 35a · scribe CLI** | `a7f96f7` | zed 调研 detour · Scripts/scribe bash wrapper (210 LOC) · -h/-v/-w/-n/-l/-d/-- 对齐 zed/code/subl · SCRIBE_AUTO_OPEN_LINE 新增 · README INSTALL_CLI 段 · 9 以 Process 调 wrapper · 不调 open（CI headless） |
+| **Phase 35b-1 · Source Control sidebar** | `ab8e21a` | GitFileStatus value · GitChangeKind enum + .unknown · GitStatusParser (NUL-separated `git status -z`) · GitClient.status(repo:) · GitStatusEngine 三状态 · SidebarMode.sourceControl + 侧栏第四 tab · SourceControlSidebar (Conflicts/Staged/Changes/Untracked 分段) · 16 tests · 零依赖 |
 
 ### 关键架构变化
 
@@ -480,7 +481,7 @@ Task { @MainActor [weak self] in
 
 `.github/workflows/ci.yml` 在 macos-15 跑（commit `4808f05` 后从 macos-14 升级，以匹配 Swift 6.0+ 工具链）：
 
-1. `swift test --parallel` — 222 tests 全绿
+1. `swift test --parallel` — 238 tests 全绿
 2. `swift build -c release` — release 编译 0 error
 3. `swift build -Xswiftc -swift-version -Xswiftc 6` — strict 模式 0 error 0 warning（Vendor/ 除外）
 4. `swift Scripts/check_localization.swift` — en ↔ zh-Hans key 一致 + 无 dangling reference
@@ -518,9 +519,10 @@ Task { @MainActor [weak self] in
 4. **Snippets v2**：`${1:placeholder}` 跳转 + tab 键从 buffer
    触发（Scintilla autocomplete） + per-language scope。Phase 33
    v1 只做了“静态 body 插入”、“面板选择”、“Settings 管理”。
-5. **Git v2 (Phase 35b)**：Source Control 侧栏 + Project Diff 多
-   文件视图 + per-hunk stage/unstage + commit UI。zed 调研点
-   出的最高 ROI。复用 Phase 31/31b GitDiffParser/Hunks。
+5. **Git v2 (Phase 35b-2/3)**：per-hunk stage/unstage + commit
+   message textarea + push/pull/fetch + Project Diff multibuffer。
+   Phase 35b-1 交付了读面（侧栏 · GitStatusParser · 分段显示）。
+   复用 Phase 31/31b/35b-1 的 GitDiffParser/Hunks/StatusParser。
 6. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末
    annotation 显示 author/time/commit · 冲突区上方 Accept/
    Reject 按钮。复用现有 GitClient。
@@ -541,13 +543,13 @@ Task { @MainActor [weak self] in
 ```
 Scribe 已从 0 长到 v1.0-rc ——
 SwiftUI Scene + Scintilla 5.6.1 + 8 主题 + 多光标 + 列选 + 全 i18n（en/zh-Hans）·
-Markdown 实时预览（手写转换器 + GFM 表格·task list·footnote + WKWebView）+ Git Gutter（unified-diff parser + Scintilla margin + ⌥⇧↑/↓ hunk 跳转） + 代码片段（⌘⇧T 选择器 + Settings 管理 tab） + 大文件 IO（≥ 64 MiB 走 SCI_CREATELOADER/GETTEXTRANGEFULL 分块 + atomic rename + OOM 护栏） + scribe CLI shim（对齐 zed/code/subl），零依赖·
+Markdown 实时预览（手写转换器 + GFM 表格·task list·footnote + WKWebView）+ Git Gutter（unified-diff parser + Scintilla margin + ⌥⇧↑/↓ hunk 跳转） + Source Control 侧栏（`git status` 读面 · 分段显示） + 代码片段（⌘⇧T 选择器 + Settings 管理 tab） + 大文件 IO（≥ 64 MiB 走 SCI_CREATELOADER/GETTEXTRANGEFULL 分块 + atomic rename + OOM 护栏） + scribe CLI shim（对齐 zed/code/subl），零依赖·
 开 20 MB 文件主线程不卡 · 50 MB typing 不卡（50 ms debounce）·
-Swift 6 strict 0/0 · 222 tests + 4 perf budget · ScintillaCodeEditor.swift
+Swift 6 strict 0/0 · 238 tests + 4 perf budget · ScintillaCodeEditor.swift
 1083 → 385 行 · .app 双击即用 · CI 四道闸 push/PR 都跑 ·
 README/ROADMAP/HANDOFF 同步到位。
 
-下一拍：Git v2 (Source Control panel / project diff / per-hunk stage)。
+下一拍：Git v2 (per-hunk stage/unstage + commit + push/pull) 或 Phase 35c (inline blame + merge UI)。
 ```
 
 ---

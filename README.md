@@ -41,6 +41,7 @@ Scribe 是一款 **macOS 原生** 文本与代码编辑器。SwiftUI 主壳 + Sc
 - **代码片段（Snippets）**：⌘⇧T 弹出 fuzzy 选择器（复用 Command Palette），在当前光标（多光标下多点）插入 body。设置 → 代码片段 tab 增/删/改，输入即存 UserDefaults JSON（Phase 33）。
 - **大文件加载**：≥ 64 MiB 的文件走 Scintilla `SCI_CREATELOADER` 分块加载路径，不再 materialise 为 Swift String；状态栏会显示“正在加载大文件…” affordance（Phase 34a/34b）。
 - **大文件保存**：⌘S 大文件走 `SCI_GETTEXTRANGEFULL` 分块读·sibling temp·fsync·原子 rename 路径；状态栏进度条开仅，不丢数据，不 OOM（Phase 34c）。
+- **Source Control 侧栏**：侧栏第四 tab 列 `git status` 所有改动文件，分 Conflicts/Staged/Changes/Untracked 四段，点行打开。零依赖 `git CLI` 调用（Phase 35b-1）。
 
 ### 完整本地化
 - **English / 简体中文** 双语包，203 个 key 全覆盖。
@@ -50,7 +51,7 @@ Scribe 是一款 **macOS 原生** 文本与代码编辑器。SwiftUI 主壳 + Sc
 - **零外部 SwiftPM 依赖**。Vendor 中只有 Scintilla + Lexilla（GPL-2 兼容 GPL-3）。
 - **Swift 6 strict concurrency** 全绿，0 error / 0 warning（Vendor/scintilla 除外）。
 - **CI 四道闸**：`swift test` · `swift build -c release` · `swift build -swift-version 6` · Localizable strings 校验。
-- **222 个单元测试** 含 Theme / Lexer / TextFormat / Find-in-Files / Performance / DocumentFlush / MarkdownConverter / GitDiffParser / GitGutterHunks / SnippetCatalog / LargeFilePolicy / ChunkedFileReader / LargeFileLoader / ChunkedFileWriter / ScribeCLI。
+- **238 个单元测试** 含 Theme / Lexer / TextFormat / Find-in-Files / Performance / DocumentFlush / MarkdownConverter / GitDiffParser / GitGutterHunks / SnippetCatalog / LargeFilePolicy / ChunkedFileReader / LargeFileLoader / ChunkedFileWriter / ScribeCLI / GitStatusParser。
 
 ---
 
@@ -251,7 +252,8 @@ swift Scripts/check_localization.swift
 - ✅ Phase 34b：LargeFile Production Path（≥ 64 MiB 走 SCI_CREATELOADER 分块，状态栏 “正在加载大文件…”）
 - ✅ Phase 34c：LargeFile v2（SCI_GETTEXTRANGEFULL 分块 save + OOM 护栏 + status banner，6 tests）
 - ✅ Phase 35a：scribe CLI shim（bash wrapper · -h/-v/-w/-n/-l/-d/-- 对齐 zed/code/subl，9 tests）
-- 🔜 Phase 35+：Git v2 · Inline blame & merge UI · LargeFile v3 · Document Map · Snippets v2 · Markdown Preview v3 · HEX View · Sparkle
+- ✅ Phase 35b-1：Source Control sidebar（读面 · GitStatusParser · 供三状态空状态 · 16 tests）
+- 🔜 Phase 35+：Git v2 (per-hunk stage / commit / push) · Inline blame & merge UI · LargeFile v3 · Document Map · Snippets v2 · Markdown Preview v3 · HEX View · Sparkle
 
 ---
 

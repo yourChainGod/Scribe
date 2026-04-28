@@ -808,11 +808,51 @@ core.editor`、从脚本调不动、要记 SCRIBE_AUTO_* env knob。
 **未覆盖 (Phase 35b+)**：IPC fifo 让已运行实例也能 wait、
 brew formula、bash/zsh completion script。
 
+## Phase 35b-1 · Source Control sidebar（2026-04-28，commit `ab8e21a`）
+
+**背景**：zed “Git Panel” 是调研交财点出的最高 ROI。这拍交付读面
+—— 侧栏 tab + 数据层 + UI 行。per-hunk stage/unstage · commit 留
+给 35b-2/3。
+
+**交付**：
+- `Sources/Scribe/Models/GitStatus.swift`（140 行）·GitFileStatus value
+  type · GitChangeKind enum (porcelain v1 codes + `.unknown`) ·
+  computed flags `isConflict` / `hasStagedChanges` / `hasUnstagedChanges` /
+  `isUntracked`
+- `Sources/Scribe/Models/GitStatusParser.swift`（80 行）·纯函数
+  · 解 `git status -z --porcelain=v1` · NUL 分隔 · R/C 吃 origin
+  path · path 保原（不 shell unquote）·未知 code 不崩
+- `Sources/Scribe/Models/GitClient.swift` + `StatusResult` enum +
+  `static func status(repo:)`（复用现有 run）
+- `Sources/Scribe/Models/GitStatusEngine.swift`（120 行）·与 Gutter
+  Engine 同模 · 三状态 idle/notInRepo/loaded · detached Task
+  cancel & replace · transient error 保留先前 rows
+- `Sources/Scribe/Models/Workspace.swift` + SidebarMode.sourceControl
+  + GitStatusEngine instance + openFolder/closeFolder bind +
+  save/handleExternalChange refresh hooks
+- `Sources/Scribe/Views/SourceControlSidebar.swift`（210 行）·分段
+  Conflicts/Staged/Changes/Untracked（红绿橙灰 zed 颜色语法）
+  · 点行 → openFile · 三个空状态 copy
+- `Sources/Scribe/Views/SidebarView.swift` + mode 按钮
+  "arrow.triangle.branch" + switch case
+- `Sources/Scribe/Resources/{en,zh-Hans}.lproj/Localizable.strings`
+  + sidebar.mode.sourceControl + sourceControl.empty.* + .section.*
+
+**测试**：16 闸覆盖 GitStatusParser：empty/空 NUL/短 entry/上下
+变/conflict 矩阵 (UU/AA/DU)/rename 吾 origin/copy 同/multi-entry
+顺序/path absolute · path 含空格 · unknown code。Live `git status`
+集成 不 由 xctest调 —— engine 热路径只是 Process + Parser，
+纯函数部分全面覆盖。
+
+**未覆盖 (Phase 35b-2 / 35b-3)**：per-hunk stage/unstage、commit
+message textarea · push/pull/fetch 按钮、Project Diff multibuffer
+（zed 可编辑 diff excerpts）、Inline blame + merge UI（Phase 35c）。
+
 ## Phase 35+ · 路线展望
 
 下面是想做的事，按重要度而非时间排。多条路线是 zed 调研后决定插入的。
 
-1. **Git v2 (Phase 35b)**：Source Control 侧栏 + Project Diff 多文件视图 + per-hunk stage/unstage + commit UI。复用 Phase 31/31b GitDiffParser/Hunks。zed 调研点出的最高 ROI。
+1. **Git v2 (Phase 35b-2/3)**：per-hunk stage/unstage + commit message textarea + push/pull/fetch + Project Diff multibuffer。复用 Phase 31/31b/35b-1 的 GitDiffParser/Hunks/StatusParser。Phase 35b-1 交付了读面。
 2. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末 annotation 显示 author/time/commit、冲突区上方 Accept/Reject 按钮。复用现有 GitClient。
 3. **LargeFile v3 (Phase 34d+)**：中途 cancel save、external-change
    mtime+size detection、SymbolOutline 读 buffer、细粒度 progress。
