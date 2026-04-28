@@ -20,3 +20,4 @@
 // re-exported (Swift importer wouldn't know what to do with the
 // abstract class); only the C-callable shim functions are.
 #import "ScribeScintillaLoaderBridge.h"
+#import "ScribeScintillaTextRangeBridge.h"

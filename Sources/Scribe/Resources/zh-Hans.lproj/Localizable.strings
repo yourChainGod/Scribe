@@ -41,6 +41,8 @@
 "status.lineCol"      = "行 %lld, 列 %lld";
 "status.charCount"    = "%lld 字符";
 "status.largeFileLoading" = "正在加载大文件…";
+"status.largeFileSaving"  = "正在保存大文件…";
+"status.largeFile"        = "大文件";
 
 "status.menu.syntax"           = "语法高亮";
 "status.menu.resetAuto"        = "恢复自动检测";
@@ -229,6 +231,7 @@
 
 "error.cannotDecode"           = "无法以 %@ 解码文件。";
 "error.cannotEncode"           = "无法以 %@ 编码文本。";
+"error.largeFileSaveNoEditor"  = "无法保存：当前没有编辑器与该大文件绑定。";
 
 // MARK: - Tabs context
 

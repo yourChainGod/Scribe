@@ -44,6 +44,22 @@ final class Document: ObservableObject, Identifiable {
     @MainActor
     var flushPendingEdit: (() -> Void)?
 
+    /// Phase 34c — large-file save hook installed by the editor's
+    /// Coordinator on `attach(view:)`. Closures the live ScintillaView
+    /// behind a Sendable façade so `Workspace.write` can drive a
+    /// chunked save without poking at the view directly.
+    ///   - parameter url: destination URL (passed straight through
+    ///     to `ChunkedFileWriter.write(...)`).
+    ///   - parameter progress: optional 0…1 callback invoked once per
+    ///     written chunk. Workspace pumps it through to
+    ///     `doc.saveProgress` so the status bar can render a bar.
+    /// Throws `ChunkedFileWriterError` on failure; Workspace catches
+    /// and turns it into an NSAlert.
+    /// Optional: nil whenever no editor is currently attached
+    /// (e.g. brand-new doc that's never been displayed).
+    @MainActor
+    var largeFileSaveHook: ((URL, (@MainActor (Double) -> Void)?) async throws -> Void)?
+
     /// Phase 30 — `true` when the user has opened the markdown
     /// preview pane for this tab (⌘⇧V or View menu). Per-document
     /// state rather than per-window because each tab can host a
@@ -80,6 +96,15 @@ final class Document: ObservableObject, Identifiable {
     /// the Coordinator uses `>= 1` as the "load is done, repaint
     /// once" signal.
     @Published var loadProgress: Double = -1
+
+    /// Phase 34c — 0…1 chunked-save progress for the large-file
+    /// path. -1 means "not saving". Workspace flips it to 0 before
+    /// kicking off the streaming write; ChunkedFileWriter's
+    /// per-chunk callback nudges it forward; on completion or
+    /// failure it returns to -1. Save UI (status bar banner, save
+    /// menu disabled state) drives off this single source of truth
+    /// rather than juggling its own bool.
+    @Published var saveProgress: Double = -1
 
     init(title: String = L10n.t("tab.untitled"), text: String = "", url: URL? = nil) {
         self.title = title

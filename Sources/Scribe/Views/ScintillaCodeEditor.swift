@@ -83,11 +83,22 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         // (`SCI_GETLENGTH` is O(1)); only when they match do we pay
         // for the full equality check that catches the rare external-
         // change race (Workspace.handleExternalChange).
-        let viewLen = Int(view.message(SCI.GETLENGTH))
-        let docLen = doc.text.utf8.count
-        let needsResync: Bool = (viewLen != docLen) || view.string() != doc.text
-        if needsResync {
-            context.coordinator.applyText(doc.text, to: view, isExternal: true)
+        //
+        // Phase 34c — large-file path skips the resync logic entirely.
+        // For a 1 GB doc the `view.string()` round-trip in the
+        // equality check would synthesise a ~1.5 GB Swift String every
+        // updateNSView tick (i.e. on every cursor move), trivially
+        // OOMing the process. Large-file documents are also already
+        // canonically owned by Scintilla via SCI_SETDOCPOINTER (see
+        // Coordinator+LargeFile.swift), so there is no doc.text to
+        // resync against.
+        if !doc.isLargeFile {
+            let viewLen = Int(view.message(SCI.GETLENGTH))
+            let docLen = doc.text.utf8.count
+            let needsResync: Bool = (viewLen != docLen) || view.string() != doc.text
+            if needsResync {
+                context.coordinator.applyText(doc.text, to: view, isExternal: true)
+            }
         }
         context.coordinator.applyLexer(for: doc, to: view)
         context.coordinator.applyFont(prefs: prefs, to: view)
@@ -235,6 +246,27 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                         self.testRectSelectExtend(linesDown: d, charsRight: r, in: view)
                     }
                 }
+            // Phase 34c — install the large-file save hook so
+            // Workspace.write can drive a chunked SCI_GETTEXTRANGEFULL
+            // → atomic temp file save without touching the
+            // ScintillaView directly. `weak view` mirrors the rest of
+            // this method's capture story; if the view is torn down
+            // while a save is in flight, the hook becomes a no-op
+            // (Workspace gives the user the alert via the timeout
+            // path instead of crashing on a dangling pointer).
+            doc.largeFileSaveHook = { [weak view] url, progress in
+                guard let view else { return }
+                let length = Int(view.message(SCI.GETLENGTH))
+                let writer = ChunkedFileWriter()
+                try await writer.write(view: view,
+                                       to: url,
+                                       byteCount: length) { written in
+                    let p = length > 0
+                        ? Double(written) / Double(length)
+                        : 1.0
+                    progress?(p)
+                }
+            }
         }
 
         // MARK: doc → view
@@ -344,7 +376,15 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         /// Each new SCN_MODIFIED cancels the prior in-flight Task so
         /// only the *last* keystroke in a burst pays the round-trip.
         /// The Task is `@MainActor`-bound implicitly via Coordinator.
+        ///
+        /// Phase 34c — large-file documents skip this path entirely;
+        /// the file is canonically owned by the Scintilla buffer
+        /// (`doc.text` stays empty) and pulling a full multi-GB
+        /// string into Swift on every typing pause would OOM the
+        /// process. Save / external-change check teach themselves
+        /// to read the buffer directly via `ChunkedFileWriter`.
         private func scheduleDocSync() {
+            if doc.isLargeFile { return }
             pendingDocSync?.cancel()
             pendingDocSync = Task { [weak self] in
                 try? await Task.sleep(nanoseconds: Coordinator.docSyncThrottleNanos)
@@ -362,7 +402,13 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         /// were paying *per keystroke* before throttling. Now we
         /// pay it once per typing pause, which is what the user
         /// experiences as "the file became saveable".
+        ///
+        /// Phase 34c — see `scheduleDocSync` for the large-file
+        /// no-op rationale; this is the synchronous twin of that
+        /// guard so `doc.flushPendingEdit?()` from Workspace.save
+        /// stays cheap on large files.
         func flushDocSync() {
+            if doc.isLargeFile { return }
             guard let view else { return }
             pendingDocSync?.cancel()
             pendingDocSync = nil

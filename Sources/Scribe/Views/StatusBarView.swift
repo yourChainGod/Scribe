@@ -16,14 +16,28 @@ struct StatusBarView: View {
                 Text("status.ready", bundle: .module)
             }
             Spacer()
-            // Phase 34b — large-file load banner. Sits on the right
-            // before the dirty marker so a user reading "modified"
-            // alongside a still-loading doc gets the priority cue
-            // (loading = the bytes aren't your edit yet) first.
+            // Phase 34b/c — large-file load + save banner. Sits on the
+            // right before the dirty marker so a user reading
+            // "modified" alongside a still-streaming doc gets the
+            // priority cue (in-flight bytes aren't your edit yet)
+            // first. We render save before load because save fully
+            // gates user input (no chunk acks during ⌘S), whereas
+            // load is followed by a normal editing window.
             if let doc = workspace.current,
                doc.isLargeFile,
-               doc.loadProgress >= 0,
-               doc.loadProgress < 1 {
+               doc.saveProgress >= 0 {
+                HStack(spacing: 6) {
+                    ProgressView(value: max(0, min(1, doc.saveProgress)))
+                        .controlSize(.small)
+                        .progressViewStyle(.linear)
+                        .frame(width: 80)
+                    Text("status.largeFileSaving", bundle: .module)
+                        .foregroundStyle(.secondary)
+                }
+            } else if let doc = workspace.current,
+                      doc.isLargeFile,
+                      doc.loadProgress >= 0,
+                      doc.loadProgress < 1 {
                 HStack(spacing: 6) {
                     ProgressView()
                         .controlSize(.small)
@@ -76,8 +90,36 @@ private struct DocumentStatusItems: View {
         Text(L10n.t("status.lineCol", doc.cursorLine, doc.cursorColumn))
             .monospacedDigit()
         StatusBarSeparator()
-        Text(L10n.t("status.charCount", doc.text.count))
-            .monospacedDigit()
+        // Phase 34c — large-file documents have an empty `doc.text`
+        // (the bytes live on the C++ side via SCI_SETDOCPOINTER), so
+        // a literal `doc.text.count` would always read "0 chars" and
+        // mislead the user. Instead surface the on-disk file size in
+        // a human-readable form; that's the number a user opening a
+        // multi-GB log actually wants confirmed.
+        if doc.isLargeFile, let url = doc.url {
+            Text(largeFileSizeLabel(for: url))
+                .monospacedDigit()
+        } else {
+            Text(L10n.t("status.charCount", doc.text.count))
+                .monospacedDigit()
+        }
+    }
+
+    /// Render `url`'s on-disk size as e.g. "128 MB" / "1.5 GB". We
+    /// stat() once per body redraw — cheap by every yardstick (a
+    /// single resourceValues call) and avoids piping the value
+    /// through Document state for what is fundamentally derived
+    /// data. Falls back to the i18n "large" label if the stat fails.
+    private func largeFileSizeLabel(for url: URL) -> String {
+        let size = (try? url.resourceValues(forKeys: [.fileSizeKey])
+            .fileSize) ?? 0
+        if size == 0 {
+            return L10n.t("status.largeFile")
+        }
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useMB, .useGB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: Int64(size))
     }
 
     private var languageMenu: some View {

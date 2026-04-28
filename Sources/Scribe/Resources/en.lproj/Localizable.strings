@@ -43,6 +43,8 @@
 "status.lineCol"      = "Ln %lld, Col %lld";
 "status.charCount"    = "%lld chars";
 "status.largeFileLoading" = "Loading large file…";
+"status.largeFileSaving"  = "Saving large file…";
+"status.largeFile"        = "Large file";
 
 "status.menu.syntax"           = "Syntax Highlighting";
 "status.menu.resetAuto"        = "Reset to Auto Detect";
@@ -231,6 +233,7 @@
 
 "error.cannotDecode"           = "Cannot decode file as %@.";
 "error.cannotEncode"           = "Cannot encode text as %@.";
+"error.largeFileSaveNoEditor"  = "Cannot save: no editor is currently attached to this large file.";
 
 // MARK: - Tabs context
 

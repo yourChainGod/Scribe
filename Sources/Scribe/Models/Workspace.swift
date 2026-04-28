@@ -286,6 +286,13 @@ final class Workspace: ObservableObject {
     /// document) or asks the user how to proceed (dirty document).
     private func handleExternalChange(of doc: Document) {
         guard let url = doc.url else { return }
+        // Phase 34c — large-file path can't load the full bytes into
+        // memory just to compare against `doc.text` (which is empty
+        // for large docs anyway). For now, FSEvents on a large doc
+        // is treated as a no-op: we trust Scintilla's buffer is the
+        // truth of record. v2 will diff via mtime + on-disk size to
+        // catch external mutations, then offer a chunked reload.
+        if doc.isLargeFile { return }
         // The file may have been deleted or renamed; if we can't read it,
         // surface the situation but leave doc.text alone so the user can
         // re-save.
@@ -414,6 +421,60 @@ final class Workspace: ObservableObject {
     }
 
     private func write(doc: Document, to url: URL) {
+        // Phase 34c — large-file path skips the String-based encode +
+        // atomic write entirely. The buffer lives on the C++ side
+        // and `doc.text` stays empty for the document's lifetime;
+        // the editor's Coordinator installs `largeFileSaveHook` on
+        // attach which streams `SCI_GETTEXTRANGEFULL` chunks to a
+        // sibling temp file and atomically renames it on top of
+        // `url`. We hop through a Task because the hook is async
+        // (`await Task.yield()` between chunks keeps the run loop
+        // responsive on multi-GB saves); doc.saveProgress drives the
+        // status bar banner the same way doc.loadProgress does for
+        // chunked open.
+        if doc.isLargeFile {
+            // Re-entrancy guard: ⌘S during an in-flight save is a
+            // no-op rather than queuing a second pipeline that would
+            // race the first for the same temp-file slot.
+            guard doc.saveProgress < 0 else { return }
+            guard let hook = doc.largeFileSaveHook else {
+                // No editor attached — should be impossible for a
+                // doc the user can ⌘S, but bail with an alert
+                // instead of crashing on the implicit unwrap.
+                let err = NSError(domain: NSCocoaErrorDomain,
+                                  code: NSFileWriteUnknownError,
+                                  userInfo: [NSLocalizedDescriptionKey:
+                                                L10n.t("error.largeFileSaveNoEditor")])
+                NSAlert(error: err).runModal()
+                return
+            }
+            doc.saveProgress = 0
+            let docRef = doc
+            let docID = doc.id
+            Task { @MainActor [weak self] in
+                do {
+                    try await hook(url) { p in
+                        docRef.saveProgress = p
+                    }
+                    docRef.saveProgress = -1
+                    docRef.isDirty = false
+                    // Mirror small-file save's gutter refresh; the
+                    // FSEvents watcher will also fire but
+                    // handleExternalChange short-circuits when the
+                    // disk + buffer agree, so only this call
+                    // actually drives the gutter recompute.
+                    if let self, docRef.id == self.selectedID {
+                        self.gitGutterEngine.refresh()
+                    }
+                } catch {
+                    docRef.saveProgress = -1
+                    NSAlert(error: error).runModal()
+                }
+                _ = docID
+            }
+            return
+        }
+
         // Phase 28c — drain any throttled keystrokes before reading
         // doc.text. Without this, ⌘S right after a fast typing burst
         // could write the up-to-50-ms-stale snapshot the editor had
