@@ -539,16 +539,60 @@ empty / single-line / contiguous / gap-of-1-splits / mixed-shape /
 ascending-sort 合计 6 例 grouping；next()  empty / 跳过-当前hunk /
 before-first / wrap-past-last 4 例；previous() 同样 4 例。
 
-## Phase 32+ · 路线展望
+## Phase 32 · Markdown Preview v2（2026-04-28，commit `92201f6`）
+
+**目标**：手写 converter 纳入 GFM 三大世人问场频最高的
+扩展：表格 · task list · footnote。零依赖。
+
+**改动**：
+- `Sources/Scribe/Models/MarkdownConverter.swift`（+456 行）
+  + `BlockContext.pendingTableHeader` 1-line lookahead state。
+  pipe 行只有在下一行是 `| --- | :-: |` 对齐行时才转
+  table，否则 fallback 为 paragraph。
+  + `BlockContext.tableAlignments: [TableAlign]?`、`openTable` /
+  `appendTableRow` / `closeTable` helpers。
+  + `lineLooksLikeOtherBlock(line:trimmed:)` 闸门：`> | a |`
+  、`- | a |`、`## | a |` 不会被表格权走。
+  + `matchTaskMarker(_:)` 检测 `[ ] ` / `[x] ` / `[X] `，输出
+  `<li class="task-list-item"><input type="checkbox" disabled
+  checked?/>...</li>`。Mixed list 可默认出现。
+  + `extractFootnotes(from:)` 二走扫描：
+     · 一走：`[^id]: text` 定义被提取 + 原行置空（不让
+       paragraph state 机处理该行）。
+     · 二走：按出现顺序为有定义的引用打编号。
+  + `renderInline(_:footnoteRefs:)` optional 参数接收 `[id: num]`
+  映射，生成 `<sup class="footnote-ref">[N]</sup>` + 双向锚
+  点。未匹配 def 的 ref 保留字面。
+  + `renderFootnoteSection(refs:defs:)` 生成底部 `<section
+  class="footnotes"><hr/><ol>...↩</ol></section>`，仅在有
+  ref+def 配对时输出。
+  + `TableAlign` enum (none/left/right/center) + `styleAttr`
+  inline `text-align:` 属性。
+- `Sources/Scribe/Views/MarkdownPreviewPane.swift`
+  + table chrome CSS (border-collapse · alt-row stripe)
+  + task list 去 bullet + checkbox vertical-align middle
+  + footnote section 与 back-link 调调颜色
+
+**测试**：`MarkdownConverterTests.swift` +18 例（3表 + 5多表
+ + 5 task + 5 footnote）达 44/44。涵盖：对齐列颜色 / inline
+ emphasis / 短行右补空 / 空行结束 / 伪-pipe-行 paragraph fallback
+ / blockquote+pipe 保住 / Mixed task list / 上大小X / footnote 路
+  引用顺序 / orphan ref + orphan def / def 内 emphasis / EOF 调度。
+
+**不在 v2范围**：代码块语法高亮（需 Prism.js / highlight.js 嵌
+入）、mermaid（需 mermaid.js）、GFM autolinks、行内 HTML、setext
+headings、引用式链接。都是 v3 画饱。
+
+## Phase 33+ · 路线展望
 
 下面是想做的事，按重要度而非时间排：
 
-1. **ndd C++ 核心移植**：`Encode.cpp` / `CmpareMode.cpp` / `HEXMode.cpp` / `LargeFile.cpp`
+1. **Snippets / Templates**：⌘⇧T 弹出 + tab key 触发。UserDefaults JSON 持久化。
+2. **ndd C++ 核心移植**：`Encode.cpp` / `CmpareMode.cpp` / `HEXMode.cpp` / `LargeFile.cpp`
    通过 ObjC++ shim 桥到 Swift；保留 GPL-3.0 copyleft。
-2. **Document Map**：右侧缩略图侧栏（学 npp-mac，仅 SwiftUI）。
-3. **Git Gutter v2**：buffer-aware (HEAD blob ↔ in-memory text，无需先保存) + per-line revert。跳转已交付。
-4. **Snippets / Templates**：⌘⇧T 弹出 + tab key 触发。
-5. **Markdown Preview v2**：表格 / task list / footnote / mermaid / 代码块语法高亮。
+3. **Document Map**：右侧缩略图侧栏（学 npp-mac，仅 SwiftUI）。
+4. **Git Gutter v2**：buffer-aware (HEAD blob ↔ in-memory text，无需先保存) + per-line revert。跳转已交付。
+5. **Markdown Preview v3**：代码块语法高亮 + mermaid 图。
 6. **HEX View**：参考 ndd 的 `HEXMode.cpp`。
 7. **官方 disk image** + Sparkle 自动更新。
 

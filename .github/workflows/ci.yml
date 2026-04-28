@@ -14,9 +14,21 @@
 #                           plus a source-side dangling-reference scan.
 #                           Trivial to fix in review when caught early.
 #
-# All four jobs share the same `macos-14` runner image. Sonoma is the
-# minimum Scribe targets (Package.swift / Info.plist) so any older
-# image would let an accidentally Ventura-incompatible API slip in.
+# All four jobs share the same `macos-15` runner image. Why not
+# macos-14:
+#   - macos-14 ships Xcode 15.0–15.4, which is Swift 5.10. Phase 28
+#     locked in `@preconcurrency ScintillaNotificationProtocol` on a
+#     conformance — that's SE-0423, Swift 6.0+. Swift 5.10 rejects
+#     it with "attribute can only be applied to declarations, not
+#     types" and every push since the CI was set up has been red.
+#   - macos-15 ships Xcode 16+ (Swift 6.0+) by default; the runner
+#     compiles the very feature Scribe was *designed* against.
+#   - Sonoma compatibility is preserved by `Package.swift`'s
+#     `.macOS(.v14)` deployment target, not by the runner OS — a
+#     Sequoia runner produces binaries that still launch on
+#     Sonoma. Phase 29's ADR-006 (Swift 6 strict is non-negotiable)
+#     trumps Phase 29's earlier choice of the macOS image; the
+#     latter was always pragmatism, never policy.
 #
 
 name: CI
@@ -37,7 +49,7 @@ concurrency:
 jobs:
   test:
     name: swift test
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
@@ -52,7 +64,7 @@ jobs:
 
   release-build:
     name: swift build -c release
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
@@ -61,7 +73,7 @@ jobs:
 
   swift6-strict:
     name: swift build (Swift 6 strict)
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
@@ -80,7 +92,7 @@ jobs:
 
   localization:
     name: Localizable.strings parity
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
