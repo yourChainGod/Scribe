@@ -163,6 +163,15 @@ enum SCI {
     static let CANUNDO:     UInt32 = 2174
     static let CANREDO:     UInt32 = 2016
     static let CANPASTE:    UInt32 = 2173
+    /// Phase 34a — large-file streaming load. `SCI_CREATELOADER(initial,
+    /// options)` returns an `ILoader *` (as sptr_t) we feed bytes into;
+    /// `SCI_SETDOCPOINTER(0, doc)` swaps Scintilla's active document for
+    /// the one the loader produced. Both bypass `setString` so a 1 GB
+    /// file no longer round-trips through a Swift `String`.
+    static let CREATELOADER:      UInt32 = 2632
+    static let SETDOCPOINTER:     UInt32 = 2026
+    static let RELEASEDOCUMENT:   UInt32 = 2377
+    static let ADDREFDOCUMENT:    UInt32 = 2376
 }
 
 // MARK: - Search flags
@@ -204,6 +213,14 @@ enum SC {
     /// disappeared just above this row).
     static let MARK_FULLRECT:    Int = 26
     static let MARK_LEFTRECT:    Int = 27
+    /// Phase 34a — `SC_DOCUMENTOPTION_*` flags passed as the second
+    /// argument to `SCI_CREATELOADER`. `TEXT_LARGE` enables 64-bit
+    /// document positions so a > 2 GB file doesn't truncate (default
+    /// is 32-bit positions); `STYLES_NONE` skips style-byte allocation
+    /// for documents we never lex (cheaper on huge logs).
+    static let DOCUMENTOPTION_DEFAULT:     Int = 0x000
+    static let DOCUMENTOPTION_STYLES_NONE: Int = 0x001
+    static let DOCUMENTOPTION_TEXT_LARGE:  Int = 0x100
     static let STYLE_DEFAULT:    Int = 32
     static let STYLE_LINENUMBER: Int = 33
     /// Phase 23 — `SelectionMode` enum values. Stream is the

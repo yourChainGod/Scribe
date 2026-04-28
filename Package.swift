@@ -49,7 +49,11 @@ let package = Package(
                 // Scintilla.iface is an IDL description, not a header
                 "include/Scintilla.iface"
             ],
-            sources: ["src", "cocoa"],
+            // Phase 34a — `swiftpm-bridge` adds ScribeScintillaLoader-
+            // Bridge.mm, an ObjC++ shim that dispatches the C++-only
+            // `Scintilla::ILoader` virtual methods. Mirrors the Lexilla
+            // bridge layout one directory over.
+            sources: ["src", "cocoa", "swiftpm-bridge"],
             publicHeadersPath: "include",
             cSettings: [
                 .headerSearchPath("src"),
