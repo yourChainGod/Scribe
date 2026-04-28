@@ -456,14 +456,66 @@ inline code 保护 emphasis / fenced code 含 lang hint + HTML escape +
 API 输出 AttributedString 不是 HTML，覆盖子集还更小；Apple
 swift-cmark 加 SwiftPM 依赖。手写 ~400 LOC 比 FFI + 格式翻译更便宜。
 
-## Phase 31+ · 路线展望
+## Phase 31 · Git Gutter（2026-04-28，commit `556d2d2`）
+
+**目标**：在编辑器左侧的窄条状 margin 上展示当前文件相对于
+HEAD 的行级状态（添加 / 修改 / 删除）。所见即文件改动。
+
+**改动**：
+- `Sources/Scribe/Models/GitDiffParser.swift`（150 行）
+  — 纯函数 unified-diff → `[LineNumber: GitGutterStatus]`。只读
+  hunk header（`@@ -OLDSTART,OLDLEN +NEWSTART,NEWLEN @@`），不解析
+  body：四种情况（add / modify / delete / replace）从 OLDLEN /
+  NEWLEN 比例就能判出，body 的 `+` `-` 只是给人看的复制品。
+  容错：malformed header 静默丢弃；保留 `@@` 后的 section name
+  不让它撞坏坐标解析；deletion-at-file-start 的 `newStart=0`
+  remap 到第 1 行；多个 hunk 落在同一行时强 status (added /
+  modified) 压制弱 status (deletedAbove)。
+- `Sources/Scribe/Models/GitGutterEngine.swift`（110 行）
+  — `@MainActor ObservableObject`，全工作区单例。`bind(to:)`
+  切换文档时立即 refresh，`refresh()` 取消上一在飞 Task 后启
+  动 detached `git diff` shell-out → parse → 回 main 写
+  `doc.gitGutter`。绑定弱引用，关闭 tab 不留尾巴。
+- `Sources/Scribe/Models/GitClient.swift` +`unifiedDiff(of:) ->
+  UnifiedDiffResult`：`git diff --no-color --no-ext-diff -U0 HEAD
+  -- <path>`，`-U0` 让 hunk 只描述真正变更的行。
+- `Sources/Scribe/Views/Scintilla/Coordinator+GitGutter.swift`
+  （150 行）— margin 1 = 6 px MARGIN_SYMBOL，三个 marker：
+  21 added (FULLRECT 绿) / 22 modified (FULLRECT 黄) / 23
+  deletedAbove (LEFTRECT 红 sliver)。`SETMARGINMASKN` 隔离
+  其它 marker。`lastAppliedGitGutter` 缓存避免无变更 tick 的
+  O(line-count) 重绘。
+- `Sources/Scribe/Models/Workspace.swift`
+  + `let gitGutterEngine = GitGutterEngine()`
+  + `selectionSink` 在 selectedID 变化时 `engine.bind(to: current)`
+  + `write(doc:to:)` / `handleExternalChange(of:)` 末尾
+    `engine.refresh()`（仅当 doc 是 selected）
+- `Sources/Scribe/Models/Document.swift`
+  + `@Published var gitGutter: [Int: GitGutterStatus] = [:]`
+
+**测试**：`Tests/ScribeTests/GitDiffParserTests.swift` 11 例覆盖：
+empty / header-only / pure-add / single-line addition (length 1
+默认) / pure-delete / delete-at-file-start / replacement / 三 hunk
+合并 (add + modify + delete) / malformed header tolerance / `@@`
+后 section name suffix tolerance / 强 status 压弱 status。
+
+**为什么 git CLI 而不是 libgit2**：用户的 mac 已经有 git，
+`/usr/bin/git` 二进制稳定，不增 SwiftPM 依赖，三个操作（locate
+repo / read HEAD blob / unified diff）一共 ~30 行 glue。
+
+**为什么对比 working tree 而不是 buffer**：v1 `git diff` 看磁盘
+文件，gutter 在保存后才更新。这与「macOS 习惯：改了未存就保存」
+吻合。Phase 31b 想做 buffer-aware 的话，HEAD blob ↔ in-memory
+text 用现有 LCS 算（DiffSession 已有）。
+
+## Phase 32+ · 路线展望
 
 下面是想做的事，按重要度而非时间排：
 
 1. **ndd C++ 核心移植**：`Encode.cpp` / `CmpareMode.cpp` / `HEXMode.cpp` / `LargeFile.cpp`
    通过 ObjC++ shim 桥到 Swift；保留 GPL-3.0 copyleft。
 2. **Document Map**：右侧缩略图侧栏（学 npp-mac，仅 SwiftUI）。
-3. **Git Gutter**：旁注 ▎ ▎ +/- 的行级 git diff（libgit2 还是直接调 `git diff` CLI 待定）。
+3. **Git Gutter v2**：buffer-aware (HEAD blob ↔ in-memory text，无需先保存) + hunk-level navigation (⌥⇧↑/↓) + per-line revert。
 4. **Snippets / Templates**：⌘⇧T 弹出 + tab key 触发。
 5. **Markdown Preview v2**：表格 / task list / footnote / mermaid / 代码块语法高亮。
 6. **HEX View**：参考 ndd 的 `HEXMode.cpp`。
