@@ -67,6 +67,12 @@ final class FindState: ObservableObject {
         case replaceCurrent
         case replaceAll
         case useSelection
+        // Phase 20 — multi-cursor commands. Routed through this same
+        // PassthroughSubject so the existing Coordinator sink picks
+        // them up without an extra Combine subscription.
+        case selectNextOccurrence
+        case selectAllOccurrences
+        case collapseToSingleCursor
     }
     let commands = PassthroughSubject<Command, Never>()
 

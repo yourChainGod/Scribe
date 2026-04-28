@@ -72,6 +72,23 @@ private enum SCI {
     static let SETINDICCURRENT:  UInt32 = 2500
     static let INDICFILLRANGE:   UInt32 = 2504
     static let INDICCLEARRANGE:  UInt32 = 2505
+    // Phase 20 — multi-cursor / multi-selection
+    static let SETMULTIPLESELECTION:        UInt32 = 2563
+    static let SETADDITIONALSELECTIONTYPING:UInt32 = 2565
+    static let SETMULTIPASTE:               UInt32 = 2614
+    static let SETSELECTIONMODE:            UInt32 = 2422
+    static let GETSELECTIONS:               UInt32 = 2570
+    static let CLEARSELECTIONS:             UInt32 = 2571
+    static let ADDSELECTION:                UInt32 = 2573
+    static let SETSELECTIONNCARET:          UInt32 = 2582
+    static let SETSELECTIONNANCHOR:         UInt32 = 2584
+    static let GETSELECTIONNCARET:          UInt32 = 2583
+    static let GETSELECTIONNANCHOR:         UInt32 = 2585
+    static let SETMAINSELECTION:            UInt32 = 2574
+    static let GETMAINSELECTION:            UInt32 = 2575
+    static let WORDSTARTPOSITION:           UInt32 = 2266
+    static let WORDENDPOSITION:             UInt32 = 2267
+    static let GETTEXTRANGE:                UInt32 = 2162
 }
 
 /// Search flags as documented in Scintilla.h.
@@ -173,6 +190,7 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         context.coordinator.applyLineNumberMargin(to: view)
         context.coordinator.applyTheme(to: view)
         context.coordinator.configureMatchIndicator(to: view)
+        context.coordinator.configureMultiSelection(to: view)
         return view
     }
 
@@ -265,6 +283,9 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                     case .replaceCurrent: self.replaceCurrent(in: view)
                     case .replaceAll:     self.replaceAll(in: view)
                     case .useSelection:   self.adoptSelectionAsQuery(from: view)
+                    case .selectNextOccurrence: self.selectNextOccurrence()
+                    case .selectAllOccurrences: self.selectAllOccurrences()
+                    case .collapseToSingleCursor: self.collapseToSingleCursor()
                     }
                 }
         }
@@ -409,6 +430,23 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         }
 
         // MARK: - Find / Replace
+
+        /// Phase 20 — enable Scintilla's native multi-cursor support.
+        /// The defaults are surprising: SCI_SETMULTIPLESELECTION and
+        /// SCI_SETADDITIONALSELECTIONTYPING are both off out of the
+        /// box, so ⌥-click selects rectangularly instead of adding a
+        /// caret, and typing into a multi-selection only modifies
+        /// the main one. Toggling them on lights up the entire
+        /// multi-cursor experience the editor would otherwise lack.
+        ///
+        /// Multi-paste also gets enabled here (`SC_MULTIPASTE_EACH = 1`)
+        /// so the clipboard pastes once per cursor — matches VSCode +
+        /// Sublime + most modern editors.
+        func configureMultiSelection(to view: ScintillaView) {
+            view.message(SCI.SETMULTIPLESELECTION, wParam: 1)
+            view.message(SCI.SETADDITIONALSELECTIONTYPING, wParam: 1)
+            view.message(SCI.SETMULTIPASTE, wParam: 1)
+        }
 
         /// One-time setup of indicator 0 — translucent rounded box used
         /// for "highlight all matches".
@@ -624,6 +662,185 @@ struct ScintillaCodeEditor: NSViewRepresentable {
             let s = Int(view.message(SCI.GETTARGETSTART))
             let e = Int(view.message(SCI.GETTARGETEND))
             return max(0, e - s)
+        }
+
+        // MARK: - Phase 20 multi-cursor commands
+
+        /// ⌘D / "Select Next Occurrence". First press: if the caret
+        /// has no selection, pick the word under it; if it does,
+        /// keep that selection and use it as the search needle.
+        /// Subsequent presses: find the next occurrence of the
+        /// needle (case-sensitive, whole-word when the seed was a
+        /// bare word) and add it as an additional selection,
+        /// scrolling the new caret into view. Wraps around the
+        /// document end to start.
+        func selectNextOccurrence() {
+            guard let view else { return }
+            let needle = ensureSelectionForMultiCursor(in: view)
+            guard !needle.isEmpty else { return }
+
+            // Search starts after the LAST (rightmost) caret so a
+            // user pressing ⌘D repeatedly walks forward through the
+            // document. Without this, every press would re-find the
+            // first match below the original caret.
+            let n = view.message(SCI.GETSELECTIONS)
+            var maxEnd = 0
+            for i in 0..<Int(n) {
+                let caret = Int(view.message(SCI.GETSELECTIONNCARET, wParam: UInt(i)))
+                let anchor = Int(view.message(SCI.GETSELECTIONNANCHOR, wParam: UInt(i)))
+                maxEnd = max(maxEnd, max(caret, anchor))
+            }
+            let docLen = Int(view.message(SCI.GETLENGTH))
+            // Two-pass scan: first from maxEnd to EOF, then 0 to
+            // maxEnd, to wrap around. Existing selection ranges are
+            // skipped so we never "find" ourselves.
+            let existing = currentSelectionRanges(in: view)
+            if let range = findNext(needle: needle,
+                                    in: view,
+                                    from: maxEnd,
+                                    to: docLen,
+                                    skip: existing)
+                ?? findNext(needle: needle,
+                            in: view,
+                            from: 0,
+                            to: maxEnd,
+                            skip: existing)
+            {
+                view.message(SCI.ADDSELECTION,
+                             wParam: UInt(bitPattern: range.upperBound),
+                             lParam: range.lowerBound)
+                view.message(SCI.SCROLLCARET)
+            }
+        }
+
+        /// ⌘⇧L / "Select All Occurrences". Picks the same needle as
+        /// `selectNextOccurrence` and adds every other occurrence in
+        /// the document as an additional selection in one shot. No-op
+        /// if the needle's empty.
+        func selectAllOccurrences() {
+            guard let view else { return }
+            let needle = ensureSelectionForMultiCursor(in: view)
+            guard !needle.isEmpty else { return }
+            let docLen = Int(view.message(SCI.GETLENGTH))
+            let existing = currentSelectionRanges(in: view)
+            var cursor = 0
+            // Bounded loop so a degenerate regex (shouldn't happen —
+            // we always pass a literal) can't pin the editor.
+            var iterations = 0
+            while cursor < docLen, iterations < 10_000 {
+                iterations += 1
+                guard let r = findNext(needle: needle,
+                                       in: view,
+                                       from: cursor,
+                                       to: docLen,
+                                       skip: existing) else { break }
+                view.message(SCI.ADDSELECTION,
+                             wParam: UInt(bitPattern: r.upperBound),
+                             lParam: r.lowerBound)
+                cursor = r.upperBound
+            }
+            view.message(SCI.SCROLLCARET)
+        }
+
+        /// Esc / "Single Cursor". Drops every additional selection
+        /// and leaves the main one intact at its current caret.
+        /// Re-uses Scintilla's `SCI_CLEARSELECTIONS` semantics: it
+        /// clears the multi-selection set but keeps the caret where
+        /// the main selection's caret was sitting.
+        func collapseToSingleCursor() {
+            guard let view else { return }
+            let n = view.message(SCI.GETSELECTIONS)
+            guard n > 1 else { return }
+            let mainIdx = view.message(SCI.GETMAINSELECTION)
+            let caret = Int(view.message(SCI.GETSELECTIONNCARET, wParam: UInt(mainIdx)))
+            // SCI_CLEARSELECTIONS leaves a single empty selection
+            // at position 0 — set it explicitly so the user keeps
+            // their place.
+            view.message(SCI.SETSEL,
+                         wParam: UInt(bitPattern: caret),
+                         lParam: caret)
+        }
+
+        /// If there's already a selection, returns its text. If the
+        /// caret is at a word, expands to that word and returns it.
+        /// Otherwise returns "".
+        private func ensureSelectionForMultiCursor(in view: ScintillaView) -> String {
+            let s = Int(view.message(SCI.GETSELECTIONSTART))
+            let e = Int(view.message(SCI.GETSELECTIONEND))
+            if e > s {
+                return textInRange(in: view, range: s..<e)
+            }
+            // Empty selection → expand to the surrounding word.
+            let pos = Int(view.message(SCI.GETCURRENTPOS))
+            let wordStart = Int(view.message(SCI.WORDSTARTPOSITION,
+                                             wParam: UInt(bitPattern: pos),
+                                             lParam: 1))
+            let wordEnd = Int(view.message(SCI.WORDENDPOSITION,
+                                           wParam: UInt(bitPattern: pos),
+                                           lParam: 1))
+            guard wordEnd > wordStart else { return "" }
+            view.message(SCI.SETSEL,
+                         wParam: UInt(bitPattern: wordStart),
+                         lParam: wordEnd)
+            return textInRange(in: view, range: wordStart..<wordEnd)
+        }
+
+        /// Snapshot of every (anchor, caret) pair as a normalised
+        /// half-open range. Used to skip "finding ourselves" when
+        /// adding the next match.
+        private func currentSelectionRanges(in view: ScintillaView) -> [Range<Int>] {
+            let n = Int(view.message(SCI.GETSELECTIONS))
+            var out: [Range<Int>] = []
+            for i in 0..<n {
+                let caret = Int(view.message(SCI.GETSELECTIONNCARET, wParam: UInt(i)))
+                let anchor = Int(view.message(SCI.GETSELECTIONNANCHOR, wParam: UInt(i)))
+                let lo = min(caret, anchor)
+                let hi = max(caret, anchor)
+                if hi > lo { out.append(lo..<hi) }
+            }
+            return out
+        }
+
+        /// Linear UTF-8-byte scan for `needle` in [from, to). Skips
+        /// any match that overlaps `skip`. Returns the half-open
+        /// match range or nil.
+        private func findNext(needle: String,
+                              in view: ScintillaView,
+                              from: Int,
+                              to: Int,
+                              skip: [Range<Int>]) -> Range<Int>? {
+            view.message(SCI.SETTARGETSTART, wParam: UInt(bitPattern: from))
+            view.message(SCI.SETTARGETEND, wParam: UInt(bitPattern: to))
+            view.message(SCI.SETSEARCHFLAGS, wParam: SCFIND.MATCHCASE)
+            // SCI_SEARCHINTARGET wants a UTF-8 byte buffer.
+            let bytes = Array(needle.utf8)
+            let result: Int = bytes.withUnsafeBufferPointer { buf in
+                guard let base = buf.baseAddress else { return -1 }
+                return Int(view.message(SCI.SEARCHINTARGET,
+                                        wParam: UInt(buf.count),
+                                        lParam: Int(bitPattern: base)))
+            }
+            guard result >= 0 else { return nil }
+            let s = Int(view.message(SCI.GETTARGETSTART))
+            let e = Int(view.message(SCI.GETTARGETEND))
+            let r = s..<e
+            if skip.contains(where: { $0.overlaps(r) }) {
+                // Skip past this match and keep going.
+                return findNext(needle: needle,
+                                in: view,
+                                from: e,
+                                to: to,
+                                skip: skip)
+            }
+            return r
+        }
+
+        private func textInRange(in view: ScintillaView, range: Range<Int>) -> String {
+            guard let raw = view.string() else { return "" }
+            let bytes = Array(raw.utf8)
+            guard range.upperBound <= bytes.count else { return "" }
+            let slice = Array(bytes[range])
+            return String(data: Data(slice), encoding: .utf8) ?? ""
         }
 
         /// Phase 18 — read the current selection as a UTF-8 String,

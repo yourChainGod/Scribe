@@ -115,6 +115,28 @@ struct ScribeApp: App {
                         fileIndex.rebuild(at: root)
                     }
                     outline.update(for: workspace.current)
+                    // Phase 20 verification hook: SCRIBE_TEST_MULTI_SELECT
+                    // takes a literal needle, finds it in the active
+                    // document, selects every occurrence as a multi-
+                    // cursor selection. Used by the screenshot script
+                    // to demonstrate multi-cursor without driving
+                    // ⌘D keystrokes through System Events.
+                    if let needle = ProcessInfo.processInfo.environment["SCRIBE_TEST_MULTI_SELECT"],
+                       !needle.isEmpty {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                            // Stash the needle as the "selection" the
+                            // command will pick up. The Coordinator
+                            // expands the live selection to a word
+                            // when no range exists, so we set the
+                            // selection text via FindState then
+                            // adopt it back into the editor.
+                            findState.query = needle
+                            findState.commands.send(.findCurrent)
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                findState.commands.send(.selectAllOccurrences)
+                            }
+                        }
+                    }
                     // Phase 18 verification hook: SCRIBE_TEST_FIND_FROM_SELECTION
                     // primes Workspace.activeSelection so the screenshot
                     // script can demonstrate the prefill-from-selection
@@ -364,6 +386,27 @@ struct ScribeApp: App {
                     findState.commands.send(.useSelection)
                 }
                 .keyboardShortcut("e", modifiers: .command)
+
+                Divider()
+
+                // Phase 20 — multi-cursor commands. They piggy-back on
+                // FindState.commands so the existing Coordinator sink
+                // routes them without an extra Combine subscription.
+                Button("Select Next Occurrence") {
+                    findState.commands.send(.selectNextOccurrence)
+                }
+                .keyboardShortcut("d", modifiers: .command)
+
+                Button("Select All Occurrences") {
+                    findState.commands.send(.selectAllOccurrences)
+                }
+                .keyboardShortcut("l", modifiers: [.command, .shift])
+
+                Button("Single Cursor") {
+                    findState.commands.send(.collapseToSingleCursor)
+                }
+                // Use ⌃⇧Esc — plain Esc is reserved for "hide find bar".
+                .keyboardShortcut(.escape, modifiers: [.control, .shift])
 
                 Divider()
 
