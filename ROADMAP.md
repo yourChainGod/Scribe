@@ -886,11 +886,48 @@ discardWorkingTree restore + status 空 · 重调幂等。
 Commit/Amend、push/pull/fetch + branch indicator、per-hunk stage
 (`git apply --cached <patch>`)、Project Diff multibuffer。
 
+## Phase 35b-2b · commit panel · branch indicator（2026-04-28，commit `7bf4e72`）
+
+**背景**：35b-1/2a 交付读面 + file-level 写面，这拍交付
+提交面本身—— 侧栏底部 multi-line TextEditor + Amend toggle
++ Commit 按钮（⌘⏎）+ 顶部分支指示器。用户不出 Scribe 就
+能完成 add-commit 闭环。
+
+**交付**：
+- `Sources/Scribe/Models/GitClient.swift` + `commit(message:repo:amend:)`
+  走 stdin 递送（`-F -`）· zed/GitHub Desktop 同推荐，
+  避开 macOS argv ~256 KiB 上限 · `--cleanup=strip`。
+- `Sources/Scribe/Models/GitClient.swift` + `currentBranch(repo:)` /
+  `headSubject(repo:)` + private `runWithStdin(_:stdin:cwd:)` helper。
+  拆出 stdin 路径避免读代码路径多走个不用的参数。
+- `Sources/Scribe/Models/GitStatusEngine.swift` + `@Published branch:
+  String?` (refresh 同一拉 status + branch) + `headSubject` 计算 ·
+  `commit(message:amend:) async` · WriteAction.commit case +
+  sourceControl.alert.commitFailed。
+- `Sources/Scribe/Views/SourceControlSidebar.swift` + branchHeader
+  + commitPanel：TextEditor (multi-line, placeholder overlay) +
+  Amend toggle（开启 预填 headSubject 仅在草稿空时不覆盖输入）·
+  Commit 按钮 .borderedProminent · ⌘⏎ 快捷键 · disabled
+  锁：空消息 或 (非 amend 且 staged=0) · 提交后启发式清草稿
+  · 隐藏在 .idle / .notInRepo。
+- `Sources/Scribe/Resources/{en,zh-Hans}.lproj/Localizable.strings`
+  + sourceControl.branch.detached + .commit.{placeholder, placeholder.amend,
+  amend, action, amend.action, shortcut.hint} + .alert.commitFailed。
+
+**测试**：+5 闸 (总 10) · commit 后 tree 空 + headSubject 一致 ·
+amend 不增加 commit count + 主题重写 · Unicode/多行体 stdin
+贯顺 · currentBranch 与 `git branch --show-current` 一致 ·
+游离 HEAD 返 nil。
+
+**未覆盖 (Phase 35b-2c / 35b-3)**：push/pull/fetch + ahead/behind
+indicator、remote branch picker、per-hunk stage (`git apply
+--cached <patch>`)、Project Diff multibuffer。
+
 ## Phase 35+ · 路线展望
 
 下面是想做的事，按重要度而非时间排。多条路线是 zed 调研后决定插入的。
 
-1. **Git v2 (Phase 35b-2b/2c/3)**：commit message textarea + push/pull/fetch + per-hunk stage/unstage + Project Diff multibuffer。复用 Phase 31/31b/35b-1/2a 的 GitDiffParser/Hunks/StatusParser/WriteResult。Phase 35b-1/2a 交付了读面 + file-level 写面。
+1. **Git v2 (Phase 35b-2c/3)**：push/pull/fetch + ahead/behind indicator + per-hunk stage/unstage + Project Diff multibuffer。复用 Phase 31/31b/35b-1/2a/2b 的 GitDiffParser/Hunks/StatusParser/WriteResult/commit 路径。Phase 35b-1/2a/2b 交付了读面 + file-level 写面 + commit。
 2. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末 annotation 显示 author/time/commit、冲突区上方 Accept/Reject 按钮。复用现有 GitClient。
 3. **LargeFile v3 (Phase 34d+)**：中途 cancel save、external-change
    mtime+size detection、SymbolOutline 读 buffer、细粒度 progress。

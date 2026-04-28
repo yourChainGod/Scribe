@@ -419,6 +419,7 @@ Phase 0.2/0.3 暂未截图。
 | **Phase 35a · scribe CLI** | `a7f96f7` | zed 调研 detour · Scripts/scribe bash wrapper (210 LOC) · -h/-v/-w/-n/-l/-d/-- 对齐 zed/code/subl · SCRIBE_AUTO_OPEN_LINE 新增 · README INSTALL_CLI 段 · 9 以 Process 调 wrapper · 不调 open（CI headless） |
 | **Phase 35b-1 · Source Control sidebar** | `ab8e21a` | GitFileStatus value · GitChangeKind enum + .unknown · GitStatusParser (NUL-separated `git status -z`) · GitClient.status(repo:) · GitStatusEngine 三状态 · SidebarMode.sourceControl + 侧栏第四 tab · SourceControlSidebar (Conflicts/Staged/Changes/Untracked 分段) · 16 tests · 零依赖 |
 | **Phase 35b-2a · row actions** | `b1d34ea` | GitClient.{stage,unstage,discardWorkingTree} (`git add`/`git restore --staged`/`git restore`) · WriteResult Sendable+Equatable · GitStatusEngine.{stage,unstage,discard}(_:) async + handleWriteResult NSAlert · SourceControlRow hover [discard]/[+]/[-] cluster · discard 走 destructive NSAlert 二次确认 · 5 git integration tests (真 scratch repo) · untracked discard 走 FileManager.removeItem |
+| **Phase 35b-2b · commit panel** | `7bf4e72` | GitClient.{commit,currentBranch,headSubject} · commit 走 stdin (`-F -`, `--cleanup=strip`) 避 argv 256 KiB 上限 · private runWithStdin helper · GitStatusEngine.@Published branch + commit(message:amend:) async + WriteAction.commit · SourceControlSidebar branchHeader (detached HEAD fallback) + commitPanel (multi-line TextEditor + placeholder overlay + Amend toggle 预填 headSubject + Commit 按钮 ⌘⏎ + disabled 锁) · 提交后启发式清草稿 · i18n 8 keys (en/zh) · +5 integration tests (commit/amend/Unicode multi-line/branch/detached) |
 
 ### 关键架构变化
 
@@ -482,7 +483,7 @@ Task { @MainActor [weak self] in
 
 `.github/workflows/ci.yml` 在 macos-15 跑（commit `4808f05` 后从 macos-14 升级，以匹配 Swift 6.0+ 工具链）：
 
-1. `swift test --parallel` — 243 tests 全绿
+1. `swift test --parallel` — 248 tests 全绿
 2. `swift build -c release` — release 编译 0 error
 3. `swift build -Xswiftc -swift-version -Xswiftc 6` — strict 模式 0 error 0 warning（Vendor/ 除外）
 4. `swift Scripts/check_localization.swift` — en ↔ zh-Hans key 一致 + 无 dangling reference
@@ -520,13 +521,15 @@ Task { @MainActor [weak self] in
 4. **Snippets v2**：`${1:placeholder}` 跳转 + tab 键从 buffer
    触发（Scintilla autocomplete） + per-language scope。Phase 33
    v1 只做了“静态 body 插入”、“面板选择”、“Settings 管理”。
-5. **Git v2 (Phase 35b-2b/2c/3)**：commit message textarea +
-   Commit/Amend、push/pull/fetch + branch indicator、per-hunk
-   stage/unstage (`git apply --cached`)、Project Diff multibuffer。
-   Phase 35b-1 交付读面（侧栏 · GitStatusParser · 分段），
-   Phase 35b-2a 交付 file-level 写面（hover stage/unstage/
-   discard）。复用 GitClient.WriteResult · GitStatusEngine
-   write helpers · GitDiffParser/Hunks/StatusParser。
+5. **Git v2 (Phase 35b-2c/3)**：push/pull/fetch + ahead/behind
+   indicator、remote branch picker、per-hunk stage/unstage
+   (`git apply --cached`)、Project Diff multibuffer。Phase 35b-1
+   交付读面（侧栏 · GitStatusParser · 分段），Phase 35b-2a
+   交付 file-level 写面（hover stage/unstage/discard），
+   Phase 35b-2b 交付 commit 面（TextEditor + Amend +
+   branch 指示器）。复用 GitClient.WriteResult · commit 走
+   stdin 路径 · GitStatusEngine write helpers · GitDiffParser/
+   Hunks/StatusParser。
 6. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末
    annotation 显示 author/time/commit · 冲突区上方 Accept/
    Reject 按钮。复用现有 GitClient。
@@ -547,13 +550,13 @@ Task { @MainActor [weak self] in
 ```
 Scribe 已从 0 长到 v1.0-rc ——
 SwiftUI Scene + Scintilla 5.6.1 + 8 主题 + 多光标 + 列选 + 全 i18n（en/zh-Hans）·
-Markdown 实时预览（手写转换器 + GFM 表格·task list·footnote + WKWebView）+ Git Gutter（unified-diff parser + Scintilla margin + ⌥⇧↑/↓ hunk 跳转） + Source Control 侧栏（`git status` 读面 · 分段显示 · hover 出 stage/unstage/discard） + 代码片段（⌘⇧T 选择器 + Settings 管理 tab） + 大文件 IO（≥ 64 MiB 走 SCI_CREATELOADER/GETTEXTRANGEFULL 分块 + atomic rename + OOM 护栏） + scribe CLI shim（对齐 zed/code/subl），零依赖·
+Markdown 实时预览（手写转换器 + GFM 表格·task list·footnote + WKWebView）+ Git Gutter（unified-diff parser + Scintilla margin + ⌥⇧↑/↓ hunk 跳转） + Source Control 侧栏（`git status` 读面 · 分段显示 · hover 出 stage/unstage/discard · 底部 commit 面板 ⌘⏎ + Amend toggle + branch 指示器） + 代码片段（⌘⇧T 选择器 + Settings 管理 tab） + 大文件 IO（≥ 64 MiB 走 SCI_CREATELOADER/GETTEXTRANGEFULL 分块 + atomic rename + OOM 护栏） + scribe CLI shim（对齐 zed/code/subl），零依赖·
 开 20 MB 文件主线程不卡 · 50 MB typing 不卡（50 ms debounce）·
-Swift 6 strict 0/0 · 243 tests + 4 perf budget · ScintillaCodeEditor.swift
+Swift 6 strict 0/0 · 248 tests + 4 perf budget · ScintillaCodeEditor.swift
 1083 → 385 行 · .app 双击即用 · CI 四道闸 push/PR 都跑 ·
 README/ROADMAP/HANDOFF 同步到位。
 
-下一拍：Phase 35b-2b (commit message + Commit/Amend) 或 Phase 35b-3 (per-hunk stage) 或 Phase 35c (inline blame + merge UI)。
+下一拍：Phase 35b-2c (push/pull/fetch + ahead/behind) 或 Phase 35b-3 (per-hunk stage) 或 Phase 35c (inline blame + merge UI)。
 ```
 
 ---
