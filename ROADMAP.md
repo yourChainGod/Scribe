@@ -641,12 +641,90 @@ id-noop / reset-replaces-user-snippets / Snippet Codable round-trip
 接入）、按语言 scope（现代码片段对所有文档可见）、导入/导出
 JSON 文件（UserDefaults 是唯一存储）。均为 v2 画饱。
 
-## Phase 34+ · 路线展望
+## Phase 34a · LargeFile Loader Plumbing（2026-04-28，commit `32c5433`）
+
+**目标**：ndd C++ 核心移植的第一拍。低风险上手：
+先全部为 chunked-load 需要的零件落地，不接 production 路径。单
+个 commit 小且独立，API 在 production 接入前被 tests 映射。
+
+**改动**：
+- `Vendor/scintilla/include/ScribeScintillaLoaderBridge.h` ·
+  `Vendor/scintilla/swiftpm-bridge/ScribeScintillaLoaderBridge.mm`
+  ObjC++ 面板调 `Scintilla::ILoader` 的 AddData / Convert /
+  Release。镜像 Lexilla 项目同样位置的 LexillaBridge。
+- `Vendor/scintilla/include/ScribeScintillaUmbrella.h` 里面 +
+  `#import "ScribeScintillaLoaderBridge.h"`。
+- `Package.swift`: Scintilla target sources 加 `swiftpm-bridge`。
+- `Sources/Scribe/Views/Scintilla/SCIConstants.swift`
+  + SCI.CREATELOADER / SETDOCPOINTER / RELEASEDOCUMENT /
+  ADDREFDOCUMENT message ID。
+  + SC.DOCUMENTOPTION_DEFAULT / STYLES_NONE / TEXT_LARGE。
+- `Sources/Scribe/Models/LargeFileLoader.swift`（140 行）
+  Swift wrapper over ILoader。`@MainActor static allocate
+  (on:initialSize:options:)` 为唯一 view-touch。实例
+  `@unchecked Sendable` 运行于后台 chunked pipeline。
+- `Sources/Scribe/Models/ChunkedFileReader.swift`（100 行）
+  mmap-backed `Data(.mappedIfSafe)`，每个块是共享页缓存的 O(1)
+  切片。Chunk size 底限 4 KiB 避免 AddData round-trip 抱獞。
+- `Sources/Scribe/Models/LargeFilePolicy.swift`（60 行）
+  64 MiB 阈值走 chunked。总是 STYLES_NONE。♥1.5 GiB 才翻
+  TEXT_LARGE。
+
+**测试**：16 例覆盖：LargeFilePolicyTests (6) / ChunkedFileReader
+Tests (8) / LargeFileLoaderTests (2 bridge symbol 可达性)。Live
+ILoader 集成 *不* 由 xctest 调 —— ScintillaView.init 在 headless
+环境下触 NSCursor 段错（同样约束与 ScintillaBridgeTests）。
+活路径 smoke 在 Phase 34b 打开 .app 测。
+
+## Phase 34b · LargeFile Production Path（2026-04-28，commit `67c7343`）
+
+**目标**：把 Phase 34a 零件接到发送路径。≥ 64 MiB 的文件现在
+走 SCI_CREATELOADER → chunked AddData → SCI_SETDOCPOINTER 路径，
+不再 materialise 为 Swift `String`。状态栏为 load 中文件显
+示“正在加载大文件…” affordance。
+
+**改动**：
+- `Sources/Scribe/Models/Document.swift`
+  + `@Published var isLargeFile: Bool = false`
+  + `@Published var loadProgress: Double = -1`
+  Documented contract：`doc.text` 对 large doc 始终为空；Find /
+  Markdown / git-gutter 读 `text` 在该场景下静默 no-op，未来
+  Phase 34c 教它们走 SCI_GETTEXTRANGE 读 Scintilla buffer。
+- `Sources/Scribe/Models/Workspace.swift`
+  `openFile` 在启 async 加载前跳个快速文件大小探针。
+  超阈值 → 打 isLargeFile=true / loadProgress=0、不启
+  loadAndDecode 、 return。小文件继续走原 String 路径。
+- `Sources/Scribe/Views/Scintilla/Coordinator+LargeFile.swift`（210 行）
+  - main: LargeFileLoader.allocate 唯一 view-touch。
+  - detached Task: ChunkedFileReader.forEachChunk → loader.addChunk
+    → loader.convertToDocument。返回 doc-pointer **以 Int** 带词
+    pattern 横跨 actor 边界（`UnsafeMutableRawPointer` 不
+    Sendable 下严格并发 mode）。
+  - main: SCI_SETDOCPOINTER lparam=address，翻主
+    loadProgress=1 / isLoading=false。
+  - Document-swap guard：载中用户切了 doc → SCI_RELEASEDOCUMENT
+    “孤儿”文档，不踩前台。
+  - 失败路径＞alloc / AddData / Convert / readFailed 都 cancel
+    loader · isLargeFile=false，用户可重开走原路径。
+- `Sources/Scribe/Views/ScintillaCodeEditor.swift`
+  + Coordinator.largeFileLoadStarted 防重入闸门。
+  + makeNSView 末尾调 `beginLargeFileLoadIfNeeded`。
+- `Sources/Scribe/Views/StatusBarView.swift`
+  + Loading banner：ProgressView + "status.largeFileLoading"。位于
+  modified 指示之前，优先级边检点。
+- `Sources/Scribe/Resources/{en,zh-Hans}.lproj/Localizable.strings`
+  + `status.largeFileLoading`。
+
+**未覆盖 (Phase 34c+)**：中途 cancel UX、细粒度 progress
+汇报、Find/Markdown/git-gutter 读 Scintilla buffer、大文件写路
+径（SCI_GETTEXTRANGE 分块 save）。
+
+## Phase 35+ · 路线展望
 
 下面是想做的事，按重要度而非时间排：
 
-1. **ndd C++ 核心移植**：`Encode.cpp` / `CmpareMode.cpp` / `HEXMode.cpp` / `LargeFile.cpp`
-   通过 ObjC++ shim 桥到 Swift；保留 GPL-3.0 copyleft。
+1. **LargeFile v2 (Phase 34c+)**：Find / Markdown / git-gutter 读
+   Scintilla buffer、分块 save、中途 cancel UX、细粒度 progress。
 2. **Document Map**：右侧缩略图侧栏（学 npp-mac，仅 SwiftUI）。
 3. **Snippets v2**：`${1:placeholder}` 跳转 + tab 键从 buffer 触发（Scintilla autocomplete） + per-language scope。
 4. **Git Gutter v2**：buffer-aware (HEAD blob ↔ in-memory text，无需先保存) + per-line revert。跳转已交付。
