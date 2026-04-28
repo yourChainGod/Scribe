@@ -36,7 +36,7 @@ Scribe 是一款 **macOS 原生** 文本与代码编辑器。SwiftUI 主壳 + Sc
 - **FSEvents 监听**：磁盘变更自动提示重载或保留。
 - **异步打开**：20 MB 文件不卡 UI（Phase 28b——主线程同步部分恒定 < 5 ms）。
 - **节流编辑**：50 MB 文件 typing 不卡 — SCN_MODIFIED 50 ms debounce（Phase 28c）。
-- **Markdown 预览**：⌘⇧V 在右侧 split 预览 .md 文件，所见即所得，WKWebView 渲染（Phase 30）。
+- **Markdown 预览**：⌘⇧V 在右侧 split 预览 .md 文件，所见即所得，WKWebView 渲染（Phase 30）。支持 GFM 表格 / task list `[ ] [x]` / footnote `[^id]`（Phase 32）。
 - **Git Gutter**：左侧窄 margin 画【+】【·】【—】三色纹显示相对 HEAD 的加/改/删行，保存后自动刷新（Phase 31）。⌥⇧↓ / ⌥⇧↑ 跳下一/上一个变更块（Phase 31b）。
 
 ### 完整本地化
@@ -47,7 +47,7 @@ Scribe 是一款 **macOS 原生** 文本与代码编辑器。SwiftUI 主壳 + Sc
 - **零外部 SwiftPM 依赖**。Vendor 中只有 Scintilla + Lexilla（GPL-2 兼容 GPL-3）。
 - **Swift 6 strict concurrency** 全绿，0 error / 0 warning（Vendor/scintilla 除外）。
 - **CI 四道闸**：`swift test` · `swift build -c release` · `swift build -swift-version 6` · Localizable strings 校验。
-- **164 个单元测试** 含 Theme / Lexer / TextFormat / Find-in-Files / Performance / DocumentFlush / MarkdownConverter / GitDiffParser / GitGutterHunks。
+- **182 个单元测试** 含 Theme / Lexer / TextFormat / Find-in-Files / Performance / DocumentFlush / MarkdownConverter / GitDiffParser / GitGutterHunks。
 
 ---
 
@@ -219,7 +219,8 @@ swift Scripts/check_localization.swift
 - ✅ Phase 30：Markdown 实时预览（手写转换器 + WKWebView，零依赖）
 - ✅ Phase 31：Git Gutter（unified-diff parser + Scintilla margin，零依赖）
 - ✅ Phase 31b：Git Gutter Hunk 跳转（⌥⇧↑/↓，环绕换行）
-- 🔜 Phase 32+：ndd C++ core / Document Map / Snippets / Markdown Preview v2 / HEX View / Sparkle
+- ✅ Phase 32：Markdown Preview v2（GFM 表格 · task list · footnote，零依赖）
+- 🔜 Phase 33+：Snippets / ndd C++ core / Document Map / Markdown Preview v3 / HEX View / Sparkle
 
 ---
 
