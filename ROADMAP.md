@@ -848,11 +848,49 @@ brew formula、bash/zsh completion script。
 message textarea · push/pull/fetch 按钮、Project Diff multibuffer
 （zed 可编辑 diff excerpts）、Inline blame + merge UI（Phase 35c）。
 
+## Phase 35b-2a · Source Control row actions（2026-04-28，commit `b1d34ea`）
+
+**背景**：35b-1 交付了读面，这拍交付 file-level 写面
+—— hover row 出 [discard]/[+stage]/[-unstage]。zed/VSCode 同
+样 hover-cluster 模式。
+
+**交付**：
+- `Sources/Scribe/Models/GitClient.swift` + `WriteResult` (Sendable
+  + Equatable) + `stage(path:repo:)` / `unstage(path:repo:)` /
+  `discardWorkingTree(path:repo:)`。3 个都是 nonisolated
+  static。zed/git-docs 推荐 `git restore --staged` 而非
+  古 `git reset HEAD --`，同采用。
+- `Sources/Scribe/Models/GitStatusEngine.swift` + `import AppKit`
+  + `stage(_:) / unstage(_:) / discard(_:) async` · detached
+  Task pipeline · untracked discard 走 FileManager.removeItem
+  (git 没东西可 restore) · WriteAction enum + handleWriteResult
+  on 错误 弹 NSAlert（用 sourceControl.alert.* i18n key）·
+  无论成败 refresh()。
+- `Sources/Scribe/Views/SourceControlSidebar.swift` + SourceControlRow
+  拿 engine · hover 出 rowActions：discard 总显 · unstage 仅
+  hasStagedChanges · stage 仅 hasUnstagedChanges 或 isUntracked
+  · "AM" 同时显 + 和 - · discard 走 NSAlert 二次确认 +
+  hasDestructiveAction。
+- `Sources/Scribe/Resources/{en,zh-Hans}.lproj/Localizable.strings`
+  + sourceControl.action.{stage,unstage,discard} +
+  .discard.confirm.{title,message} + .alert.{stage,unstage,discard}Failed
+  + alert.button.ok。
+
+**测试**：5 闸集成 · 每次在
+`NSTemporaryDirectory/scribe-git-write-<UUID>` 建 scratch repo
+· stage " M"→"M " · stage "??"→"A " · unstage "M "→" M" ·
+discardWorkingTree restore + status 空 · 重调幂等。
+`XCTSkipUnless /usr/bin/git`。
+
+**未覆盖 (Phase 35b-2b / 2c / 35b-3)**：commit message textarea +
+Commit/Amend、push/pull/fetch + branch indicator、per-hunk stage
+(`git apply --cached <patch>`)、Project Diff multibuffer。
+
 ## Phase 35+ · 路线展望
 
 下面是想做的事，按重要度而非时间排。多条路线是 zed 调研后决定插入的。
 
-1. **Git v2 (Phase 35b-2/3)**：per-hunk stage/unstage + commit message textarea + push/pull/fetch + Project Diff multibuffer。复用 Phase 31/31b/35b-1 的 GitDiffParser/Hunks/StatusParser。Phase 35b-1 交付了读面。
+1. **Git v2 (Phase 35b-2b/2c/3)**：commit message textarea + push/pull/fetch + per-hunk stage/unstage + Project Diff multibuffer。复用 Phase 31/31b/35b-1/2a 的 GitDiffParser/Hunks/StatusParser/WriteResult。Phase 35b-1/2a 交付了读面 + file-level 写面。
 2. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末 annotation 显示 author/time/commit、冲突区上方 Accept/Reject 按钮。复用现有 GitClient。
 3. **LargeFile v3 (Phase 34d+)**：中途 cancel save、external-change
    mtime+size detection、SymbolOutline 读 buffer、细粒度 progress。
