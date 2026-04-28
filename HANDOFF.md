@@ -557,7 +557,14 @@ Task { @MainActor [weak self] in
    BranchParser。
 6. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末
    annotation 显示 author/time/commit · 冲突区上方 Accept/
-   Reject 按钮。复用现有 GitClient。
+   Reject 按钮。35c-i 已交付 GitClient 数据层（BlameLine
+   struct + isUncommitted flag · BlameResult enum 与
+   HeadBlobResult 同形 · `blame(file:)` 走 `git blame
+   --porcelain --root` · `parseBlamePorcelain` 状态机
+   parser，SHA-cache 复用元数据，SHA-1+SHA-256 双支持，
+   malformed silent skip）+ 12 测试 (8 unit + 4 integration)。
+   35c-ii 接 Scintilla EOLAnnotation + caret hook + tooltip，
+   35c-iii 加 Settings 开关 + i18n。
 7. **LargeFile v3 (Phase 34d+)**：中途 cancel save UX、external-
    change 大文件 mtime+size diff、SymbolOutline / Markdown
    preview 读大文件 buffer。Phase 34a/34b/34c 交付了加载 +
@@ -577,11 +584,11 @@ Scribe 已从 0 长到 v1.0-rc ——
 SwiftUI Scene + Scintilla 5.6.1 + 8 主题 + 多光标 + 列选 + 全 i18n（en/zh-Hans）·
 Markdown 实时预览（手写转换器 + GFM 表格·task list·footnote + WKWebView）+ Git Gutter（unified-diff parser + Scintilla margin + ⌥⇧↑/↓ hunk 跳转） + Source Control 侧栏（`git status` 读面 · 分段显示 · hover 出 stage/unstage/discard · 行前 chevron 展开 hunk 列表 hover [+]/[-] · 行右键「在 Project Diff 中打开」跳 multibuffer 定位 · 底部 commit 面板 ⌘⏎ + Amend toggle · branch 名 Menu picker（Local/Remote + ✓ + auto-track）· 顶部 ahead/behind capsule + Project Diff multibuffer 入口 + fetch/pull/push 3 按钮 · push 右键出 force-with-lease · pull `--ff-only` 默认) + Project Diff 全工作区视图（read-only excerpts + per-hunk Stage/Unstage/Revert · 文件级 Stage All/Unstage All · Open File 跳转 · ScrollViewReader 自动定位 · ⌘F 跨文件 substring search + 黄色匹配高亮 · ⌘G/⇧⌘G 行级 next/prev 跳转 + 当前匹配橙色 + "k of N" 计数 · Done/ESC 关闭） + 代码片段（⌘⇧T 选择器 + Settings 管理 tab） + 大文件 IO（≥ 64 MiB 走 SCI_CREATELOADER/GETTEXTRANGEFULL 分块 + atomic rename + OOM 护栏） + scribe CLI shim（对齐 zed/code/subl），零依赖·
 开 20 MB 文件主线程不卡 · 50 MB typing 不卡（50 ms debounce）·
-Swift 6 strict 0/0 · 297 tests + 4 perf budget · ScintillaCodeEditor.swift
+Swift 6 strict 0/0 · 309 tests + 4 perf budget · ScintillaCodeEditor.swift
 1083 → 385 行 · .app 双击即用 · CI workflow（账单暂停中、`gh workflow disable CI` ）· 4 道闸本地 discipline ·
 README/ROADMAP/HANDOFF 同步到位。
 
-下一拍：Phase 35b-4-g (in-place 编辑 diff hunk excerpt + submodule + 流式 load) 或 Phase 35c (inline blame + merge UI) 或换主线 (LargeFile v3 / CLI v2 / Document Map …)。
+下一拍：Phase 35c-ii (Scintilla EOLAnnotation 接入 + caret hook + 时间相对化 + tooltip) 或 35b-4-g (in-place / submodule / 流式 load) 或换主线 (LargeFile v3 / CLI v2 / Document Map …)。
 ```
 
 ---

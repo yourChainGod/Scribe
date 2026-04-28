@@ -911,6 +911,80 @@ final class GitClientWriteIntegrationTests: XCTestCase {
         return String(data: data, encoding: .utf8) ?? ""
     }
 
+    // MARK: - Phase 35c-i · git blame round-trips
+
+    func test_blame_initialCommit_returnsAuthorAndCurrentSha() async throws {
+        // The setUp commit creates README.md with "initial\n" as
+        // its only line. blame() should resolve it to one row
+        // pointing at HEAD with the test identity baked in. We
+        // pin sha against `git rev-parse HEAD` so the test
+        // doesn't drift if setUp's commit message ever changes.
+        let head = try captureGit(["rev-parse", "HEAD"])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let result = GitClient.blame(file: readmeURL())
+        guard case .ok(let lines) = result else {
+            XCTFail("expected .ok, got: \(result)"); return
+        }
+        XCTAssertEqual(lines.count, 1)
+        XCTAssertEqual(lines[0].lineNo, 1)
+        XCTAssertEqual(lines[0].sha, head)
+        XCTAssertEqual(lines[0].author, "Scribe Test")
+        XCTAssertEqual(lines[0].authorEmail, "<test@scribe.app>")
+        XCTAssertEqual(lines[0].summary, "initial")
+        XCTAssertFalse(lines[0].isUncommitted)
+        // authorTime came from `git commit` clock; just sanity-
+        // check it's a positive Unix timestamp rather than 0.
+        XCTAssertGreaterThan(lines[0].authorTime, 0)
+    }
+
+    func test_blame_workingChange_marksLineUncommitted() async throws {
+        // Append a line in the working tree (no stage, no commit).
+        // git blame's porcelain emits the all-zeros SHA for it,
+        // which BlameLine.isUncommitted picks up. The original
+        // line still resolves to HEAD.
+        try seedFile(name: "README.md", contents: "initial\nadded\n")
+        let result = GitClient.blame(file: readmeURL())
+        guard case .ok(let lines) = result else {
+            XCTFail("expected .ok, got: \(result)"); return
+        }
+        XCTAssertEqual(lines.count, 2)
+        XCTAssertFalse(lines[0].isUncommitted,
+                       "line 1 should still be the HEAD commit")
+        XCTAssertTrue(lines[1].isUncommitted,
+                      "line 2 is a fresh working-tree edit")
+    }
+
+    func test_blame_untrackedFile_returnsUntracked() async throws {
+        // A file that exists on disk but isn't in the index has
+        // no blame surface at all. Mirroring headBlob's contract
+        // so the inline-blame UI can collapse both cases to "no
+        // annotations" without a special branch.
+        try seedFile(name: "scratch.txt", contents: "hi\n")
+        let url = repoURL.appendingPathComponent("scratch.txt")
+        let result = GitClient.blame(file: url)
+        if case .untracked = result {
+            // expected
+        } else {
+            XCTFail("expected .untracked, got: \(result)")
+        }
+    }
+
+    func test_blame_outsideRepo_returnsNotInRepo() async throws {
+        // Pick a path that has no .git ancestor. macOS
+        // /private/tmp is reliably outside any repo on a CI
+        // runner, and createDirectory makes setUp's repoURL its
+        // sibling rather than parent.
+        let outside = URL(fileURLWithPath: "/private/tmp/scribe-not-a-repo-\(UUID().uuidString).txt")
+        try "x\n".write(to: outside, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: outside) }
+        let result = GitClient.blame(file: outside)
+        if case .notInRepo = result {
+            // expected
+        } else {
+            XCTFail("expected .notInRepo, got: \(result)")
+        }
+    }
+
     // MARK: - Helpers
 
     /// Run a git invocation against `repoURL`. Throws on non-zero

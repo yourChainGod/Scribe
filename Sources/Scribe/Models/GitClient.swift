@@ -441,6 +441,188 @@ enum GitClient {
         }
     }
 
+    // MARK: - Phase 35c-i · git blame (data layer)
+
+    /// One source line's blame metadata. `lineNo` is 1-based to
+    /// align with editor display; the parser hides the
+    /// porcelain-format off-by-one mess from callers. `sha` is
+    /// the 40-char hex SHA-1 (or 64-char SHA-256 once `git
+    /// init --object-format=sha256` lands more broadly); both
+    /// shapes are accepted by the parser.
+    ///
+    /// `authorTime` is Unix epoch seconds — relative-time
+    /// rendering ("3 days ago") is a UI concern; this struct
+    /// stays format-agnostic.
+    ///
+    /// `summary` is the first line of the commit message. Email
+    /// is stored *with* the angle brackets (`<foo@bar.com>`),
+    /// matching git's wire format so callers don't have to
+    /// re-add them when echoing.
+    struct BlameLine: Sendable, Equatable {
+        var lineNo: Int
+        var sha: String
+        var author: String
+        var authorEmail: String
+        var authorTime: Int
+        var summary: String
+
+        /// Convenience flag — the "all-zeros" SHA git emits for
+        /// uncommitted lines (working tree edits not yet
+        /// committed). Inline blame UI usually skips these so
+        /// the caret line for fresh edits doesn't show "Not
+        /// Committed Yet".
+        var isUncommitted: Bool {
+            sha.allSatisfy { $0 == "0" }
+        }
+    }
+
+    /// Outcome of `blame(file:)`. Mirrors the shape of
+    /// `HeadBlobResult` so callers can pattern-match in the same
+    /// idiom: `untracked` and `notInRepo` collapse to "no inline
+    /// blame" in the UI without firing an alert; `error` carries
+    /// git's own diagnostic verbatim for the rare case where
+    /// blame fails on a tracked file (corrupt object DB, etc.).
+    enum BlameResult {
+        case ok([BlameLine])    // ordered by lineNo ascending
+        case untracked
+        case notInRepo
+        case error(String)
+    }
+
+    /// Run `git blame --porcelain --root -- <file>` and parse it
+    /// into one `BlameLine` per source line. `--root` makes the
+    /// initial commit's parent the all-zero SHA instead of
+    /// failing the command, so a freshly-init'd repo's first
+    /// file blames cleanly.
+    ///
+    /// Returns `.untracked` for files that exist on disk but
+    /// aren't in the index (mirrors `headBlob`'s convention so
+    /// the gutter and inline blame agree on "git knows about
+    /// this file" semantics).
+    nonisolated static func blame(file: URL) -> BlameResult {
+        let path = file.standardizedFileURL.path
+        guard let repoRoot = findRepoRoot(for: file) else {
+            return .notInRepo
+        }
+        let relative = relativize(path: path, from: repoRoot)
+        switch run(["ls-files", "--error-unmatch", "--", relative],
+                   cwd: repoRoot) {
+        case .failure: return .untracked
+        case .success: break
+        }
+        switch run(["blame",
+                    "--porcelain",
+                    "--root",
+                    "--", relative],
+                   cwd: repoRoot) {
+        case .success(let raw):
+            return .ok(parseBlamePorcelain(raw))
+        case .failure(let err):
+            return .error(err)
+        }
+    }
+
+    /// Pure parser for `git blame --porcelain` output. Split out
+    /// so it can be unit-tested without spawning git.
+    ///
+    /// Format (per source line):
+    ///
+    /// ```
+    /// <sha> <orig> <final>[ <count>]      ← group header
+    /// author NAME                          ← metadata block
+    /// author-mail <EMAIL>                  ← (only on first
+    /// author-time SECONDS                  ←  occurrence of
+    /// author-tz +0000                      ←  this sha)
+    /// committer ...
+    /// summary FIRST_LINE_OF_MSG
+    /// previous SHA FILENAME
+    /// filename FILENAME
+    /// <TAB>SOURCE_LINE                     ← terminates group
+    /// ```
+    ///
+    /// Subsequent groups for the same sha drop the metadata
+    /// block — git only emits it on first sight. We cache per-
+    /// sha so the second occurrence inherits without us having
+    /// to re-read the metadata. Lines that don't match any of
+    /// the expected shapes are silently skipped (defensive
+    /// against future git format additions).
+    nonisolated static func parseBlamePorcelain(_ raw: String) -> [BlameLine] {
+        struct Meta {
+            var author: String = ""
+            var authorEmail: String = ""
+            var authorTime: Int = 0
+            var summary: String = ""
+        }
+        var cache: [String: Meta] = [:]
+        var out: [BlameLine] = []
+        var pendingSha: String? = nil
+        var pendingFinalLine: Int = 0
+        var pending = Meta()
+        for line in raw.split(separator: "\n",
+                              omittingEmptySubsequences: false) {
+            let s = String(line)
+            if s.hasPrefix("\t") {
+                // Source-line terminator: emit one BlameLine
+                // using the cached + pending metadata for the
+                // current group's sha.
+                guard let sha = pendingSha else { continue }
+                if cache[sha] == nil {
+                    cache[sha] = pending
+                }
+                let meta = cache[sha] ?? pending
+                out.append(BlameLine(
+                    lineNo: pendingFinalLine,
+                    sha: sha,
+                    author: meta.author,
+                    authorEmail: meta.authorEmail,
+                    authorTime: meta.authorTime,
+                    summary: meta.summary))
+                pendingSha = nil
+                pending = Meta()
+                continue
+            }
+            // Group header detection: "<sha> <orig> <final>[
+            // <count>]". sha is 40 (SHA-1) or 64 (SHA-256) hex
+            // chars; both numeric tokens after it must parse.
+            let parts = s.split(separator: " ",
+                                maxSplits: 4,
+                                omittingEmptySubsequences: false)
+                          .map(String.init)
+            if parts.count >= 3,
+               (parts[0].count == 40 || parts[0].count == 64),
+               parts[0].allSatisfy({ $0.isHexDigit }),
+               Int(parts[1]) != nil,
+               let final = Int(parts[2]) {
+                pendingSha = parts[0]
+                pendingFinalLine = final
+                // Pre-seed pending from cache so a sha seen
+                // before doesn't lose its metadata if we never
+                // hit the "if cache[sha] == nil" branch (we
+                // would, but defensive).
+                pending = cache[parts[0]] ?? Meta()
+                continue
+            }
+            // Metadata line — only meaningful inside an open
+            // group. Outside a group (shouldn't happen with
+            // valid input, but tolerated) the line is dropped.
+            guard pendingSha != nil else { continue }
+            let kv = s.split(separator: " ",
+                             maxSplits: 1,
+                             omittingEmptySubsequences: false)
+                      .map(String.init)
+            guard let key = kv.first else { continue }
+            let value = kv.count > 1 ? kv[1] : ""
+            switch key {
+            case "author":      pending.author = value
+            case "author-mail": pending.authorEmail = value
+            case "author-time": pending.authorTime = Int(value) ?? 0
+            case "summary":     pending.summary = value
+            default:            break    // committer / filename / previous / boundary
+            }
+        }
+        return out
+    }
+
     // MARK: - Phase 35b-3 · per-hunk staging plumbing
 
     /// One unified-diff hunk with full body lines preserved. Unlike

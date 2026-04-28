@@ -1327,12 +1327,68 @@ GitHub 的 diff search 体感对齐。
 （mini editor 集成）· submodule diff · 流式 diff load（>10k
 文件工作区）。
 
+## Phase 35c-i · Inline Git Blame 数据层（2026-04-29）
+
+**背景**：Git v2 招牌闭环 96%+ 后转向上层 UI 品峰。Inline Git
+Blame 是 zed / vscode-GitLens 的标志性 1-line UI，让用户在
+caret 移动时即时看到当前行 author/time/SHA + commit summary。
+本拍只做最底层数据层（GitClient 的 blame() + porcelain
+parser），后续 35c-ii 接 Scintilla EOLAnnotation 渲染、
+35c-iii 加配置开关。
+
+**交付**：
+
+- `Sources/Scribe/Models/GitClient.swift` ·
+  - 新 `BlameLine` struct (`lineNo / sha / author /
+    authorEmail / authorTime / summary` + `isUncommitted`
+    convenience flag 检测 all-zeros sentinel SHA) ·
+    Sendable + Equatable。
+  - 新 `BlameResult` enum (`.ok([BlameLine]) / .untracked /
+    .notInRepo / .error(String)`) — 与 `HeadBlobResult` 同
+    形，inline blame UI 可与 gutter 共用 untracked / notInRepo
+    "跳过 annotation" 分支。
+  - 新 `blame(file:)` ⇒ 走 `git blame --porcelain --root --
+    <relative>`，`--root` 让初始 commit 的 parent 是全零 SHA
+    避免命令失败。Untracked check 复用现有 `ls-files
+    --error-unmatch` 与 `headBlob` 一致。
+  - 新 `parseBlamePorcelain(_ raw:)` 状态机解析：group
+    header (`<sha> <orig> <final>[ <count>]`) → 元数据 block
+    (`author / author-mail / author-time / summary`) →
+    `\t<source>` 行触发 BlameLine emit。SHA-cache 让二次出现
+    同 sha 复用首次的元数据（git porcelain "first sight"
+    优化）。SHA-1 (40-char) + SHA-256 (64-char) hex 双支持。
+    Malformed 行 silent skip。
+- `Tests/ScribeTests/GitBlameParserTests.swift` (new, 8 测试) ·
+  single-commit 多行 / multi-commit 交错 sha-cache 复用 /
+  all-zeros 工作树标识 / SHA-256 64-char header / 空输入 /
+  malformed sha 忽略 / 元数据 stray 在 group 之前丢弃 /
+  final 行号取 header 第二个数字。
+- `Tests/ScribeTests/GitClientWriteIntegrationTests.swift`
+  (+4 测试) · setUp `Scribe Test <test@scribe.app>` 初始
+  commit → blame README.md 验 sha=HEAD / author / email
+  / summary / authorTime > 0 / `isUncommitted == false` ·
+  追加未提交工作树行 → line 2 sha=all-zeros · 未跟踪文件
+  返 `.untracked` · 仓外路径返 `.notInRepo`。
+
+**测试**：+12 闸 (297 → 309)。8 unit (parseBlamePorcelain) +
+4 integration (real-repo blame round trip，gated on
+`/usr/bin/git`)。
+
+**未覆盖 (Phase 35c-ii)**：Scintilla EOLAnnotation 接入
+（`SCI_EOLANNOTATIONSETTEXT` 渲染当前 caret 行尾）+ caret
+line change hook + 时间相对化 ("3 days ago" / "刚刚")
+helper + hover tooltip 出 commit summary + 失败 / 未跟踪 /
+未保存 silent skip。
+
+**未覆盖 (Phase 35c-iii)**：Settings 开关（默认关 / 开 /
+仅当前光标行 / 全部行）+ i18n + 文档同步。
+
 ## Phase 35+ · 路线展望
 
 下面是想做的事，按重要度而非时间排。多条路线是 zed 调研后决定插入的。
 
 1. **Git v2 polish (Phase 35b-4-g)**：in-place 编辑 hunk excerpt（zed 风可编辑 diff，目前 ProjectDiffView 仍是 read-only）+ submodule diff + 流式 diff load。Phase 35b-1/2a/2b/2c/3/4-a/4-b/4-c/4-d/4-e/4-f 交付了读面 + file-level 写面 + commit + remote sync + per-hunk stage/unstage + 分支 picker + force-with-lease + Project Diff multibuffer (read-only) + Stage All / Unstage All + Revert Hunk + 侧栏右键跳 multibuffer + ⌘F 跨文件 search + ⌘G/⇧⌘G 行级 next/prev 闭环。
-2. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末 annotation 显示 author/time/commit、冲突区上方 Accept/Reject 按钮。复用现有 GitClient。
+2. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末 annotation 显示 author/time/commit、冲突区上方 Accept/Reject 按钮。35c-i 已交付数据层（GitClient.blame + parseBlamePorcelain + BlameLine + BlameResult），35c-ii 接 Scintilla EOLAnnotation + caret hook + tooltip，35c-iii 加 Settings 开关 + i18n。
 3. **LargeFile v3 (Phase 34d+)**：中途 cancel save、external-change
    mtime+size detection、SymbolOutline 读 buffer、细粒度 progress。
 4. **CLI shim v2 (Phase 35d+)**：IPC fifo 让 `--wait` 不再冷启动、bash/zsh completion、brew formula。
