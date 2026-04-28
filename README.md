@@ -85,6 +85,29 @@ SCRIBE_AUTO_FOLDER=/path/to/project swift run Scribe
 SCRIBE_AUTO_COMPARE=/path/a.txt:/path/b.txt swift run Scribe
 ```
 
+### `scribe` CLI（Phase 35a）
+
+`Scripts/scribe` 是一个 bash wrapper，对齐 `code` / `subl` / `zed`
+的命令行接口。安装：把 `Scribe.app` 拷到 `/Applications`，再把
+wrapper 链到 `$PATH` 里：
+
+```bash
+ln -sf "$PWD/Scripts/scribe" /usr/local/bin/scribe
+# 或者放在你 PATH 里的任何目录都行
+```
+
+常用法：
+```bash
+scribe README.md                       # 打开
+scribe -l 42 src/main.swift            # 打开到第 42 行
+scribe --diff old.txt new.txt          # 直接进 diff 视图
+scribe --wait COMMIT_EDITMSG           # 阻塞返回（git core.editor）
+git config --global core.editor "scribe --wait"
+```
+
+`--wait` v1 通过 `open -W -n` 实现，每次 cold-start 一个新 Scribe
+实例；Phase 35b 计划加 IPC fifo 让已运行的实例也能 wait。
+
 ---
 
 ## ⌨️ Cheat Sheet

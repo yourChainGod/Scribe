@@ -1,0 +1,225 @@
+#!/usr/bin/env bash
+#
+# scribe — CLI shim for Scribe.app (Phase 35a).
+#
+# Translates argv flags into the `SCRIBE_AUTO_*` env contract that
+# Scribe.app's StartupEnvironment already consumes, then dispatches
+# `open -a Scribe.app`. Mirrors the surface of `code` / `subl` /
+# `zed` so users coming from those editors don't have to relearn
+# the verbs.
+#
+# Why a shell wrapper instead of a Swift CLI binary:
+#   - SwiftPM-produced executables aren't natively bundle-aware;
+#     we'd need IPC to talk to the SwiftUI app process. That's a
+#     v2 nice-to-have, not a v1 blocker.
+#   - The wrapper has zero runtime dependencies — it's portable to
+#     bash 3 (the macOS system bash) and avoids dragging Python /
+#     a Swift toolchain into the install path.
+#
+# Limitations (documented in INSTALL_CLI in README):
+#   --wait        : delegates to `open -W -n`, which waits for the
+#                   spawned Scribe instance to exit. If Scribe is
+#                   already running, `-n` forces a fresh instance,
+#                   so `--wait` always cold-starts. Phase 35b will
+#                   add an IPC fifo for instance-shared waits.
+#   --line N      : forwarded to every file in this invocation
+#                   (matches `code -g` / `subl -l` semantics).
+#                   Per-file lines need separate `scribe` calls.
+#   --diff A B    : routes through SCRIBE_AUTO_COMPARE; the diff
+#                   pane already supports two arbitrary URLs.
+#
+
+set -euo pipefail
+
+VERSION="0.35a"
+APP_NAME="Scribe"
+APP_BUNDLE="${APP_NAME}.app"
+
+usage() {
+    cat <<'HELP'
+scribe — open files in Scribe.app from the command line.
+
+USAGE
+    scribe [options] [files...]
+
+OPTIONS
+    -h, --help              Show this help and exit.
+    -v, --version           Print scribe CLI version and exit.
+    -w, --wait              Wait for Scribe to exit before returning
+                            (suitable for `git core.editor`). v1
+                            cold-starts a fresh Scribe instance per
+                            call; multi-instance shared-wait IPC
+                            lands in Phase 35b.
+    -n, --new               Force a new Scribe window even if one
+                            is already open.
+    -l, --line N            Place the cursor on 1-based line N of
+                            each file given. N must be > 0.
+    -d, --diff A B          Open A and B in a side-by-side diff
+                            view instead of as regular tabs.
+        --                  Treat all subsequent arguments as files
+                            (use when a filename starts with `-`).
+
+EXAMPLES
+    scribe README.md
+    scribe -l 42 src/main.swift
+    scribe --wait COMMIT_EDITMSG          # for git core.editor
+    scribe --diff old.txt new.txt
+    git config --global core.editor "scribe --wait"
+HELP
+}
+
+# --- Parse flags ----------------------------------------------------
+
+WAIT=0
+NEW=0
+LINE=""
+DIFF_LEFT=""
+DIFF_RIGHT=""
+FILES=()
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        -v|--version)
+            echo "scribe $VERSION"
+            exit 0
+            ;;
+        -w|--wait)
+            WAIT=1
+            shift
+            ;;
+        -n|--new)
+            NEW=1
+            shift
+            ;;
+        -l|--line)
+            if [[ $# -lt 2 ]]; then
+                echo "scribe: --line requires a positive integer" >&2
+                exit 2
+            fi
+            # Strict-positive Int gate so the env knob downstream
+            # gets clean values; matches StartupEnvironment.current().
+            if ! [[ "$2" =~ ^[1-9][0-9]*$ ]]; then
+                echo "scribe: --line value must be a positive integer (got: $2)" >&2
+                exit 2
+            fi
+            LINE="$2"
+            shift 2
+            ;;
+        -d|--diff)
+            if [[ $# -lt 3 ]]; then
+                echo "scribe: --diff requires two file paths" >&2
+                exit 2
+            fi
+            DIFF_LEFT="$2"
+            DIFF_RIGHT="$3"
+            shift 3
+            ;;
+        --)
+            shift
+            while [[ $# -gt 0 ]]; do
+                FILES+=("$1")
+                shift
+            done
+            ;;
+        -*)
+            echo "scribe: unknown option: $1" >&2
+            echo "Run 'scribe --help' for usage." >&2
+            exit 2
+            ;;
+        *)
+            FILES+=("$1")
+            shift
+            ;;
+    esac
+done
+
+# --- Resolve paths to absolute --------------------------------------
+#
+# `open -a Scribe.app file.txt` works fine on its own, but the env
+# bridge we use (SCRIBE_AUTO_OPEN, SCRIBE_AUTO_COMPARE) reads paths
+# verbatim and the Scribe process's CWD will be the user's home —
+# not the shell's CWD. Resolve here so the contract stays simple.
+
+resolve_abs() {
+    local path="$1"
+    if [[ "$path" = /* ]]; then
+        printf '%s' "$path"
+    else
+        printf '%s/%s' "$PWD" "$path"
+    fi
+}
+
+ABS_FILES=()
+for f in "${FILES[@]:-}"; do
+    [[ -z "$f" ]] && continue
+    ABS_FILES+=("$(resolve_abs "$f")")
+done
+
+ABS_DIFF_LEFT=""
+ABS_DIFF_RIGHT=""
+if [[ -n "$DIFF_LEFT" ]]; then
+    ABS_DIFF_LEFT="$(resolve_abs "$DIFF_LEFT")"
+    ABS_DIFF_RIGHT="$(resolve_abs "$DIFF_RIGHT")"
+fi
+
+# --- Build env vars -------------------------------------------------
+
+ENV_PAIRS=()
+
+if [[ ${#ABS_FILES[@]} -gt 0 ]]; then
+    # SCRIBE_AUTO_OPEN expects colon-joined paths. We accept the
+    # rare path-with-colon edge case as undefined — same as the
+    # existing test rig. Document on a future commit if it bites.
+    JOINED=""
+    for f in "${ABS_FILES[@]}"; do
+        if [[ -n "$JOINED" ]]; then
+            JOINED="${JOINED}:${f}"
+        else
+            JOINED="$f"
+        fi
+    done
+    ENV_PAIRS+=("SCRIBE_AUTO_OPEN=$JOINED")
+fi
+
+if [[ -n "$LINE" ]]; then
+    ENV_PAIRS+=("SCRIBE_AUTO_OPEN_LINE=$LINE")
+fi
+
+if [[ -n "$ABS_DIFF_LEFT" ]]; then
+    ENV_PAIRS+=("SCRIBE_AUTO_COMPARE=${ABS_DIFF_LEFT}:${ABS_DIFF_RIGHT}")
+fi
+
+# --- Build `open` invocation ----------------------------------------
+
+OPEN_ARGS=("-a" "$APP_BUNDLE")
+
+if [[ $WAIT -eq 1 ]]; then
+    # `open -W` blocks until *some* instance exits; we pair it with
+    # `-n` so we always have a fresh instance to wait on. Without
+    # `-n`, an already-running Scribe makes `open` return
+    # immediately and `--wait` becomes a silent no-op — that's the
+    # exact failure mode users complain about with code's `-w`.
+    OPEN_ARGS+=("-W" "-n")
+elif [[ $NEW -eq 1 ]]; then
+    OPEN_ARGS+=("-n")
+fi
+
+# When we have file args, append them after `--` so `open` doesn't
+# misparse a path that happens to start with `-`. Empty file list is
+# fine — `open -a Scribe.app` just brings the app to the front.
+if [[ ${#ABS_FILES[@]} -gt 0 ]]; then
+    OPEN_ARGS+=("--")
+    OPEN_ARGS+=("${ABS_FILES[@]}")
+fi
+
+# --- Dispatch -------------------------------------------------------
+
+if [[ ${#ENV_PAIRS[@]} -gt 0 ]]; then
+    exec env "${ENV_PAIRS[@]}" open "${OPEN_ARGS[@]}"
+else
+    exec open "${OPEN_ARGS[@]}"
+fi

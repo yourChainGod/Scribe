@@ -37,6 +37,15 @@ struct StartupEnvironment {
     /// the diff path.
     let autoCompare: String
 
+    /// Phase 35a — 1-based line number passed via
+    /// `SCRIBE_AUTO_OPEN_LINE`. Plumbed through the CLI's `-l N`
+    /// flag so `scribe -l 42 src/main.swift` opens with the cursor
+    /// on line 42 (column 1). `nil` ⇒ no line targeting; opens the
+    /// file at its persisted position. Negative / zero values are
+    /// rejected at parse time so downstream `pendingScrollLine`
+    /// gets a clean Int? with valid values only.
+    let autoOpenLine: Int?
+
     /// Resolve from the current process environment.
     static func current() -> StartupEnvironment {
         let env = ProcessInfo.processInfo.environment
@@ -51,10 +60,21 @@ struct StartupEnvironment {
                     : nil
             }
 
+        // Parse SCRIBE_AUTO_OPEN_LINE as a strictly-positive Int.
+        // Garbage / zero / negatives are silently dropped; the
+        // caller behaves as though no line was requested. We
+        // deliberately don't surface a parse error — the CLI
+        // wrapper validates before launch, and any other launch
+        // path with a malformed line is most likely a bug we want
+        // to fail open (= file still opens, no scroll).
+        let line: Int? = (env["SCRIBE_AUTO_OPEN_LINE"]).flatMap(Int.init)
+            .flatMap { $0 > 0 ? $0 : nil }
+
         return StartupEnvironment(
             autoOpenURLs: urls,
             autoFolder: env["SCRIBE_AUTO_FOLDER"] ?? "",
-            autoCompare: env["SCRIBE_AUTO_COMPARE"] ?? ""
+            autoCompare: env["SCRIBE_AUTO_COMPARE"] ?? "",
+            autoOpenLine: line
         )
     }
 }
@@ -86,8 +106,15 @@ enum AppActivation {
 enum StartupAutoOpen {
     static func apply(_ env: StartupEnvironment, to workspace: Workspace) {
         DispatchQueue.main.async {
+            // Phase 35a — `-l N` from the CLI plumbs through to a
+            // single shared line number applied to every auto-opened
+            // file. The common case is `scribe -l 42 file.swift` (one
+            // file, one line); when multiple files are listed the
+            // line targets each of them, which matches `code` and
+            // `subl` semantics — users who want different lines per
+            // file invoke the CLI multiple times.
             for url in env.autoOpenURLs {
-                workspace.openFile(at: url)
+                workspace.openFile(at: url, line: env.autoOpenLine)
             }
             if !env.autoFolder.isEmpty {
                 let url = URL(fileURLWithPath: env.autoFolder)
