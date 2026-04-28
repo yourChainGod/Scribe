@@ -772,18 +772,56 @@ ILoader 集成 *不* 由 xctest 调 —— ScintillaView.init 在 headless
 大文件 mtime+size diff、SymbolOutline / Markdown preview 读
 大文件 buffer。
 
+## Phase 35a · scribe CLI shim（2026-04-28，commit `a7f96f7`）
+
+**背景**：zed 调研后的 detour —— zed 文档表面上主打
+协作/AI/CRDT/GPUI，但那些架构选择对一个 Scintilla
+后端的编辑器不适用。真正高 ROI 取经点为“现代编辑器
+都有 CLI shim”这个期望。没有它 Scribe 体现不了 `git
+core.editor`、从脚本调不动、要记 SCRIBE_AUTO_* env knob。
+
+**交付**：
+- `Scripts/scribe`（210 行 bash + chmod +x）
+  Argv 解析 → SCRIBE_AUTO_* env → `open -a Scribe.app`。接口
+  对齐 zed verbs：
+  - `-h/--help`、`-v/--version`
+  - `-w/--wait` · 适用 `git core.editor`（v1 用
+    `open -W -n`，冷启动；v2 上 IPC fifo）
+  - `-n/--new` 强制新实例
+  - `-l/--line N` · 1-based、在解析时拒绝 0 / 负 / 非数
+  - `-d/--diff A B` · 塑 SCRIBE_AUTO_COMPARE
+  - `--` stop flag，支持 `-` 开头的文件名
+  路径统一补全为绝对 ($PWD)，SwiftUI app 进程的 CWD 与
+  shell 不同，不补全会错错。
+- `Sources/Scribe/App/StartupEnvironment.swift`
+  + `autoOpenLine: Int?` 字段·从 SCRIBE_AUTO_OPEN_LINE 读取·
+    严格正整验证（0 / 负 / 非数 都 silently drop）。
+  + `StartupAutoOpen.apply` 传给 `workspace.openFile(at:line:)`。
+    多文件共享同一 line，同 `code -g` / `subl -l`。
+- `Tests/ScribeTests/ScribeCLITests.swift`（9 cases）
+  以 Process 调 wrapper · verify exit code / stdout / stderr。
+  覆盖 --version / --help / --line missing/bad/0/-5 / --diff
+  one-arg / unknown flag。不调实际 `open`（CI headless）。
+- `README.md`：Quick Start 下增“使用 scribe CLI (Phase 35a)”
+  子段·symlink 安装 · 用例 · v1 限制说明。
+
+**未覆盖 (Phase 35b+)**：IPC fifo 让已运行实例也能 wait、
+brew formula、bash/zsh completion script。
+
 ## Phase 35+ · 路线展望
 
-下面是想做的事，按重要度而非时间排：
+下面是想做的事，按重要度而非时间排。多条路线是 zed 调研后决定插入的。
 
-1. **LargeFile v3 (Phase 34d+)**：中途 cancel save、external-change
+1. **Git v2 (Phase 35b)**：Source Control 侧栏 + Project Diff 多文件视图 + per-hunk stage/unstage + commit UI。复用 Phase 31/31b GitDiffParser/Hunks。zed 调研点出的最高 ROI。
+2. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末 annotation 显示 author/time/commit、冲突区上方 Accept/Reject 按钮。复用现有 GitClient。
+3. **LargeFile v3 (Phase 34d+)**：中途 cancel save、external-change
    mtime+size detection、SymbolOutline 读 buffer、细粒度 progress。
-2. **Document Map**：右侧缩略图侧栏（学 npp-mac，仅 SwiftUI）。
-3. **Snippets v2**：`${1:placeholder}` 跳转 + tab 键从 buffer 触发（Scintilla autocomplete） + per-language scope。
-4. **Git Gutter v2**：buffer-aware (HEAD blob ↔ in-memory text，无需先保存) + per-line revert。跳转已交付。
-5. **Markdown Preview v3**：代码块语法高亮 + mermaid 图。
-6. **HEX View**：参考 ndd 的 `HEXMode.cpp`。
-7. **官方 disk image** + Sparkle 自动更新。
+4. **CLI shim v2 (Phase 35d+)**：IPC fifo 让 `--wait` 不再冷启动、bash/zsh completion、brew formula。
+5. **Document Map**：右侧缩略图侧栏（学 npp-mac，仅 SwiftUI）。
+6. **Snippets v2**：`${1:placeholder}` 跳转 + tab 键从 buffer 触发（Scintilla autocomplete） + per-language scope。
+7. **Markdown Preview v3**：代码块语法高亮 + mermaid 图。
+8. **HEX View**：参考 ndd 的 `HEXMode.cpp`。
+9. **官方 disk image** + Sparkle 自动更新。
 
 ---
 

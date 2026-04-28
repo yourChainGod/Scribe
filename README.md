@@ -50,7 +50,7 @@ Scribe 是一款 **macOS 原生** 文本与代码编辑器。SwiftUI 主壳 + Sc
 - **零外部 SwiftPM 依赖**。Vendor 中只有 Scintilla + Lexilla（GPL-2 兼容 GPL-3）。
 - **Swift 6 strict concurrency** 全绿，0 error / 0 warning（Vendor/scintilla 除外）。
 - **CI 四道闸**：`swift test` · `swift build -c release` · `swift build -swift-version 6` · Localizable strings 校验。
-- **213 个单元测试** 含 Theme / Lexer / TextFormat / Find-in-Files / Performance / DocumentFlush / MarkdownConverter / GitDiffParser / GitGutterHunks / SnippetCatalog / LargeFilePolicy / ChunkedFileReader / LargeFileLoader / ChunkedFileWriter。
+- **222 个单元测试** 含 Theme / Lexer / TextFormat / Find-in-Files / Performance / DocumentFlush / MarkdownConverter / GitDiffParser / GitGutterHunks / SnippetCatalog / LargeFilePolicy / ChunkedFileReader / LargeFileLoader / ChunkedFileWriter / ScribeCLI。
 
 ---
 
@@ -250,7 +250,8 @@ swift Scripts/check_localization.swift
 - ✅ Phase 34a：LargeFile Loader Plumbing（ObjC++ ILoader bridge + chunked reader + policy，16 tests）
 - ✅ Phase 34b：LargeFile Production Path（≥ 64 MiB 走 SCI_CREATELOADER 分块，状态栏 “正在加载大文件…”）
 - ✅ Phase 34c：LargeFile v2（SCI_GETTEXTRANGEFULL 分块 save + OOM 护栏 + status banner，6 tests）
-- 🔜 Phase 35+：LargeFile v3 / Document Map / Snippets v2 / Markdown Preview v3 / HEX View / Sparkle
+- ✅ Phase 35a：scribe CLI shim（bash wrapper · -h/-v/-w/-n/-l/-d/-- 对齐 zed/code/subl，9 tests）
+- 🔜 Phase 35+：Git v2 · Inline blame & merge UI · LargeFile v3 · Document Map · Snippets v2 · Markdown Preview v3 · HEX View · Sparkle
 
 ---
 
