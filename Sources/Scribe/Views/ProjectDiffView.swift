@@ -44,9 +44,21 @@ struct ProjectDiffView: View {
     /// the user is staging individual hunks.
     @State private var hasLoadedOnce: Bool = false
 
+    /// Phase 35b-4-e — diff search state. `searchVisible` toggles
+    /// the bar via the magnifying-glass button or ⌘F; `searchQuery`
+    /// is the live substring filter (case-insensitive). When the
+    /// bar is hidden the query is forced empty so a stale match
+    /// can't keep filtering invisible-state results.
+    @State private var searchVisible: Bool = false
+    @State private var searchQuery: String = ""
+    @FocusState private var searchFocused: Bool
+
     var body: some View {
         VStack(spacing: 0) {
             header
+            if searchVisible {
+                searchBar
+            }
             Divider()
             content
         }
@@ -76,6 +88,21 @@ struct ProjectDiffView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
             Spacer()
+            // Phase 35b-4-e — search toggle. Click or ⌘F to flip
+            // visibility; clicking when already visible collapses
+            // and clears the query so the next open is a clean
+            // slate.
+            Button {
+                toggleSearch()
+            } label: {
+                Image(systemName: searchVisible
+                      ? "magnifyingglass.circle.fill"
+                      : "magnifyingglass")
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .buttonStyle(.borderless)
+            .keyboardShortcut("f", modifiers: .command)
+            .help(L10n.t("projectDiff.action.search"))
             Button {
                 Task { await reload() }
             } label: {
@@ -94,6 +121,110 @@ struct ProjectDiffView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(Color(nsColor: .controlBackgroundColor))
+    }
+
+    /// Phase 35b-4-e — search bar shown below the header when
+    /// `searchVisible` is true. Plain TextField + clear button;
+    /// no regex, no whole-word, just substring (case-insensitive).
+    /// Filtering is computed lazily on `filteredEntries` so an
+    /// empty query is a free pass-through.
+    private var searchBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .font(.system(size: 12))
+            TextField(L10n.t("projectDiff.search.placeholder"),
+                      text: $searchQuery)
+                .textFieldStyle(.roundedBorder)
+                .focused($searchFocused)
+                .onSubmit {
+                    // Enter on an empty query collapses the bar —
+                    // otherwise it just commits the current filter.
+                    if searchQuery.isEmpty {
+                        searchVisible = false
+                    }
+                }
+            if !searchQuery.isEmpty {
+                Button {
+                    searchQuery = ""
+                    searchFocused = true
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.borderless)
+                .help(L10n.t("projectDiff.action.clearSearch"))
+            }
+            Text(searchCountLabel)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(Color(nsColor: .controlBackgroundColor))
+    }
+
+    /// Toggle the search bar. Opening focuses the field; closing
+    /// drops the query so a re-open starts clean.
+    private func toggleSearch() {
+        if searchVisible {
+            searchVisible = false
+            searchQuery = ""
+        } else {
+            searchVisible = true
+            // .async hop so the TextField is in the view tree
+            // before we ask it to take focus.
+            DispatchQueue.main.async { searchFocused = true }
+        }
+    }
+
+    /// "(N matches)" / "(no matches)" — only renders when the
+    /// query is non-empty, otherwise we keep the bar visually
+    /// quiet.
+    private var searchCountLabel: String {
+        let q = searchQuery.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return "" }
+        let n = filteredEntries.count
+        if n == 0 {
+            return L10n.t("projectDiff.search.noMatches")
+        }
+        let key = n == 1 ? "projectDiff.search.matches.one"
+                         : "projectDiff.search.matches.many"
+        return L10n.t(key, n)
+    }
+
+    // MARK: - Filtering
+
+    /// Search-aware view of `entries`. When the trimmed query is
+    /// empty, returns `entries` verbatim (free pass-through). When
+    /// non-empty, keeps only those entries that contain at least
+    /// one hunk with at least one body line whose substring
+    /// matches the query (case-insensitive). Hunks themselves
+    /// are not filtered out of the kept entries — the whole
+    /// file's diff stays visible so the user has surrounding
+    /// context, with the matching lines highlighted in the body.
+    private var filteredEntries: [ProjectDiffEntry] {
+        let q = searchQuery.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return entries }
+        return entries.filter { entry in
+            entry.stagedHunks.contains(where: { hunkMatches($0, q) })
+                || entry.workingHunks.contains(where: { hunkMatches($0, q) })
+        }
+    }
+
+    /// `true` iff any body line in `hunk` contains `q`
+    /// (case-insensitive substring).
+    private func hunkMatches(_ hunk: GitClient.Hunk, _ q: String) -> Bool {
+        hunk.bodyLines.contains(where: { lineMatches($0, q) })
+    }
+
+    /// Single-line match helper. Pulled out so highlight
+    /// rendering can share the exact same predicate the filter
+    /// uses — no risk of "shows in list but not highlighted".
+    private func lineMatches(_ line: String, _ q: String) -> Bool {
+        line.range(of: q, options: .caseInsensitive) != nil
     }
 
     /// "(N files)" — singular / plural is folded into the i18n
@@ -132,6 +263,20 @@ struct ProjectDiffView: View {
                     .foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if filteredEntries.isEmpty {
+            // Phase 35b-4-e — search is active but matches nothing.
+            // We still want the header search bar (lives above
+            // `content` in body) to stay live so the user can
+            // refine the query without losing focus.
+            VStack(spacing: 12) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 36, weight: .ultraLight))
+                    .foregroundStyle(.secondary)
+                Text("projectDiff.search.noMatches.detail",
+                     bundle: .module)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             // ScrollViewReader gives us programmatic .scrollTo for
             // the focus-path handoff from the sidebar; per-file
@@ -141,7 +286,7 @@ struct ProjectDiffView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 14) {
-                        ForEach(entries) { entry in
+                        ForEach(filteredEntries) { entry in
                             fileSection(entry)
                                 .id(entry.id)
                         }
@@ -349,6 +494,8 @@ struct ProjectDiffView: View {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(hunk.bodyLines.indices, id: \.self) { lineIdx in
                     let line = hunk.bodyLines[lineIdx]
+                    let q = searchQuery.trimmingCharacters(in: .whitespaces)
+                    let matched = !q.isEmpty && lineMatches(line, q)
                     HStack(spacing: 0) {
                         Text(line.isEmpty ? " " : line)
                             .font(.system(size: 12, design: .monospaced))
@@ -358,6 +505,14 @@ struct ProjectDiffView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .background(lineBackground(line))
+                    // Phase 35b-4-e — search match highlight. Layered
+                    // *over* the +/- diff tint via a second .background
+                    // call (SwiftUI stacks them bottom-up). Yellow
+                    // matches what zed / GitHub use; opacity stays low
+                    // so the underlying green/red still reads.
+                    .background(matched
+                                ? Color.yellow.opacity(0.30)
+                                : Color.clear)
                 }
             }
         }

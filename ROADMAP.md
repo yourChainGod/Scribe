@@ -1215,15 +1215,66 @@ revertHunk → 工作树/index 都干净）· `test_applyPatch_
 workingTreeReverseRemovesEdit`（直接走 GitClient API pin
 cached:false 契约）。
 
-**未覆盖 (后续)**：in-place 编辑 hunk excerpt（zed 让 user
-直接在 diff 面里改源文件，需 mini editor 集成）· 跨文件 diff
-search · submodule diff · 流式 diff load（>10k 文件工作区）。
+**未覆盖 (Phase 35b-4-e / 后续)**：跨文件 diff search、in-place
+编辑 hunk excerpt（zed 让 user 直接在 diff 面里改源文件，需
+mini editor 集成）· submodule diff · 流式 diff load（>10k 文
+件工作区）。
+
+## Phase 35b-4-e · Project Diff 跨文件 search bar（2026-04-29）
+
+**背景**：35b-4-d 收完 Revert + auto-jump，multibuffer 已具备
+完整 commit-prep 工作面。但 10+ 文件 dirty 时滚屏找特定符号
+仍嫌慢。本拍补一个轻量 search bar：⌘F 弹、substring 过滤、
+matched 行黄色 tint，对齐 zed Project Diff 的搜索体感。
+
+**交付**：
+
+- `Sources/Scribe/Views/ProjectDiffView.swift` ·
+  - `@State searchVisible/searchQuery` + `@FocusState
+    searchFocused` 三个 view-local state。
+  - header 加 `magnifyingglass` button (`⌘F` shortcut)
+    toggle visibility · 切换图标 `magnifyingglass.circle.fill`
+    表 active · 关闭时 query 强制清空避免 invisible state
+    残留过滤。
+  - 新 `searchBar` view (header 下方独立 strip) · TextField +
+    clear button (only when non-empty) + match count tail
+    label · `.onSubmit` 空 query enter ⇒ 收起 bar · 打开
+    时 `DispatchQueue.main.async` 延迟一拍取焦确保 TextField
+    已挂树。
+  - `filteredEntries` computed 先 trim whitespace · 空 query
+    pass-through · 否则按 file 维度 filter (`stagedHunks +
+    workingHunks` 任一含 `lineMatches` 的 file 保留全 hunks
+    供上下文)。
+  - `hunkMatches` / `lineMatches` 共享谓词 (Foundation
+    `range(of:options:.caseInsensitive)`) 让 filter 与 highlight
+    用同一规则，无 "列表里有但行不亮" 不同步。
+  - hunk body 渲染 layered `.background(matched ? Color.yellow.
+    opacity(0.30) : Color.clear)` 叠在已有 +/- diff tint 上。
+  - content 加第 4 态：`hasLoadedOnce && !entries.isEmpty &&
+    filteredEntries.isEmpty` ⇒ 居中 "No hunks match your search."
+    + magnifyingglass icon · header search bar 仍可见让 user
+    refine query 不丢焦。
+- `Sources/Scribe/Resources/{en,zh-Hans}.lproj/Localizable.strings`
+  + projectDiff.action.{search, clearSearch} +
+  projectDiff.search.{placeholder, noMatches, noMatches.detail,
+  matches.one, matches.many}（7 keys × 2 locale）。
+
+**测试**：0 新闸（保持 297）。search 是 view-only 逻辑，与
+35b-3-ii 同策略不写 SwiftUI unit test (依赖 NSAlert/NSModal/
+SwiftUI layout，端到端价值低于维护成本)；底层
+`projectDiff() / hunks(forPath:cached:)` plumbing 已被 35b-4-b/c/d
+共 10+ integration 覆盖。
+
+**未覆盖 (Phase 35b-4-f / 后续)**：in-place 编辑 hunk excerpt
+（zed 让 user 直接在 diff 面里改源文件，需 mini editor 集成）·
+submodule diff · 流式 diff load（>10k 文件工作区）· 多文件
+search highlight scroll-to-next。
 
 ## Phase 35+ · 路线展望
 
 下面是想做的事，按重要度而非时间排。多条路线是 zed 调研后决定插入的。
 
-1. **Git v2 polish (Phase 35b-4-e)**：in-place 编辑 hunk excerpt（zed 风可编辑 diff，目前 ProjectDiffView 仍是 read-only）+ 跨文件 diff search + submodule diff + 流式 diff load。Phase 35b-1/2a/2b/2c/3/4-a/4-b/4-c/4-d 交付了读面 + file-level 写面 + commit + remote sync + per-hunk stage/unstage + 分支 picker + force-with-lease + Project Diff multibuffer (read-only) + Stage All / Unstage All + Revert Hunk + 侧栏右键跳 multibuffer 闭环。
+1. **Git v2 polish (Phase 35b-4-f)**：in-place 编辑 hunk excerpt（zed 风可编辑 diff，目前 ProjectDiffView 仍是 read-only）+ submodule diff + 流式 diff load + 跨文件 search 高亮 next/prev 跳转。Phase 35b-1/2a/2b/2c/3/4-a/4-b/4-c/4-d/4-e 交付了读面 + file-level 写面 + commit + remote sync + per-hunk stage/unstage + 分支 picker + force-with-lease + Project Diff multibuffer (read-only) + Stage All / Unstage All + Revert Hunk + 侧栏右键跳 multibuffer + ⌘F 跨文件 search 闭环。
 2. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末 annotation 显示 author/time/commit、冲突区上方 Accept/Reject 按钮。复用现有 GitClient。
 3. **LargeFile v3 (Phase 34d+)**：中途 cancel save、external-change
    mtime+size detection、SymbolOutline 读 buffer、细粒度 progress。

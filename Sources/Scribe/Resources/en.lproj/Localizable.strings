@@ -88,6 +88,15 @@
 "sourceControl.alert.revertHunkFailed" = "Couldn’t revert hunk.";
 "projectDiff.action.openInDiff"        = "Open in Project Diff";
 "sourceControl.contextMenu.openFile"   = "Open File";
+
+// Project Diff search bar (Phase 35b-4-e)
+"projectDiff.action.search"            = "Search diff (⌘F)";
+"projectDiff.action.clearSearch"       = "Clear search";
+"projectDiff.search.placeholder"       = "Search hunks…";
+"projectDiff.search.noMatches"         = "no matches";
+"projectDiff.search.noMatches.detail"  = "No hunks match your search.";
+"projectDiff.search.matches.one"       = "%d match";
+"projectDiff.search.matches.many"      = "%d matches";
 "projectDiff.title"                 = "Project Diff";
 "projectDiff.loading"               = "Loading project diff…";
 "projectDiff.empty"                 = "No changes in the working tree.";
