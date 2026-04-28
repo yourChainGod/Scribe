@@ -53,6 +53,13 @@ struct ProjectDiffView: View {
     @State private var searchQuery: String = ""
     @FocusState private var searchFocused: Bool
 
+    /// Phase 35b-4-f — current match cursor. `nil` when no
+    /// search is active or the result set is empty; otherwise an
+    /// index into `matches` (0…N-1, wraps around). ⌘G advances,
+    /// ⇧⌘G retreats. Mutating this triggers a programmatic
+    /// `proxy.scrollTo(.center)` via `.onChange` below.
+    @State private var currentMatchIndex: Int? = nil
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -137,11 +144,20 @@ struct ProjectDiffView: View {
                       text: $searchQuery)
                 .textFieldStyle(.roundedBorder)
                 .focused($searchFocused)
+                .onChange(of: searchQuery) { _, _ in
+                    // A new query invalidates the cursor — drop
+                    // it so the count label reads "1 of N" again
+                    // and the next ⌘G lands on the first hit.
+                    currentMatchIndex = nil
+                }
                 .onSubmit {
-                    // Enter on an empty query collapses the bar —
-                    // otherwise it just commits the current filter.
+                    // Enter cycles forward (zed convention) when
+                    // matches exist; an empty query collapses the
+                    // bar to keep the keystroke free.
                     if searchQuery.isEmpty {
                         searchVisible = false
+                    } else if !matches.isEmpty {
+                        matchNext()
                     }
                 }
             if !searchQuery.isEmpty {
@@ -156,10 +172,36 @@ struct ProjectDiffView: View {
                 .buttonStyle(.borderless)
                 .help(L10n.t("projectDiff.action.clearSearch"))
             }
+            // Phase 35b-4-f — prev / next chevrons. Disabled when
+            // there's nothing to walk; the keyboard shortcuts on
+            // each button still register (SwiftUI grants .keyboard-
+            // Shortcut even on disabled controls), but the helpers
+            // guard on `matches.count > 0` so the no-op is silent.
+            Button {
+                matchPrev()
+            } label: {
+                Image(systemName: "chevron.up")
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .buttonStyle(.borderless)
+            .keyboardShortcut("g", modifiers: [.command, .shift])
+            .disabled(matches.isEmpty)
+            .help(L10n.t("projectDiff.action.searchPrev"))
+            Button {
+                matchNext()
+            } label: {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .buttonStyle(.borderless)
+            .keyboardShortcut("g", modifiers: .command)
+            .disabled(matches.isEmpty)
+            .help(L10n.t("projectDiff.action.searchNext"))
             Text(searchCountLabel)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
+                .frame(minWidth: 80, alignment: .trailing)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
@@ -180,22 +222,26 @@ struct ProjectDiffView: View {
         }
     }
 
-    /// "(N matches)" / "(no matches)" — only renders when the
-    /// query is non-empty, otherwise we keep the bar visually
-    /// quiet.
+    /// "k of N" / "no matches" — Phase 35b-4-f line-level
+    /// counter. Empty when the query is blank so the bar reads
+    /// quietly during normal editing. Falls back to "no matches"
+    /// when the predicate finds nothing in the working tree.
     private var searchCountLabel: String {
         let q = searchQuery.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return "" }
-        let n = filteredEntries.count
+        let n = matches.count
         if n == 0 {
             return L10n.t("projectDiff.search.noMatches")
         }
-        let key = n == 1 ? "projectDiff.search.matches.one"
-                         : "projectDiff.search.matches.many"
-        return L10n.t(key, n)
+        // "k" is 1-based for human display; the cursor is 0-based
+        // internally. When no match is selected yet (just opened
+        // the bar / typed a fresh query) we still show "1 of N"
+        // since the next ⌘G will land on index 0.
+        let k = (currentMatchIndex ?? 0) + 1
+        return L10n.t("projectDiff.search.kOfN", k, n)
     }
 
-    // MARK: - Filtering
+    // MARK: - Filtering (Phase 35b-4-e)
 
     /// Search-aware view of `entries`. When the trimmed query is
     /// empty, returns `entries` verbatim (free pass-through). When
@@ -225,6 +271,102 @@ struct ProjectDiffView: View {
     /// uses — no risk of "shows in list but not highlighted".
     private func lineMatches(_ line: String, _ q: String) -> Bool {
         line.range(of: q, options: .caseInsensitive) != nil
+    }
+
+    // MARK: - Match navigation (Phase 35b-4-f)
+
+    /// Coordinates of one matched body line — enough to derive a
+    /// stable SwiftUI view id and to look up the line for the
+    /// "current match" highlight check. `group` distinguishes the
+    /// staged vs working strip because the same hunk header +
+    /// body index can appear in both columns when an edit is
+    /// partially staged, and they're rendered as distinct rows.
+    fileprivate struct MatchLocation: Hashable, Equatable {
+        let entryId: String
+        let group: HunkGroup
+        let hunkIdx: Int
+        let lineIdx: Int
+
+        enum HunkGroup: String, Hashable { case staged, working }
+
+        /// View id consumed by both the row's `.id(...)` modifier
+        /// and `ScrollViewProxy.scrollTo`. Pipe is fine as a
+        /// separator because the components are `path |
+        /// rawValue("staged"/"working") | Int | Int` — none of
+        /// the integer components can collide with the string
+        /// constants, and path-with-pipe is rejected on macOS
+        /// HFS / APFS so collisions on the path side are also
+        /// not reachable.
+        var rowId: String {
+            "\(entryId)|\(group.rawValue)|\(hunkIdx)|\(lineIdx)"
+        }
+    }
+
+    /// Flat list of every matching body line across the filtered
+    /// set, in display order (top-to-bottom, staged-then-working
+    /// inside each file). Empty when the query is blank.
+    /// `currentMatchIndex` walks this list mod N.
+    private var matches: [MatchLocation] {
+        let q = searchQuery.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return [] }
+        var out: [MatchLocation] = []
+        for entry in filteredEntries {
+            for (hi, hunk) in entry.stagedHunks.enumerated() {
+                for (li, line) in hunk.bodyLines.enumerated()
+                where lineMatches(line, q) {
+                    out.append(.init(entryId: entry.id,
+                                     group: .staged,
+                                     hunkIdx: hi,
+                                     lineIdx: li))
+                }
+            }
+            for (hi, hunk) in entry.workingHunks.enumerated() {
+                for (li, line) in hunk.bodyLines.enumerated()
+                where lineMatches(line, q) {
+                    out.append(.init(entryId: entry.id,
+                                     group: .working,
+                                     hunkIdx: hi,
+                                     lineIdx: li))
+                }
+            }
+        }
+        return out
+    }
+
+    /// Move to the next match (wraps). No-op on empty list — the
+    /// chevron buttons are .disabled in that state, but ⌘G can
+    /// still reach the helper directly so the guard matters.
+    private func matchNext() {
+        let n = matches.count
+        guard n > 0 else { return }
+        let cur = currentMatchIndex ?? -1
+        currentMatchIndex = (cur + 1) % n
+    }
+
+    /// Symmetric to `matchNext`. `+ n` keeps the modulo non-
+    /// negative on the first prev-from-zero (Swift's `%` is
+    /// signed and would return -1 otherwise).
+    private func matchPrev() {
+        let n = matches.count
+        guard n > 0 else { return }
+        let cur = currentMatchIndex ?? 0
+        currentMatchIndex = (cur - 1 + n) % n
+    }
+
+    /// `true` iff the row being rendered IS the cursor's current
+    /// match — used to swap the body-row highlight from the
+    /// "any match" yellow tint to the "current" orange tint.
+    private func isCurrentMatch(entryId: String,
+                                group: MatchLocation.HunkGroup,
+                                hunkIdx: Int,
+                                lineIdx: Int) -> Bool {
+        guard let i = currentMatchIndex,
+              matches.indices.contains(i) else { return false }
+        let m = matches[i]
+        return m.entryId == entryId
+            && m.group == group
+            && m.hunkIdx == hunkIdx
+            && m.lineIdx == lineIdx
     }
 
     /// "(N files)" — singular / plural is folded into the i18n
@@ -303,7 +445,28 @@ struct ProjectDiffView: View {
                 .onChange(of: entries) { _, _ in
                     scrollIfNeeded(proxy, target: workspace.projectDiffFocusPath)
                 }
+                // Phase 35b-4-f — match cursor moved (⌘G / chevron
+                // / Enter / fresh query landing). Animate-scroll
+                // to the row id derived from MatchLocation; anchor
+                // .center so the highlight band sits in the middle
+                // of the viewport instead of just-above-the-fold.
+                .onChange(of: currentMatchIndex) { _, _ in
+                    scrollToCurrentMatch(proxy)
+                }
             }
+        }
+    }
+
+    /// Animate to the cursor's current match. No-op when the
+    /// cursor is `nil` or the index has been invalidated by a
+    /// reload — silent because the chevrons / ⌘G already
+    /// guarded `matches.count > 0` upstream.
+    private func scrollToCurrentMatch(_ proxy: ScrollViewProxy) {
+        guard let i = currentMatchIndex,
+              matches.indices.contains(i) else { return }
+        let target = matches[i].rowId
+        withAnimation(.easeOut(duration: 0.18)) {
+            proxy.scrollTo(target, anchor: .center)
         }
     }
 
@@ -430,7 +593,8 @@ struct ProjectDiffView: View {
             ForEach(hunks.indices, id: \.self) { idx in
                 hunkExcerpt(hunks[idx],
                             isStaged: isStaged,
-                            path: path)
+                            path: path,
+                            hunkIdx: idx)
                     .padding(.horizontal, 12)
             }
         }
@@ -453,7 +617,8 @@ struct ProjectDiffView: View {
     /// working tree.
     private func hunkExcerpt(_ hunk: GitClient.Hunk,
                              isStaged: Bool,
-                             path: String) -> some View {
+                             path: String,
+                             hunkIdx: Int) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text(hunk.headerLine)
@@ -496,6 +661,22 @@ struct ProjectDiffView: View {
                     let line = hunk.bodyLines[lineIdx]
                     let q = searchQuery.trimmingCharacters(in: .whitespaces)
                     let matched = !q.isEmpty && lineMatches(line, q)
+                    // Phase 35b-4-f — distinguish "current" (the
+                    // ⌘G cursor) vs "any other" match. Only one
+                    // row is current at any time; checking is
+                    // O(1) against `currentMatchIndex` not O(N).
+                    let group: MatchLocation.HunkGroup =
+                        isStaged ? .staged : .working
+                    let isCurrent = matched && isCurrentMatch(
+                        entryId: path,
+                        group: group,
+                        hunkIdx: hunkIdx,
+                        lineIdx: lineIdx)
+                    let rowId = MatchLocation(
+                        entryId: path,
+                        group: group,
+                        hunkIdx: hunkIdx,
+                        lineIdx: lineIdx).rowId
                     HStack(spacing: 0) {
                         Text(line.isEmpty ? " " : line)
                             .font(.system(size: 12, design: .monospaced))
@@ -507,12 +688,15 @@ struct ProjectDiffView: View {
                     .background(lineBackground(line))
                     // Phase 35b-4-e — search match highlight. Layered
                     // *over* the +/- diff tint via a second .background
-                    // call (SwiftUI stacks them bottom-up). Yellow
-                    // matches what zed / GitHub use; opacity stays low
-                    // so the underlying green/red still reads.
-                    .background(matched
-                                ? Color.yellow.opacity(0.30)
-                                : Color.clear)
+                    // call (SwiftUI stacks them bottom-up). Phase
+                    // 35b-4-f bumps the cursor's current match to
+                    // a brighter orange so the user can spot which
+                    // of the (possibly many) yellow rows is "this
+                    // one". Opacity stays low enough for the +/-
+                    // tint to still read underneath.
+                    .background(searchHighlight(matched: matched,
+                                                isCurrent: isCurrent))
+                    .id(rowId)
                 }
             }
         }
@@ -551,6 +735,23 @@ struct ProjectDiffView: View {
         case "-": return Color.red.opacity(0.10)
         default:  return .clear
         }
+    }
+
+    /// Phase 35b-4-f — highlight tint stacked on top of
+    /// `lineBackground`. Three states:
+    ///
+    /// - non-match → clear (the +/- tint shows through unchanged)
+    /// - match, not current → soft yellow (zed/GitHub palette)
+    /// - match, current → brighter orange (calls out the cursor)
+    ///
+    /// Opacities chosen so `+` / `-` tints remain visible
+    /// underneath both layers — verified manually against light
+    /// and dark `NSAppearance` modes.
+    private func searchHighlight(matched: Bool,
+                                 isCurrent: Bool) -> Color {
+        if !matched { return .clear }
+        if isCurrent { return Color.orange.opacity(0.55) }
+        return Color.yellow.opacity(0.30)
     }
 
     // MARK: - Refresh

@@ -87,14 +87,17 @@
 "projectDiff.action.openInDiff"        = "在 Project Diff 中打开";
 "sourceControl.contextMenu.openFile"   = "打开文件";
 
-// Project Diff 搜索栏（Phase 35b-4-e）
+// Project Diff 搜索栏（Phase 35b-4-e / 35b-4-f）
 "projectDiff.action.search"            = "搜索 diff（⌘F）";
 "projectDiff.action.clearSearch"       = "清空搜索";
+"projectDiff.action.searchNext"        = "下一个匹配（⌘G）";
+"projectDiff.action.searchPrev"        = "上一个匹配（⇧⌘G）";
 "projectDiff.search.placeholder"       = "搜索 hunk…";
 "projectDiff.search.noMatches"         = "无匹配";
 "projectDiff.search.noMatches.detail"  = "没有 hunk 匹配此搜索。";
 "projectDiff.search.matches.one"       = "%d 个匹配";
 "projectDiff.search.matches.many"      = "%d 个匹配";
+"projectDiff.search.kOfN"              = "%d / %d";
 "projectDiff.title"                 = "Project Diff";
 "projectDiff.loading"               = "正在加载 Project Diff…";
 "projectDiff.empty"                 = "工作树没有任何改动。";

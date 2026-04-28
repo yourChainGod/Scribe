@@ -89,14 +89,17 @@
 "projectDiff.action.openInDiff"        = "Open in Project Diff";
 "sourceControl.contextMenu.openFile"   = "Open File";
 
-// Project Diff search bar (Phase 35b-4-e)
+// Project Diff search bar (Phase 35b-4-e / 35b-4-f)
 "projectDiff.action.search"            = "Search diff (⌘F)";
 "projectDiff.action.clearSearch"       = "Clear search";
+"projectDiff.action.searchNext"        = "Next match (⌘G)";
+"projectDiff.action.searchPrev"        = "Previous match (⇧⌘G)";
 "projectDiff.search.placeholder"       = "Search hunks…";
 "projectDiff.search.noMatches"         = "no matches";
 "projectDiff.search.noMatches.detail"  = "No hunks match your search.";
 "projectDiff.search.matches.one"       = "%d match";
 "projectDiff.search.matches.many"      = "%d matches";
+"projectDiff.search.kOfN"              = "%d of %d";
 "projectDiff.title"                 = "Project Diff";
 "projectDiff.loading"               = "Loading project diff…";
 "projectDiff.empty"                 = "No changes in the working tree.";

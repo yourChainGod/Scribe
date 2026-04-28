@@ -1265,16 +1265,73 @@ SwiftUI layout，端到端价值低于维护成本)；底层
 `projectDiff() / hunks(forPath:cached:)` plumbing 已被 35b-4-b/c/d
 共 10+ integration 覆盖。
 
-**未覆盖 (Phase 35b-4-f / 后续)**：in-place 编辑 hunk excerpt
-（zed 让 user 直接在 diff 面里改源文件，需 mini editor 集成）·
-submodule diff · 流式 diff load（>10k 文件工作区）· 多文件
-search highlight scroll-to-next。
+**未覆盖 (Phase 35b-4-f / 后续)**：search next/prev 跳转、
+in-place 编辑 hunk excerpt（zed 让 user 直接在 diff 面里改源
+文件，需 mini editor 集成）· submodule diff · 流式 diff load
+（>10k 文件工作区）。
+
+## Phase 35b-4-f · search next/prev + 行级 scroll-to（2026-04-29）
+
+**背景**：35b-4-e 上线了 ⌘F substring filter 与 yellow 行高亮，
+但用户在 100+ 匹配行的工作区还得手动滚屏找。本拍补 ⌘G /
+⇧⌘G 跳下/上一个匹配 + 行级 .id 让 ScrollViewReader 精准滚到
+当前匹配 + current 匹配单独标橙比 yellow 更显眼，与 zed /
+GitHub 的 diff search 体感对齐。
+
+**交付**：
+
+- `Sources/Scribe/Views/ProjectDiffView.swift` ·
+  - `@State currentMatchIndex: Int? = nil` 加 view-local
+    cursor。query 改变时 `.onChange(of: searchQuery)` 自动
+    清 cursor。
+  - 新 `MatchLocation` struct (`entryId / group:.staged|
+    .working / hunkIdx / lineIdx`) + `rowId` computed
+    `"<path>|staged|<hunk>|<line>"` —— SwiftUI `.id` 与
+    `proxy.scrollTo` 共用同一 ID 推导。
+  - `matches` computed：扫 `filteredEntries` 的
+    staged-then-working 双层数组，按 display order push 到
+    flat list。空 query 直接返 `[]`。
+  - `matchNext` / `matchPrev` 取模 wrap (Swift `%` 是 signed，
+    `+ n` 防 prev-from-zero 负)。
+  - `isCurrentMatch(entryId:group:hunkIdx:lineIdx:)` O(1) 查
+    cursor 用于决定该行是 yellow 还是 orange。
+  - `searchBar` 加两个 chevron Button (`chevron.up` /
+    `chevron.down`) + `.keyboardShortcut("g", modifiers:
+    [.command, .shift])` / `.command`，`.disabled
+    (matches.isEmpty)`，help tooltip 走 i18n。
+  - `onSubmit` 改为 zed convention：query 非空 ⇒ matchNext，
+    空 ⇒ 收起 bar。
+  - `searchCountLabel` 改 "k of N" 走新 key
+    `projectDiff.search.kOfN`，cursor `nil` 时显示 "1 of N"
+    （下次 ⌘G 落在 0）。
+  - `hunkGroup` 把 hunk index 透传给 `hunkExcerpt(_:isStaged:
+    path:hunkIdx:)`。
+  - body 行 `.id(MatchLocation(...).rowId)`；`.background` 叠
+    `searchHighlight(matched:isCurrent:)` —— `clear /
+    yellow.opacity(0.30) / orange.opacity(0.55)` 三态。
+  - `ScrollViewReader` 加第 3 个 `.onChange(of:
+    currentMatchIndex)` ⇒ `scrollToCurrentMatch(proxy)`
+    走 `withAnimation(.easeOut(0.18)) { proxy.scrollTo(
+    rowId, anchor: .center) }`。.center 让高亮带落在视口
+    中央而非贴底。
+- `Sources/Scribe/Resources/{en,zh-Hans}.lproj/Localizable.strings`
+  + projectDiff.action.{searchNext, searchPrev} +
+  projectDiff.search.kOfN（3 keys × 2 locale）。
+  - en：`%d of %d` · zh：`%d / %d`。
+
+**测试**：0 新闸（保持 297）。与 35b-4-e 同策略 view-only
+逻辑不写 SwiftUI unit test。底层 `lineMatches` /
+`projectDiff()` 全 covered。
+
+**未覆盖 (Phase 35b-4-g / 后续)**：in-place 编辑 hunk excerpt
+（mini editor 集成）· submodule diff · 流式 diff load（>10k
+文件工作区）。
 
 ## Phase 35+ · 路线展望
 
 下面是想做的事，按重要度而非时间排。多条路线是 zed 调研后决定插入的。
 
-1. **Git v2 polish (Phase 35b-4-f)**：in-place 编辑 hunk excerpt（zed 风可编辑 diff，目前 ProjectDiffView 仍是 read-only）+ submodule diff + 流式 diff load + 跨文件 search 高亮 next/prev 跳转。Phase 35b-1/2a/2b/2c/3/4-a/4-b/4-c/4-d/4-e 交付了读面 + file-level 写面 + commit + remote sync + per-hunk stage/unstage + 分支 picker + force-with-lease + Project Diff multibuffer (read-only) + Stage All / Unstage All + Revert Hunk + 侧栏右键跳 multibuffer + ⌘F 跨文件 search 闭环。
+1. **Git v2 polish (Phase 35b-4-g)**：in-place 编辑 hunk excerpt（zed 风可编辑 diff，目前 ProjectDiffView 仍是 read-only）+ submodule diff + 流式 diff load。Phase 35b-1/2a/2b/2c/3/4-a/4-b/4-c/4-d/4-e/4-f 交付了读面 + file-level 写面 + commit + remote sync + per-hunk stage/unstage + 分支 picker + force-with-lease + Project Diff multibuffer (read-only) + Stage All / Unstage All + Revert Hunk + 侧栏右键跳 multibuffer + ⌘F 跨文件 search + ⌘G/⇧⌘G 行级 next/prev 闭环。
 2. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末 annotation 显示 author/time/commit、冲突区上方 Accept/Reject 按钮。复用现有 GitClient。
 3. **LargeFile v3 (Phase 34d+)**：中途 cancel save、external-change
    mtime+size detection、SymbolOutline 读 buffer、细粒度 progress。
