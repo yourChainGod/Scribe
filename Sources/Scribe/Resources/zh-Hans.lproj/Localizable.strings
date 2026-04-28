@@ -68,6 +68,16 @@
 "sourceControl.alert.pullFailed"       = "pull 失败。";
 "sourceControl.alert.pushFailed"       = "push 失败。";
 
+// 单 hunk 暂存（Phase 35b-3-ii）
+"sourceControl.hunk.expand"             = "展开 hunk";
+"sourceControl.hunk.collapse"           = "收起 hunk";
+"sourceControl.hunk.loading"            = "正在加载 hunk…";
+"sourceControl.hunk.none"               = "此文件没有可显示的 hunk。";
+"sourceControl.action.stageHunk"        = "暂存此 hunk";
+"sourceControl.action.unstageHunk"      = "取消暂存此 hunk";
+"sourceControl.alert.stageHunkFailed"   = "暂存 hunk 失败。";
+"sourceControl.alert.unstageHunkFailed" = "取消暂存 hunk 失败。";
+
 // MARK: - Tabs
 
 "tab.untitled"            = "未命名";

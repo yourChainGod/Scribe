@@ -215,21 +215,73 @@ final class GitStatusEngine: ObservableObject {
         handleWriteResult(result, action: .push)
     }
 
+    /// Phase 35b-3-ii — fetch hunks for a single file. `cached: false`
+    /// returns working-tree-vs-index hunks (the source of "stage
+    /// hunk"); `cached: true` returns index-vs-HEAD hunks (the
+    /// source of "unstage hunk"). Returns an empty array on any git
+    /// failure so the sidebar's expand-to-show-hunks affordance just
+    /// collapses gracefully — a transient git error mid-typing
+    /// shouldn't pop an alert.
+    func hunks(forPath path: String, cached: Bool) async -> [GitClient.Hunk] {
+        guard let repo else { return [] }
+        return await Task.detached(priority: .userInitiated) {
+            () -> [GitClient.Hunk] in
+            switch GitClient.diffForApply(path: path,
+                                          repo: repo,
+                                          cached: cached) {
+            case .diff(let raw):
+                return GitClient.parseHunks(raw)
+            case .untracked, .notInRepo, .error:
+                return []
+            }
+        }.value
+    }
+
+    /// Stage one hunk from the working tree into the index. The hunk
+    /// must originate from a `cached: false` diff — applying a hunk
+    /// extracted from somewhere else won't locate cleanly because
+    /// the line numbers and context strings are tied to the working
+    /// tree's current state.
+    func stageHunk(_ hunk: GitClient.Hunk, path: String) async {
+        guard let repo else { return }
+        let patch = hunk.minimalPatch(forFilePath: path)
+        let result = await Task.detached(priority: .userInitiated) {
+            GitClient.applyPatch(patch, repo: repo, reverse: false)
+        }.value
+        handleWriteResult(result, action: .stageHunk)
+    }
+
+    /// Unstage one hunk from the index back into the working tree.
+    /// `hunk` must originate from a `cached: true` diff for the
+    /// same reason — its line numbers describe the index, and
+    /// reverse-apply needs that context to find the right slice.
+    func unstageHunk(_ hunk: GitClient.Hunk, path: String) async {
+        guard let repo else { return }
+        let patch = hunk.minimalPatch(forFilePath: path)
+        let result = await Task.detached(priority: .userInitiated) {
+            GitClient.applyPatch(patch, repo: repo, reverse: true)
+        }.value
+        handleWriteResult(result, action: .unstageHunk)
+    }
+
     /// Internal — write-op kinds used to label the failure alert.
     /// The `failureKey` indirection feeds L10n at the time the
     /// alert is built so the message follows the system language.
     private enum WriteAction {
-        case stage, unstage, discard, commit, fetch, pull, push
+        case stage, unstage, discard, commit, fetch, pull, push,
+             stageHunk, unstageHunk
 
         var failureKey: String {
             switch self {
-            case .stage:   return "sourceControl.alert.stageFailed"
-            case .unstage: return "sourceControl.alert.unstageFailed"
-            case .discard: return "sourceControl.alert.discardFailed"
-            case .commit:  return "sourceControl.alert.commitFailed"
-            case .fetch:   return "sourceControl.alert.fetchFailed"
-            case .pull:    return "sourceControl.alert.pullFailed"
-            case .push:    return "sourceControl.alert.pushFailed"
+            case .stage:        return "sourceControl.alert.stageFailed"
+            case .unstage:      return "sourceControl.alert.unstageFailed"
+            case .discard:      return "sourceControl.alert.discardFailed"
+            case .commit:       return "sourceControl.alert.commitFailed"
+            case .fetch:        return "sourceControl.alert.fetchFailed"
+            case .pull:         return "sourceControl.alert.pullFailed"
+            case .push:         return "sourceControl.alert.pushFailed"
+            case .stageHunk:    return "sourceControl.alert.stageHunkFailed"
+            case .unstageHunk:  return "sourceControl.alert.unstageHunkFailed"
             }
         }
     }

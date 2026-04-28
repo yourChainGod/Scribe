@@ -70,6 +70,16 @@
 "sourceControl.alert.pullFailed"       = "Couldn’t pull.";
 "sourceControl.alert.pushFailed"       = "Couldn’t push.";
 
+// Per-hunk staging (Phase 35b-3-ii)
+"sourceControl.hunk.expand"             = "Show hunks";
+"sourceControl.hunk.collapse"           = "Hide hunks";
+"sourceControl.hunk.loading"            = "Loading hunks…";
+"sourceControl.hunk.none"               = "No hunks for this file.";
+"sourceControl.action.stageHunk"        = "Stage Hunk";
+"sourceControl.action.unstageHunk"      = "Unstage Hunk";
+"sourceControl.alert.stageHunkFailed"   = "Couldn’t stage hunk.";
+"sourceControl.alert.unstageHunkFailed" = "Couldn’t unstage hunk.";
+
 // MARK: - Tabs
 
 "tab.untitled"            = "Untitled";

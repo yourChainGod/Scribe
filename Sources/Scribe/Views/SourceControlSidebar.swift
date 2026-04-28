@@ -279,25 +279,38 @@ struct SourceControlSidebar: View {
                     section(titleKey: "sourceControl.section.conflicts",
                             count: conflicts.count,
                             tint: .red,
-                            rows: conflicts)
+                            rows: conflicts,
+                            hunkSource: nil)
                 }
                 if !staged.isEmpty {
+                    // Phase 35b-3-ii — staged rows expand into the
+                    // cached diff (index-vs-HEAD) so each hunk is
+                    // unstage-able.
                     section(titleKey: "sourceControl.section.staged",
                             count: staged.count,
                             tint: .green,
-                            rows: staged)
+                            rows: staged,
+                            hunkSource: .staged)
                 }
                 if !changes.isEmpty {
+                    // Phase 35b-3-ii — changes rows expand into the
+                    // working diff (working-vs-index) so each hunk
+                    // is stage-able.
                     section(titleKey: "sourceControl.section.changes",
                             count: changes.count,
                             tint: .orange,
-                            rows: changes)
+                            rows: changes,
+                            hunkSource: .changes)
                 }
                 if !untracked.isEmpty {
+                    // Untracked has no two-sided diff, so no per-
+                    // hunk surface. The whole-file [+] in the row
+                    // hover already covers staging it.
                     section(titleKey: "sourceControl.section.untracked",
                             count: untracked.count,
                             tint: .gray,
-                            rows: untracked)
+                            rows: untracked,
+                            hunkSource: nil)
                 }
                 Spacer(minLength: 16)
             }
@@ -309,7 +322,8 @@ struct SourceControlSidebar: View {
     private func section(titleKey: LocalizedStringKey,
                          count: Int,
                          tint: Color,
-                         rows: [GitFileStatus]) -> some View {
+                         rows: [GitFileStatus],
+                         hunkSource: SourceControlRow.HunkSource?) -> some View {
         HStack(spacing: 6) {
             Text(titleKey, bundle: .module)
                 .font(.system(size: 11, weight: .semibold))
@@ -329,7 +343,7 @@ struct SourceControlSidebar: View {
         .padding(.vertical, 4)
 
         ForEach(rows) { row in
-            SourceControlRow(row: row, engine: engine)
+            SourceControlRow(row: row, engine: engine, hunkSource: hunkSource)
                 .onTapGesture {
                     workspace.openFile(at: row.url)
                 }
@@ -358,53 +372,151 @@ struct SourceControlSidebar: View {
 /// stable when sections re-shuffle (the engine refresh may move a
 /// file from "Changes" → "Staged" without it disappearing).
 private struct SourceControlRow: View {
+    /// Phase 35b-3-ii — which side of the diff the row's hunk
+    /// expansion uses, and therefore what the per-hunk button
+    /// does. `.staged` ⇒ unstage from index. `.changes` ⇒ stage
+    /// into index. Conflict / untracked rows are passed nil at
+    /// the call site, which suppresses the chevron entirely.
+    enum HunkSource { case staged, changes }
+
     let row: GitFileStatus
     let engine: GitStatusEngine
+    let hunkSource: HunkSource?
     @State private var hover = false
+    @State private var expanded = false
+    @State private var hunks: [GitClient.Hunk] = []
+    @State private var hunksLoaded = false
+    @State private var hunksLoading = false
 
     var body: some View {
-        HStack(spacing: 6) {
-            Text(statusLabel)
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .foregroundStyle(statusTint)
-                .frame(width: 16, alignment: .center)
-            Image(systemName: "doc.text")
-                .foregroundStyle(.secondary)
-                .font(.system(size: 11))
-            // Display the file name + parent directory hint so two
-            // `index.ts` rows from different folders don't collapse
-            // into a confusing pair of identical labels. Matches
-            // VSCode / zed's row format.
-            Text(displayName)
-                .font(.system(size: 12))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-            Text(parentHint)
-                .font(.system(size: 10))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.head)
-                .layoutPriority(0)
-            Spacer(minLength: 4)
-            // Phase 35b-2a — hover-revealed action cluster. We keep
-            // the buttons hidden by default so a wide list isn't
-            // visually noisy; they appear only when the cursor lands
-            // on a row (matches the convention zed / VSCode picked).
-            if hover {
-                rowActions
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 6) {
+                // Phase 35b-3-ii — leading chevron. Tapping toggles
+                // the per-hunk expansion. We render an invisible
+                // 12 pt placeholder for rows without a hunk surface
+                // (conflicts / untracked) so the column of file
+                // names stays visually aligned across sections.
+                if hunkSource != nil {
+                    Button(action: toggleExpanded) {
+                        Image(systemName: expanded
+                              ? "chevron.down"
+                              : "chevron.right")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 12, height: 12)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(L10n.t(expanded
+                                 ? "sourceControl.hunk.collapse"
+                                 : "sourceControl.hunk.expand"))
+                } else {
+                    Color.clear.frame(width: 12, height: 12)
+                }
+                Text(statusLabel)
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(statusTint)
+                    .frame(width: 16, alignment: .center)
+                Image(systemName: "doc.text")
+                    .foregroundStyle(.secondary)
+                    .font(.system(size: 11))
+                Text(displayName)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(parentHint)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.head)
+                    .layoutPriority(0)
+                Spacer(minLength: 4)
+                if hover {
+                    rowActions
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 3)
+            .contentShape(Rectangle())
+            .background(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(hover ? Color.primary.opacity(0.06) : Color.clear)
+                    .padding(.horizontal, 4)
+            )
+            .onHover { hover = $0 }
+            .help(row.path)
+
+            // Phase 35b-3-ii — hunk list. We render it inside the
+            // same VStack so SwiftUI animates the expand/collapse
+            // smoothly and the list scrolls with its parent row.
+            if expanded, let source = hunkSource {
+                hunkList(source: source)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 3)
-        .contentShape(Rectangle())
-        .background(
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(hover ? Color.primary.opacity(0.06) : Color.clear)
-                .padding(.horizontal, 4)
-        )
-        .onHover { hover = $0 }
-        .help(row.path)
+    }
+
+    /// Toggle expand state. On expand we kick off an async hunk
+    /// fetch — `hunks(forPath:cached:)` runs the git CLI on a
+    /// detached task so we never block the main run loop, and
+    /// stores into local @State once the result lands.
+    private func toggleExpanded() {
+        guard let source = hunkSource else { return }
+        if expanded {
+            expanded = false
+            return
+        }
+        expanded = true
+        // Always re-fetch on each expand: between two expansions
+        // the index might have moved (the user could have committed
+        // from another terminal), and a stale hunk list applied
+        // back will fail at `git apply` time with a confusing
+        // "patch does not apply" alert.
+        hunksLoading = true
+        Task { [path = row.path] in
+            let fresh = await engine.hunks(forPath: path,
+                                           cached: source.cached)
+            await MainActor.run {
+                self.hunks = fresh
+                self.hunksLoaded = true
+                self.hunksLoading = false
+            }
+        }
+    }
+
+    /// Per-hunk list view. Each line shows a short summary
+    /// ("@@ -12,4 +12,5 @@" + section name + +/- counts) and a
+    /// hover-revealed [+] / [-] button that calls into the engine.
+    @ViewBuilder
+    private func hunkList(source: HunkSource) -> some View {
+        if hunksLoading && !hunksLoaded {
+            HStack {
+                ProgressView()
+                    .scaleEffect(0.5)
+                    .frame(width: 12, height: 12)
+                Text("sourceControl.hunk.loading", bundle: .module)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.leading, 38)
+            .padding(.vertical, 2)
+        } else if hunks.isEmpty {
+            // Empty state means git produced no diff for this path —
+            // common when the row is a pure rename (R) or a binary
+            // file that diff suppresses.
+            Text("sourceControl.hunk.none", bundle: .module)
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .padding(.leading, 38)
+                .padding(.vertical, 2)
+        } else {
+            ForEach(Array(hunks.enumerated()), id: \.offset) { _, hunk in
+                HunkRow(hunk: hunk,
+                        source: source,
+                        path: row.path,
+                        engine: engine)
+            }
+        }
     }
 
     // MARK: - Hover actions
@@ -512,5 +624,107 @@ private struct SourceControlRow: View {
         let comps = row.path.split(separator: "/")
         guard comps.count > 1 else { return "" }
         return comps.dropLast().joined(separator: "/")
+    }
+}
+
+extension SourceControlRow.HunkSource {
+    /// `cached:` flag for `GitClient.diffForApply`. Staged rows
+    /// expand the cached diff (index-vs-HEAD); changes rows expand
+    /// the working diff (working-vs-index).
+    var cached: Bool {
+        switch self {
+        case .staged:  return true
+        case .changes: return false
+        }
+    }
+}
+
+/// Phase 35b-3-ii — single hunk row inside an expanded file. Shows
+/// a one-line summary ("@@ ... @@ section · +N -M") and a hover-
+/// revealed [+] (stage) or [-] (unstage) button.
+private struct HunkRow: View {
+    let hunk: GitClient.Hunk
+    let source: SourceControlRow.HunkSource
+    let path: String
+    let engine: GitStatusEngine
+    @State private var hover = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            // Indent matching the file row's chevron+status+icon
+            // gutter so hunks visually nest under their parent.
+            Color.clear.frame(width: 38, height: 1)
+            Text(headerLabel)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            if let section = hunk.section {
+                Text("· \(section)")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            Text(countsLabel)
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .foregroundStyle(.secondary)
+            Spacer(minLength: 4)
+            if hover {
+                Button(action: applyHunk) {
+                    Image(systemName: source == .changes ? "plus" : "minus")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(source == .changes ? .green : .orange)
+                        .frame(width: 16, height: 16)
+                        .background(
+                            Circle().fill((source == .changes
+                                           ? Color.green
+                                           : Color.orange).opacity(0.12))
+                        )
+                }
+                .buttonStyle(.plain)
+                .help(L10n.t(source == .changes
+                             ? "sourceControl.action.stageHunk"
+                             : "sourceControl.action.unstageHunk"))
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 1)
+        .contentShape(Rectangle())
+        .background(
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(hover ? Color.primary.opacity(0.04) : Color.clear)
+                .padding(.horizontal, 4)
+        )
+        .onHover { hover = $0 }
+    }
+
+    /// Compact header label — `@@ -12,4 +12,5 @@`.
+    private var headerLabel: String {
+        "@@ -\(hunk.oldStart),\(hunk.oldLen) +\(hunk.newStart),\(hunk.newLen) @@"
+    }
+
+    /// `+N -M` counters — eyeballable insert/delete weight without
+    /// having to count body lines manually.
+    private var countsLabel: String {
+        let plus  = hunk.bodyLines.filter { $0.first == "+" }.count
+        let minus = hunk.bodyLines.filter { $0.first == "-" }.count
+        return "+\(plus) -\(minus)"
+    }
+
+    /// Dispatch to engine.{stageHunk,unstageHunk}. The engine
+    /// refreshes after a successful apply, which collapses the
+    /// row's expansion (because the row may move sections or
+    /// disappear entirely) and the user can re-expand a fresh
+    /// list if there's still anything left.
+    private func applyHunk() {
+        let h = hunk
+        let p = path
+        switch source {
+        case .changes:
+            Task { await engine.stageHunk(h, path: p) }
+        case .staged:
+            Task { await engine.unstageHunk(h, path: p) }
+        }
     }
 }

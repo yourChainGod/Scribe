@@ -962,11 +962,66 @@ apply --cached <patch>`)、Project Diff multibuffer、remote
 branch picker、`--force-with-lease` push UX、inline blame +
 merge conflict UI。
 
+## Phase 35b-3 · per-hunk staging（2026-04-28）
+
+**背景**：file-level stage/unstage（35b-2a）一次只能整文件
+进出 index；混合编辑（一次 commit 拆两个逻辑改动）就只能
+靠 `git add -p` 跳出去。这拍补齐 zed/VSCode 体感的核心
+缺口：行内 hunk 列表 + hover [+]/[-]。
+
+**i 拍 · 纯函数 plumbing（commit `b6192a6`）**：
+
+- `Sources/Scribe/Models/GitClient.swift` + `Hunk { oldStart,
+  oldLen, newStart, newLen, section, bodyLines }` (Sendable +
+  Equatable) · `parseHunks(_:) -> [Hunk]` 纯函数（跳过 file
+  preamble、保留 `\\ No newline at end of file` sentinel、
+  畸形 header 不 crash）· `Hunk.minimalPatch(forFilePath:)`
+  发 `--- a/ +++ b/` + header + body + 结尾换行（始终 pin
+  `,LEN` 显式形态便于下游严格 parse）· `diffForApply(path:
+  repo:cached:)` 走 `-U3` 上下文（让 `git apply` 即使先前
+  hunk 移行也能定位）· `applyPatch(_:repo:reverse:)` 走
+  `git apply --cached --whitespace=nowarn [--reverse] -`
+  + stdin pipe（避 argv 256 KiB 上限）。
+- `Tests/ScribeTests/GitHunkParserTests.swift` 11 闸纯函数 ·
+  `GitClientWriteIntegrationTests.swift` +3 round-trip
+  (`-U3` 上下文 / forward stage 单 hunk / reverse unstage 单
+  hunk · 双 hunk 文件验证只动一个不影响另一个) · 总 17
+  integration + 11 unit = +14。
+
+**ii 拍 · UI 层（this commit）**：
+
+- `Sources/Scribe/Models/GitStatusEngine.swift` + `hunks(forPath:
+  cached:) async -> [Hunk]` (失败返空数组让 UI graceful
+  collapse，不弹 alert) · `stageHunk(_:path:) / unstageHunk(_:
+  path:) async` (复用 detached + handleWriteResult) ·
+  WriteAction.{stageHunk,unstageHunk} + 对应 alert keys。
+- `Sources/Scribe/Views/SourceControlSidebar.swift` 行前 chevron
+  · 点击展开/折叠 hunk 列表（每次重新拉取避免 stale apply）·
+  loading state + empty state + 每 hunk 一行 `@@ -A,B +C,D @@
+  · section · +N -M` + hover 出 [+]（changes 段=stage）/[-]
+  （staged 段=unstage）。Conflict / untracked 段无 chevron
+  （没有两端 diff 切片）。`HunkSource` enum (.staged/.changes)
+  把段身份编码到 row 里，cached 计算属性映成 diffForApply
+  参数。
+- `Sources/Scribe/Resources/{en,zh-Hans}.lproj/Localizable.strings`
+  + sourceControl.hunk.{expand,collapse,loading,none} +
+  .action.{stageHunk,unstageHunk} + .alert.{stageHunk,
+  unstageHunk}Failed。
+
+**测试**：plumbing 闸全部覆盖 hunk 解析 + apply round-trip。
+UI 层 SwiftUI 视图层不写 unit test（视图依赖 NSAlert 模态、
+SwiftUI 内部 layout，端到端价值低于维护成本）—— @State
+expand/loading/empty 三态走人工烟测，CI 守 plumbing。
+
+**未覆盖 (Phase 35b-4 / 35c / 后续)**：Project Diff multibuffer
+（zed 风可编辑 diff excerpts）、remote branch picker、
+`--force-with-lease` push UX、inline blame、merge conflict UI。
+
 ## Phase 35+ · 路线展望
 
 下面是想做的事，按重要度而非时间排。多条路线是 zed 调研后决定插入的。
 
-1. **Git v2 (Phase 35b-3 / 35b-4)**：per-hunk stage/unstage (`git apply --cached`) + Project Diff multibuffer + remote branch picker。Phase 35b-1/2a/2b/2c 交付了读面 + file-level 写面 + commit + remote sync 闭环。
+1. **Git v2 (Phase 35b-4)**：Project Diff multibuffer + remote branch picker + `--force-with-lease` push UX。Phase 35b-1/2a/2b/2c/3 交付了读面 + file-level 写面 + commit + remote sync + per-hunk stage/unstage 闭环。
 2. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末 annotation 显示 author/time/commit、冲突区上方 Accept/Reject 按钮。复用现有 GitClient。
 3. **LargeFile v3 (Phase 34d+)**：中途 cancel save、external-change
    mtime+size detection、SymbolOutline 读 buffer、细粒度 progress。
