@@ -24,6 +24,14 @@ enum GitClient {
         case error(String)      // any other git failure (corrupt HEAD, …)
     }
 
+    /// Outcome of `unifiedDiff(of:)`. Phase 31 git-gutter input.
+    enum UnifiedDiffResult {
+        case diff(String)       // the raw unified-diff text; empty = identical
+        case untracked          // file isn't tracked at HEAD
+        case notInRepo
+        case error(String)
+    }
+
     // MARK: - Public
 
     /// Return the textual contents of `file` as it exists in HEAD.
@@ -60,6 +68,45 @@ enum GitClient {
         case .failure:        shortSHA = "HEAD"
         }
         return .success(blob: blob, shortSHA: shortSHA)
+    }
+
+    /// Phase 31 — return `git diff -U0 HEAD -- <file>` so the gutter
+    /// engine can map every changed line back to a +/− status. We
+    /// pin `-U0` (zero context) so the unified hunks describe only
+    /// the actually-changed lines: any "unchanged" line that would
+    /// otherwise pad the hunk for human readability would just be
+    /// noise to the parser.
+    ///
+    /// Caveat: `git diff` works against the *working tree* as it
+    /// exists on disk, not the buffer the user is editing. We re-run
+    /// after every save (Workspace.write) so the gutter catches up
+    /// whenever the file becomes save-able. A buffer-aware variant
+    /// (HEAD blob ↔ in-memory text) is Phase 31b material.
+    nonisolated static func unifiedDiff(of file: URL) -> UnifiedDiffResult {
+        let path = file.standardizedFileURL.path
+        guard let repoRoot = findRepoRoot(for: file) else {
+            return .notInRepo
+        }
+        let relative = relativize(path: path, from: repoRoot)
+        // Tracked check first — `git diff` on an untracked file
+        // returns nothing, which would silently render as "no
+        // changes" instead of "no gutter at all".
+        switch run(["ls-files", "--error-unmatch", "--", relative],
+                   cwd: repoRoot) {
+        case .failure: return .untracked
+        case .success: break
+        }
+        switch run(["diff",
+                    "--no-color",
+                    "--no-ext-diff",
+                    "-U0",
+                    "HEAD",
+                    "--",
+                    relative],
+                   cwd: repoRoot) {
+        case .success(let out): return .diff(out)
+        case .failure(let err): return .error(err)
+        }
     }
 
     /// Walk parent directories until we find one containing `.git`.

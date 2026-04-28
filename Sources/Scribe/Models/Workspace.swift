@@ -6,6 +6,7 @@
 import Foundation
 import SwiftUI
 import AppKit
+import Combine
 import UniformTypeIdentifiers
 
 /// Which mode the side panel is in. Mirrors the VSCode primary side
@@ -44,6 +45,19 @@ final class Workspace: ObservableObject {
     /// can prune by identity even if the underlying URL is reassigned.
     private var watchers: [UUID: FileWatcher] = [:]
 
+    /// Phase 31 — single shared engine that runs `git diff` for the
+    /// currently-active document and writes the per-line status into
+    /// `doc.gitGutter`. We keep one instance per workspace so a save
+    /// burst doesn't pile up parallel `git diff` invocations across
+    /// every open tab; only the visible doc has its gutter live, the
+    /// rest catch up on next bind / save.
+    let gitGutterEngine = GitGutterEngine()
+
+    /// Sink for `selectedID` changes — re-binds the gutter engine to
+    /// the newly-selected doc whenever the user switches tabs. Held
+    /// internally so the engine + sink share Workspace's lifetime.
+    private var selectionSink: AnyCancellable?
+
     init(prefs: EditorPreferences, openInitialUntitled: Bool = true) {
         self.prefs = prefs
         // Open one empty doc by default so the editor isn't blank on first run.
@@ -52,6 +66,16 @@ final class Workspace: ObservableObject {
         if openInitialUntitled {
             newDocument()
         }
+        // Keep the gutter engine pointed at whatever's selected. Both
+        // the initial newDocument() above and any later tab switch
+        // funnel through `selectedID`, so this single sink covers
+        // every code path that changes the active doc.
+        selectionSink = $selectedID
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.gitGutterEngine.bind(to: self.current)
+            }
     }
 
     func openFolder() {
@@ -266,6 +290,10 @@ final class Workspace: ObservableObject {
         doc.encoding = decoded.encoding
         doc.lineEnding = decoded.lineEnding
         doc.isDirty = false
+        // Phase 31 — file on disk just changed; re-run git diff so the
+        // gutter catches up. Cheap relative to re-decoding the whole
+        // file we just did.
+        if doc.id == selectedID { gitGutterEngine.refresh() }
     }
 
     /// Silent re-read of `doc` from disk using its current encoding.
@@ -380,6 +408,13 @@ final class Workspace: ObservableObject {
             }
             try payload.write(to: url, options: .atomic)
             doc.isDirty = false
+            // Phase 31 — the just-written bytes are what `git diff`
+            // sees; refresh the gutter so the saved-then-unmodified
+            // lines disappear from the strip immediately. The watcher
+            // will fire shortly with the same path but `decoded.text
+            // == doc.text` already so handleExternalChange short-
+            // circuits, and only this call actually drives the gutter.
+            if doc.id == selectedID { gitGutterEngine.refresh() }
         } catch {
             NSAlert(error: error).runModal()
         }

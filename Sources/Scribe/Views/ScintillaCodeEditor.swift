@@ -48,6 +48,7 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         context.coordinator.applyFont(prefs: prefs, to: view)
         context.coordinator.applyTabs(prefs: prefs, to: view)
         context.coordinator.applyLineNumberMargin(to: view)
+        context.coordinator.configureGitGutterMargin(in: view)
         context.coordinator.applyTheme(to: view)
         context.coordinator.configureMatchIndicator(to: view)
         context.coordinator.configureMultiSelection(to: view)
@@ -89,6 +90,7 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         context.coordinator.applyTabs(prefs: prefs, to: view)
         context.coordinator.applyTheme(to: view)
         context.coordinator.refreshHighlightsIfNeeded()
+        context.coordinator.applyGitGutter(in: view)
         context.coordinator.consumePendingScroll(in: view)
     }
 
@@ -139,6 +141,16 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         /// paths that need an authoritative `doc.text` (save, external
         /// change check) drain via `flushDocSync()` first.
         private var pendingDocSync: Task<Void, Never>?
+
+        /// Phase 31 — last `[Int: GitGutterStatus]` actually rendered
+        /// to the margin. SwiftUI calls `updateNSView` on every
+        /// unrelated tick (cursor move, prefs change…), and re-painting
+        /// markers is O(line-count) — checking the cached snapshot
+        /// against the current `doc.gitGutter` lets us no-op the path
+        /// in the common case where nothing about git status moved.
+        /// Module-internal so `Coordinator+GitGutter.swift` can read +
+        /// write it.
+        var lastAppliedGitGutter: [Int: GitGutterStatus] = [:]
 
         /// 50 ms feels imperceptible to the user but covers the
         /// common burst-typing window (sustained typing rarely sees

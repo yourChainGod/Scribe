@@ -52,6 +52,16 @@ final class Document: ObservableObject, Identifiable {
     /// when `isMarkdown && isMarkdownPreviewVisible`.
     @Published var isMarkdownPreviewVisible: Bool = false
 
+    /// Phase 31 — git gutter status, keyed by 1-based line number.
+    /// Populated by `GitGutterEngine` whenever the doc switches in,
+    /// the file is saved, or an external change fires. Empty
+    /// dictionary = "no changes vs HEAD" or "file isn't in a git
+    /// repo / isn't tracked"; the editor margin draws nothing in
+    /// either case. ScintillaCodeEditor.Coordinator observes this
+    /// via `@ObservedObject` and re-applies the markers in
+    /// `updateNSView` only when the dict actually changed.
+    @Published var gitGutter: [Int: GitGutterStatus] = [:]
+
     init(title: String = L10n.t("tab.untitled"), text: String = "", url: URL? = nil) {
         self.title = title
         self.text = text

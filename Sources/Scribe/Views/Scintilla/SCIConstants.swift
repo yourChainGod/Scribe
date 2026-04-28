@@ -41,6 +41,21 @@ enum SCI {
     // Margins
     static let SETMARGINTYPEN:   UInt32 = 2240
     static let SETMARGINWIDTHN:  UInt32 = 2242
+    /// Phase 31 — `SCI_SETMARGINMASKN(margin, mask)` filters which
+    /// marker numbers are allowed to render in the given margin.
+    /// Without it Scintilla draws every marker (including system
+    /// folding markers 25–31 if the lexer enables them) on every
+    /// margin, which would make the git-gutter strip flicker with
+    /// unrelated icons.
+    static let SETMARGINMASKN:   UInt32 = 2244
+    /// Phase 31 — marker setup. `MARKERDEFINE(num, type)` picks the
+    /// glyph (FULLRECT, LEFTRECT, …); `MARKERSETBACK / FORE` colour
+    /// it; `MARKERADD / DELETE(line, num)` paints / clears it.
+    static let MARKERDEFINE:     UInt32 = 2040
+    static let MARKERSETFORE:    UInt32 = 2041
+    static let MARKERSETBACK:    UInt32 = 2042
+    static let MARKERADD:        UInt32 = 2043
+    static let MARKERDELETE:     UInt32 = 2044
     // Styles
     static let STYLECLEARALL:    UInt32 = 2050
     static let STYLESETFORE:     UInt32 = 2051
@@ -178,6 +193,17 @@ enum SCIND {
 /// reserved style indices, selection-mode enum values.
 enum SC {
     static let MARGIN_NUMBER:    Int = 1
+    /// Phase 31 — `SC_MARGIN_SYMBOL = 0`. Margin type that draws
+    /// per-line markers added via `SCI_MARKERADD`. Margin 1 in the
+    /// editor is dedicated to the git gutter strip.
+    static let MARGIN_SYMBOL:    Int = 0
+    /// Phase 31 — marker glyph types. `FULLRECT` paints the whole
+    /// margin cell; `LEFTRECT` paints a thin sliver at the left.
+    /// We pick FULLRECT for added/modified (loud, GitHub-style)
+    /// and LEFTRECT for `deletedAbove` (subtle pointer that something
+    /// disappeared just above this row).
+    static let MARK_FULLRECT:    Int = 26
+    static let MARK_LEFTRECT:    Int = 27
     static let STYLE_DEFAULT:    Int = 32
     static let STYLE_LINENUMBER: Int = 33
     /// Phase 23 — `SelectionMode` enum values. Stream is the
