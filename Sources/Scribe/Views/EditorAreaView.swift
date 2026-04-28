@@ -12,20 +12,60 @@ struct EditorAreaView: View {
 
     var body: some View {
         if let doc = workspace.current {
-            VStack(spacing: 0) {
-                if findState.isVisible {
-                    FindBar(state: findState)
-                }
-                ScintillaCodeEditor(doc: doc, prefs: prefs, findState: findState)
-                    .id(doc.id)
-                    .background(Color(nsColor: .textBackgroundColor))
-                    .contextMenu {
-                        editorContextMenu(doc: doc)
-                    }
-            }
+            // Indirect through a Document-aware sub-view so SwiftUI
+            // tracks per-doc @Published changes (e.g. toggling the
+            // markdown preview) and re-evaluates body without us
+            // having to mark every doc property as a workspace-level
+            // dependency.
+            DocumentEditorPane(doc: doc)
+                .environmentObject(workspace)
+                .environmentObject(prefs)
+                .environmentObject(findState)
         } else {
             WelcomeView()
         }
+    }
+}
+
+/// Editor + (optional) markdown preview for a single document.
+/// Lives inside EditorAreaView; broken out so its `@ObservedObject`
+/// on the Document picks up `isMarkdownPreviewVisible` flips even
+/// though Workspace.documents itself didn't change identity.
+private struct DocumentEditorPane: View {
+    @ObservedObject var doc: Document
+    @EnvironmentObject var workspace: Workspace
+    @EnvironmentObject var prefs: EditorPreferences
+    @EnvironmentObject var findState: FindState
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if findState.isVisible {
+                FindBar(state: findState)
+            }
+            if doc.isMarkdown, doc.isMarkdownPreviewVisible {
+                // HSplitView lets the user drag the divider; the
+                // preview's minWidth keeps it from collapsing into
+                // an unreadable strip.
+                HSplitView {
+                    editor
+                    MarkdownPreviewPane(markdown: doc.text,
+                                        isDark: colorScheme == .dark)
+                        .frame(minWidth: 260)
+                }
+            } else {
+                editor
+            }
+        }
+    }
+
+    private var editor: some View {
+        ScintillaCodeEditor(doc: doc, prefs: prefs, findState: findState)
+            .id(doc.id)
+            .background(Color(nsColor: .textBackgroundColor))
+            .contextMenu {
+                editorContextMenu(doc: doc)
+            }
     }
 
     /// Editor right-click menu. Replaces Scintilla's English built-in

@@ -173,6 +173,7 @@
 "menu.tools.settings"     = "Settings…";
 
 "menu.view.editorTheme"   = "Editor Theme";
+"menu.view.markdownPreview" = "Markdown Preview";
 "menu.edit.useSelection"  = "Use Selection for Find";
 "menu.edit.hideFindBar"   = "Hide Find Bar";
 

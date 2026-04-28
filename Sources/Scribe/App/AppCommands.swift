@@ -73,6 +73,24 @@ struct ScribeCommands: Commands {
             } label: {
                 Text("menu.view.editorTheme", bundle: .module)
             }
+
+            Divider()
+
+            // Phase 30 — Markdown preview pane toggle. Disabled when
+            // the active document isn't markdown so the user gets a
+            // clear cue that it does nothing for, say, a .swift file.
+            Button {
+                workspace.current?.isMarkdownPreviewVisible.toggle()
+            } label: {
+                if workspace.current?.isMarkdownPreviewVisible == true {
+                    Label(L10n.t("menu.view.markdownPreview"),
+                          systemImage: "checkmark")
+                } else {
+                    Text("menu.view.markdownPreview", bundle: .module)
+                }
+            }
+            .keyboardShortcut("v", modifiers: [.command, .shift])
+            .disabled(workspace.current?.isMarkdown != true)
         }
 
         // — Go menu —

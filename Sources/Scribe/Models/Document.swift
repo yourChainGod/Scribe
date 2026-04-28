@@ -44,6 +44,14 @@ final class Document: ObservableObject, Identifiable {
     @MainActor
     var flushPendingEdit: (() -> Void)?
 
+    /// Phase 30 — `true` when the user has opened the markdown
+    /// preview pane for this tab (⌘⇧V or View menu). Per-document
+    /// state rather than per-window because each tab can host a
+    /// different file type and the toggle should follow the tab.
+    /// EditorAreaView splits the canvas into editor | preview only
+    /// when `isMarkdown && isMarkdownPreviewVisible`.
+    @Published var isMarkdownPreviewVisible: Bool = false
+
     init(title: String = L10n.t("tab.untitled"), text: String = "", url: URL? = nil) {
         self.title = title
         self.text = text
@@ -58,5 +66,17 @@ final class Document: ObservableObject, Identifiable {
         guard let url else { return "txt" }
         let ext = url.pathExtension.lowercased()
         return ext.isEmpty ? "txt" : ext
+    }
+
+    /// Phase 30 — used by EditorAreaView to decide whether the
+    /// markdown preview toggle is meaningful for this doc. We
+    /// match Outline's set ("md" / "markdown") so a user who
+    /// renames a file gets the preview enabled / disabled
+    /// consistently with the Outline sidebar's heading parser.
+    var isMarkdown: Bool {
+        switch languageGuess {
+        case "md", "markdown": true
+        default:               false
+        }
     }
 }
