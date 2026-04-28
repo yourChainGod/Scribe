@@ -719,12 +719,65 @@ ILoader 集成 *不* 由 xctest 调 —— ScintillaView.init 在 headless
 汇报、Find/Markdown/git-gutter 读 Scintilla buffer、大文件写路
 径（SCI_GETTEXTRANGE 分块 save）。
 
+## Phase 34c · LargeFile v2 — chunked save + OOM 护栏（2026-04-28，commit `c678b67`）
+
+**背景**：Phase 34a/34b 只交付加载。这拍如果不补，1 GB
+文件会在三个地方出事：(1) ⌘S 写空 buffer（`doc.text=""`）——
+实际数据丢失；(2) 每次光标移动 SwiftUI 调 updateNSView 里走
+到1.5 GB Swift String 允率 OOM；(3) 状态栏报“0 chars”误
+导用户。三个 CRIT 全补。
+
+**改动**：
+- `Vendor/scintilla/include/ScribeScintillaTextRangeBridge.h` ·
+  `Vendor/scintilla/swiftpm-bridge/ScribeScintillaTextRangeBridge.mm`
+  ObjC++ 面板包 SCI_GETTEXTRANGEFULL。`NSData *Scribe
+  ReadTextRange(view, start, length)`。`Sci_TextRangeFull` 用
+  Sci_Position（64-bit ptrdiff_t）保证 > 2 GB 读取安全。
+- `Sources/Scribe/Models/ChunkedFileWriter.swift`（190 行）
+  `@MainActor write(view:to:byteCount:progress:)`。256 KiB chunk
+  （4 KiB 底限、与 reader 收同）。同盘 sibling temp + 
+  rename。`synchronize()` fsync 后再 rename，避免断电后藏半个文
+  件在 page cache。各块间 `Task.yield()` 不锁住 run loop。
+  失败模式：openTempFailed / writeFailed / readFailed /
+  replaceFailed —— 全部原子以防部分赋赋。
+- `Sources/Scribe/Models/Document.swift`
+  + `largeFileSaveHook: (URL, (@MainActor (Double) -> Void)?)
+    async throws -> Void` —— Coordinator.attach 调装。合 phase
+    28c 的 `flushPendingEdit` 同模。
+  + `@Published var saveProgress: Double = -1`。
+- `Sources/Scribe/Models/Workspace.swift`
+  + `write(doc:to:)` 检 isLargeFile 走 chunked save。防重入 +
+  异步 Task + saveProgress 。小文件走原路径不变。
+  + `handleExternalChange` 大文件父 no-op（不能读整个文件
+  去比 doc.text）。v2 上 mtime + size check。
+- `Sources/Scribe/Views/ScintillaCodeEditor.swift`
+  + `if !doc.isLargeFile { ... }` 不 resync 大文件（CRIT #2）。
+  + `flushDocSync` / `scheduleDocSync` 大文件 early-return。
+  + Coordinator.attach 装上 `largeFileSaveHook`。
+- `Sources/Scribe/Views/StatusBarView.swift`
+  + Save banner（linear ProgressView + “正在保存大文件…”）。
+  + `largeFileSizeLabel(for:)` 大文件 charCount 处换为
+  ByteCountFormatter 人读文件大小。
+- `Sources/Scribe/Resources/{en,zh-Hans}.lproj/Localizable.strings`
+  + status.largeFileSaving / status.largeFile
+  + error.largeFileSaveNoEditor
+
+**测试**：6 例覆盖 ChunkedFileWriter：bridge 符号可达 + nil/0
+边界 · 4 KiB chunk size floor · default 256 KiB · 空文档快路径
+· ChunkedFileWriterError Sendable。Live SCI_GETTEXTRANGEFULL 集
+成 *不* 由 xctest 调 —— ScintillaView.init headless segfault
+同 LargeFileLoaderTests。
+
+**未覆盖 (Phase 34d+)**：中途 cancel save UX、external-change
+大文件 mtime+size diff、SymbolOutline / Markdown preview 读
+大文件 buffer。
+
 ## Phase 35+ · 路线展望
 
 下面是想做的事，按重要度而非时间排：
 
-1. **LargeFile v2 (Phase 34c+)**：Find / Markdown / git-gutter 读
-   Scintilla buffer、分块 save、中途 cancel UX、细粒度 progress。
+1. **LargeFile v3 (Phase 34d+)**：中途 cancel save、external-change
+   mtime+size detection、SymbolOutline 读 buffer、细粒度 progress。
 2. **Document Map**：右侧缩略图侧栏（学 npp-mac，仅 SwiftUI）。
 3. **Snippets v2**：`${1:placeholder}` 跳转 + tab 键从 buffer 触发（Scintilla autocomplete） + per-language scope。
 4. **Git Gutter v2**：buffer-aware (HEAD blob ↔ in-memory text，无需先保存) + per-line revert。跳转已交付。

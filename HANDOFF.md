@@ -415,6 +415,7 @@ Phase 0.2/0.3 暂未截图。
 | **Phase 33 · Snippets v1** | `5e70a25` | Snippet Codable · SnippetCatalog 单键 UserDefaults JSON · SnippetController 复用 PaletteWindowController · ⌘⇧T 选择器 · Settings tab “输入即存” · 5 个 starter snippets · 9 tests · 零依赖 |
 | **Phase 34a · LargeFile Plumbing** | `32c5433` | ObjC++ ILoader bridge · LargeFileLoader (@MainActor allocate + nonisolated addChunk) · ChunkedFileReader (mmap) · LargeFilePolicy (64 MiB / 1.5 GiB) · 16 tests · production path 不接 |
 | **Phase 34b · LargeFile Prod** | `67c7343` | Workspace.openFile size-gate · Coordinator+LargeFile detached pipeline (Int address 跨 actor) · SETDOCPOINTER + RELEASEDOCUMENT cancel · 状态栏 “正在加载大文件…” · 零依赖 |
+| **Phase 34c · LargeFile v2** | `c678b67` | SCI_GETTEXTRANGEFULL ObjC++ shim · ChunkedFileWriter (256 KiB chunk + sibling temp + fsync + atomic rename) · Workspace.write 大文件分流 · updateNSView/flushDocSync OOM 护栏 · 状态栏 save banner + ByteCountFormatter charCount · 6 tests |
 
 ### 关键架构变化
 
@@ -478,7 +479,7 @@ Task { @MainActor [weak self] in
 
 `.github/workflows/ci.yml` 在 macos-15 跑（commit `4808f05` 后从 macos-14 升级，以匹配 Swift 6.0+ 工具链）：
 
-1. `swift test --parallel` — 207 tests 全绿
+1. `swift test --parallel` — 213 tests 全绿
 2. `swift build -c release` — release 编译 0 error
 3. `swift build -Xswiftc -swift-version -Xswiftc 6` — strict 模式 0 error 0 warning（Vendor/ 除外）
 4. `swift Scripts/check_localization.swift` — en ↔ zh-Hans key 一致 + 无 dangling reference
@@ -516,9 +517,10 @@ Task { @MainActor [weak self] in
 4. **Snippets v2**：`${1:placeholder}` 跳转 + tab 键从 buffer
    触发（Scintilla autocomplete） + per-language scope。Phase 33
    v1 只做了“静态 body 插入”、“面板选择”、“Settings 管理”。
-5. **LargeFile v2 (Phase 34c+)**：Find / Markdown / git-gutter 读
-   Scintilla buffer、分块 save、中途 cancel UX、细粒度 progress。
-   Phase 34a/34b 只交付了加载路径 + 状态栏 banner。
+5. **LargeFile v3 (Phase 34d+)**：中途 cancel save UX、external-
+   change 大文件 mtime+size diff、SymbolOutline / Markdown
+   preview 读大文件 buffer。Phase 34a/34b/34c 交付了加载 +
+   chunked save + OOM 护栏。
 6. **Phase 35+ 路线**：见 ROADMAP "Phase 35+ 路线展望"（Document
    Map / HEX View / Sparkle）。
 
@@ -529,13 +531,13 @@ Task { @MainActor [weak self] in
 ```
 Scribe 已从 0 长到 v1.0-rc ——
 SwiftUI Scene + Scintilla 5.6.1 + 8 主题 + 多光标 + 列选 + 全 i18n（en/zh-Hans）·
-Markdown 实时预览（手写转换器 + GFM 表格·task list·footnote + WKWebView）+ Git Gutter（unified-diff parser + Scintilla margin + ⌥⇧↑/↓ hunk 跳转） + 代码片段（⌘⇧T 选择器 + Settings 管理 tab） + 大文件加载（≥ 64 MiB 走 SCI_CREATELOADER 分块），零依赖·
+Markdown 实时预览（手写转换器 + GFM 表格·task list·footnote + WKWebView）+ Git Gutter（unified-diff parser + Scintilla margin + ⌥⇧↑/↓ hunk 跳转） + 代码片段（⌘⇧T 选择器 + Settings 管理 tab） + 大文件 IO（≥ 64 MiB 走 SCI_CREATELOADER/GETTEXTRANGEFULL 分块 + atomic rename + OOM 护栏），零依赖·
 开 20 MB 文件主线程不卡 · 50 MB typing 不卡（50 ms debounce）·
-Swift 6 strict 0/0 · 207 tests + 4 perf budget · ScintillaCodeEditor.swift
+Swift 6 strict 0/0 · 213 tests + 4 perf budget · ScintillaCodeEditor.swift
 1083 → 385 行 · .app 双击即用 · CI 四道闸 push/PR 都跑 ·
 README/ROADMAP/HANDOFF 同步到位。
 
-下一拍：LargeFile v2 (Find/Markdown/git-gutter on Scintilla buffer) + Document Map + Snippets v2。
+下一拍：LargeFile v3 (cancel save / external-change diff) + Document Map + Snippets v2。
 ```
 
 ---
