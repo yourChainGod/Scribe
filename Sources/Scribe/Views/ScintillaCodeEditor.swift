@@ -68,7 +68,20 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         context.coordinator.findState = findState
         context.coordinator.workspace = workspace
 
-        if view.string() != doc.text {
+        // Cheap-signature short-circuit: SwiftUI calls updateNSView on
+        // every prefs / findState / cursor-tick mutation. For a 20 MB
+        // document the old `view.string() != doc.text` path roundtripped
+        // the entire buffer through Scintilla → NSString → Swift String
+        // every time, even though the typical path (user typing) never
+        // mutates doc.text out-of-band — Scintilla is the source of
+        // truth via SCN_MODIFIED. We compare byte counts first
+        // (`SCI_GETLENGTH` is O(1)); only when they match do we pay
+        // for the full equality check that catches the rare external-
+        // change race (Workspace.handleExternalChange).
+        let viewLen = Int(view.message(SCI.GETLENGTH))
+        let docLen = doc.text.utf8.count
+        let needsResync: Bool = (viewLen != docLen) || view.string() != doc.text
+        if needsResync {
             context.coordinator.applyText(doc.text, to: view, isExternal: true)
         }
         context.coordinator.applyLexer(for: doc, to: view)

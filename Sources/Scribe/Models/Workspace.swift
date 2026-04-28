@@ -121,20 +121,95 @@ final class Workspace: ObservableObject {
             prefs.addRecent(normalized)
             return
         }
+
+        // Phase 28b — read + decode happen on a background queue so the
+        // main thread never stalls on a multi-megabyte `Data(contentsOf:)`.
+        // We register a placeholder document immediately (text empty,
+        // isLoading = true) so the tab + sidebar update without waiting
+        // for I/O. The Scintilla coordinator sees the placeholder, paints
+        // an empty buffer, and re-applies once the async load resolves.
+        let doc = Document(title: normalized.lastPathComponent,
+                           text: "",
+                           url: normalized)
+        doc.isLoading = true
+        if let line { doc.pendingScrollLine = line }
+        documents.append(doc)
+        selectedID = doc.id
+        prefs.addRecent(normalized)
+
+        // Two-stage Task: the outer body lives on the main actor and
+        // is the only place we ever touch `self` — the inner
+        // `Task.detached` is a leaf that captures only Sendable
+        // values (URL + the static fn pointer) and returns a
+        // Sendable result. This shape is what Swift 6's region-
+        // based isolation model accepts without complaining about
+        // sending `self` across actor boundaries.
+        let docID = doc.id
+        Task { [weak self] in
+            let result = await Task.detached(priority: .userInitiated) {
+                Workspace.loadAndDecode(at: normalized)
+            }.value
+            guard let self else { return }
+            guard let target = self.documents.first(where: { $0.id == docID }) else {
+                // Document was closed while loading — silently
+                // discard the result. No harm, no surfaced error.
+                return
+            }
+            self.applyLoadResult(result, to: target)
+        }
+    }
+
+    /// Off-main-thread file read + format detection. Returns either
+    /// the decoded payload or the underlying Cocoa error so the
+    /// main-thread callback can surface a single NSAlert.
+    /// `nonisolated` because Workspace itself is `@MainActor` but
+    /// this routine has no shared state and runs purely on the
+    /// background queue the Task.detached call hops onto.
+    nonisolated private static func loadAndDecode(at url: URL) -> Result<DecodedDocument, Error> {
         do {
-            let data = try Data(contentsOf: normalized)
+            // .mappedIfSafe lets the kernel page the file in lazily for
+            // very large reads; for small files it falls back to a
+            // regular read with no behavioural difference.
+            let data = try Data(contentsOf: url, options: [.mappedIfSafe])
             let format = TextFormatDetector.decode(data: data)
-            let doc = Document(title: normalized.lastPathComponent,
-                               text: format.text,
-                               url: normalized)
-            doc.encoding = format.encoding
-            doc.lineEnding = format.lineEnding
-            if let line { doc.pendingScrollLine = line }
-            documents.append(doc)
-            selectedID = doc.id
-            prefs.addRecent(normalized)
-            startWatching(doc)
+            return .success(DecodedDocument(text: format.text,
+                                            encoding: format.encoding,
+                                            lineEnding: format.lineEnding))
         } catch {
+            return .failure(error)
+        }
+    }
+
+    /// Decoded payload from the background loader. Sendable so it can
+    /// hop the actor boundary back to the main thread.
+    private struct DecodedDocument: Sendable {
+        let text: String
+        let encoding: TextEncoding
+        let lineEnding: LineEnding
+    }
+
+    /// Main-thread side of the async open. Either fills in the
+    /// placeholder document with the decoded payload (success) or
+    /// removes it and surfaces an alert (failure). Either way the
+    /// `isLoading` flag is cleared so the editor wrapper drops the
+    /// placeholder UI.
+    private func applyLoadResult(_ result: Result<DecodedDocument, Error>, to doc: Document) {
+        switch result {
+        case .success(let payload):
+            doc.text = payload.text
+            doc.encoding = payload.encoding
+            doc.lineEnding = payload.lineEnding
+            doc.isLoading = false
+            startWatching(doc)
+        case .failure(let error):
+            doc.isLoading = false
+            // Drop the placeholder — it represents a doc the user
+            // can't actually edit, and leaving it would clutter the
+            // tab bar with a broken entry.
+            documents.removeAll { $0.id == doc.id }
+            if selectedID == doc.id {
+                selectedID = documents.last?.id
+            }
             NSAlert(error: error).runModal()
         }
     }

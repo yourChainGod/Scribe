@@ -25,6 +25,13 @@ final class Document: ObservableObject, Identifiable {
     /// during makeNSView / updateNSView and cleared after consumption.
     @Published var pendingScrollLine: Int? = nil
 
+    /// Phase 28b — `true` while Workspace is still reading + decoding
+    /// the file's bytes off the main thread. The Scintilla wrapper
+    /// shows a placeholder during that window so a 20 MB open doesn't
+    /// freeze the UI for the half-second the synchronous
+    /// `Data(contentsOf:)` used to take.
+    @Published var isLoading: Bool = false
+
     init(title: String = L10n.t("tab.untitled"), text: String = "", url: URL? = nil) {
         self.title = title
         self.text = text

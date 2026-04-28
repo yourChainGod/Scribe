@@ -25,3 +25,6 @@ Vendor/lexilla/test/
 Vendor/lexilla/examples/
 Vendor/lexilla/scripts/
 Vendor/lexilla/access/
+
+# Phase 28b — performance fixtures (regenerate with Scripts/gen_perf_samples.sh)
+Tests/Fixtures/perf_*.txt
