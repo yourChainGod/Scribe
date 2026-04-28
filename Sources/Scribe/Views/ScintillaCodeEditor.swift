@@ -215,6 +215,8 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                     case .addCaretBelow: self.addCaretBelow()
                     case .skipAndSelectNextOccurrence: self.skipAndSelectNextOccurrence()
                     case .toggleColumnSelectionMode: self.toggleColumnSelectionMode()
+                    case .gotoNextHunk: self.gotoNextHunk(in: view)
+                    case .gotoPrevHunk: self.gotoPrevHunk(in: view)
                     case .insertAtCarets(let s): self.insertAtCarets(s, in: view)
                     case let .testRectSelectExtend(d, r):
                         self.testRectSelectExtend(linesDown: d, charsRight: r, in: view)

@@ -132,6 +132,50 @@ extension ScintillaCodeEditor.Coordinator {
         }
     }
 
+    // MARK: - Hunk navigation (Phase 31b)
+
+    /// Jump the caret to the start of the next hunk after the current
+    /// line. Wraps to the top of the file when past the last hunk.
+    /// No-op (with a soft beep) when the file has no changes vs HEAD —
+    /// the user pressing ⌥⇧↓ on a clean file shouldn't get a silent
+    /// dead key.
+    func gotoNextHunk(in view: ScintillaView) {
+        guard let target = GitGutterHunks.next(after: currentLine1Based(in: view),
+                                               in: doc.gitGutter) else {
+            NSSound.beep()
+            return
+        }
+        moveCaret(to: target, in: view)
+    }
+
+    /// Symmetric with `gotoNextHunk` — jumps to the previous hunk.
+    func gotoPrevHunk(in view: ScintillaView) {
+        guard let target = GitGutterHunks.previous(before: currentLine1Based(in: view),
+                                                   in: doc.gitGutter) else {
+            NSSound.beep()
+            return
+        }
+        moveCaret(to: target, in: view)
+    }
+
+    /// Caret line in 1-based coordinates so it speaks the same dialect
+    /// as `GitDiffParser`. Scintilla uses 0-based internally; we add 1
+    /// at the boundary instead of sprinkling +1 across the call sites.
+    fileprivate func currentLine1Based(in view: ScintillaView) -> Int {
+        let pos = view.message(SCI.GETCURRENTPOS)
+        let line0 = view.message(SCI.LINEFROMPOSITION, wParam: UInt(pos), lParam: 0)
+        return Int(line0) + 1
+    }
+
+    /// Move the caret to the start of `line1` (1-based) and scroll it
+    /// into view. `SCI_GOTOLINE` already resets selection + collapses
+    /// any multi-cursor state, so we don't need to do that ourselves.
+    fileprivate func moveCaret(to line1: Int, in view: ScintillaView) {
+        let line0 = max(0, line1 - 1)
+        view.message(SCI.GOTOLINE, wParam: UInt(line0))
+        view.message(SCI.SCROLLCARET)
+    }
+
     /// Glyph + colour pair for one marker number. Uses `sciColor` from
     /// `Coordinator+Theme.swift` to get Scintilla's BGR-swizzled int
     /// representation of the RGB literal — consistent with every

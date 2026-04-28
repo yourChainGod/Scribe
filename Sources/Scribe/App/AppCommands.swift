@@ -142,6 +142,30 @@ struct ScribeCommands: Commands {
             }
             .keyboardShortcut("d", modifiers: [.command, .shift])
             .disabled(workspace.current?.url == nil)
+
+            Divider()
+
+            // Phase 31b — git-gutter hunk navigation. Wraps top↔bottom
+            // and beeps if the file has no changes vs HEAD. ⌥⇧↓ / ⌥⇧↑
+            // mirror the "Option = navigate by chunks" convention
+            // already used by addCaretAbove/Below (⌘⌥↑/↓).
+            // Disabled when there's no document to navigate against
+            // (initial untitled buffer scenarios).
+            Button {
+                findState.commands.send(.gotoNextHunk)
+            } label: {
+                Text("menu.tools.nextHunk", bundle: .module)
+            }
+            .keyboardShortcut(.downArrow, modifiers: [.option, .shift])
+            .disabled(workspace.current == nil)
+
+            Button {
+                findState.commands.send(.gotoPrevHunk)
+            } label: {
+                Text("menu.tools.prevHunk", bundle: .module)
+            }
+            .keyboardShortcut(.upArrow, modifiers: [.option, .shift])
+            .disabled(workspace.current == nil)
         }
 
         // — Edit menu —

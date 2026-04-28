@@ -80,6 +80,14 @@ final class FindState: ObservableObject {
         case skipAndSelectNextOccurrence
         // Phase 23 — toggle SC_SEL_STREAM ⇄ SC_SEL_RECTANGLE.
         case toggleColumnSelectionMode
+        /// Phase 31b — jump the caret to the next / previous git
+        /// gutter hunk relative to its current line. Wraps top↔bottom
+        /// when past the last / before the first hunk. No-op when
+        /// the file has no changes vs HEAD. Routed through the same
+        /// PassthroughSubject so the Coordinator's existing sink
+        /// dispatches them without an extra subscription.
+        case gotoNextHunk
+        case gotoPrevHunk
         /// Test-only: inserts the literal string at every caret via
         /// `SCI_REPLACESEL`. Used by the Phase 21 verification hook
         /// to render visible markers at the multi-caret positions —

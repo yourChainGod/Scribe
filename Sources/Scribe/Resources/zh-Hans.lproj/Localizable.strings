@@ -168,6 +168,8 @@
 
 "menu.tools.diff"         = "对比文件…";
 "menu.tools.compareHEAD"  = "与 HEAD 对比";
+"menu.tools.nextHunk"     = "下一个 Git 变更";
+"menu.tools.prevHunk"     = "上一个 Git 变更";
 "menu.tools.settings"     = "设置…";
 
 "menu.view.editorTheme"   = "编辑器主题";

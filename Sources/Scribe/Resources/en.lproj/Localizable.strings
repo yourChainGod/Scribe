@@ -170,6 +170,8 @@
 
 "menu.tools.diff"         = "Compare Files…";
 "menu.tools.compareHEAD"  = "Compare with HEAD";
+"menu.tools.nextHunk"     = "Next Git Change";
+"menu.tools.prevHunk"     = "Previous Git Change";
 "menu.tools.settings"     = "Settings…";
 
 "menu.view.editorTheme"   = "Editor Theme";
