@@ -9,6 +9,8 @@ import UniformTypeIdentifiers
 struct MainWindow: View {
     @EnvironmentObject var workspace: Workspace
     @EnvironmentObject var prefs: EditorPreferences
+    @EnvironmentObject var findState: FindState
+    @EnvironmentObject var findInFiles: FindInFilesState
     let findInFilesEngine: FindInFilesEngine
     @State private var dragOver = false
 
@@ -37,17 +39,28 @@ struct MainWindow: View {
             .background(Color(nsColor: .textBackgroundColor))
         }
         .toolbar {
+            // Sidebar toggle stays anchored on the left, separate
+            // from the file / edit / view button groups so it
+            // tracks the macOS Mail / Xcode convention.
             ToolbarItem(placement: .navigation) {
                 Button {
                     workspace.sidebarVisible.toggle()
                 } label: {
-                    Image(systemName: "sidebar.left")
+                    Image(systemName: workspace.sidebarVisible
+                          ? "sidebar.left"
+                          : "sidebar.leading")
                 }
-                .help("Toggle Sidebar")
+                .help(workspace.sidebarVisible ? "Hide Sidebar" : "Show Sidebar")
             }
+
+            // — File ops group — square.and.pencil for new comes
+            // from the modern macOS document idiom (Mail / Notes
+            // both use the same glyph for "compose"). folder /
+            // tray.and.arrow.down are the unambiguous open / save
+            // pair.
             ToolbarItemGroup(placement: .primaryAction) {
                 Button { workspace.newDocument() } label: {
-                    Image(systemName: "doc.badge.plus")
+                    Image(systemName: "square.and.pencil")
                 }
                 .help("New Tab (⌘N)")
 
@@ -57,34 +70,49 @@ struct MainWindow: View {
                 .help("Open… (⌘O)")
 
                 Button { workspace.saveCurrent() } label: {
-                    Image(systemName: "square.and.arrow.down")
+                    Image(systemName: "tray.and.arrow.down")
                 }
                 .help("Save (⌘S)")
+                .disabled(workspace.current == nil)
+            }
 
-                Spacer()
-
-                Button { prefs.zoomOut() } label: {
-                    Image(systemName: "textformat.size.smaller")
-                }
-                .help("Zoom Out (⌘-)")
-                .disabled(prefs.fontSize <= EditorPreferences.fontSizeMin)
-
-                Text("\(Int(prefs.fontSize))")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .frame(minWidth: 22)
-                    .help("Editor font size")
-
-                Button { prefs.zoomIn() } label: {
-                    Image(systemName: "textformat.size.larger")
-                }
-                .help("Zoom In (⌘+)")
-                .disabled(prefs.fontSize >= EditorPreferences.fontSizeMax)
-
-                Button {} label: {
+            // — Search / compare group — split off so SwiftUI
+            // inserts the standard toolbar item-group spacing
+            // between file ops and the search trio.
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button {
+                    findState.show(replaceMode: false)
+                } label: {
                     Image(systemName: "magnifyingglass")
                 }
                 .help("Find (⌘F)")
+                .disabled(workspace.current == nil)
+
+                Button {
+                    workspace.sidebarVisible = true
+                    workspace.sidebarMode = .search
+                    let selection = workspace.activeSelection
+                    if !selection.isEmpty {
+                        findInFiles.query = selection
+                        if let root = workspace.folderRoot?.url {
+                            let opts = FindInFilesOptions(
+                                query: selection,
+                                matchCase: findInFiles.matchCase,
+                                wholeWord: findInFiles.wholeWord,
+                                regex: false,
+                                includeGlobs: [],
+                                excludeGlobs: []
+                            )
+                            findInFilesEngine.search(options: opts,
+                                                     root: root,
+                                                     into: findInFiles)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "doc.text.magnifyingglass")
+                }
+                .help("Find in Files (⌘⇧F)")
+                .disabled(workspace.folderRoot == nil)
 
                 Button {
                     startCompare()
@@ -92,6 +120,34 @@ struct MainWindow: View {
                     Image(systemName: "rectangle.split.2x1")
                 }
                 .help("Compare Files (⌥⌘D)")
+            }
+
+            // — View / zoom group — on the far right because
+            // macOS users expect view-state toggles last.
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button { prefs.zoomOut() } label: {
+                    Image(systemName: "minus.magnifyingglass")
+                }
+                .help("Zoom Out (⌘-)")
+                .disabled(prefs.fontSize <= EditorPreferences.fontSizeMin)
+
+                // Compact font-size readout. Tertiary-coloured so
+                // it doesn't read as an interactive control —
+                // users won't try to click it as a dropdown.
+                // `monospacedDigit` keeps the width stable as the
+                // value crosses 9 → 10.
+                Text("\(Int(prefs.fontSize))")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+                    .monospacedDigit()
+                    .frame(minWidth: 18)
+                    .help("Editor font size")
+
+                Button { prefs.zoomIn() } label: {
+                    Image(systemName: "plus.magnifyingglass")
+                }
+                .help("Zoom In (⌘+)")
+                .disabled(prefs.fontSize >= EditorPreferences.fontSizeMax)
             }
         }
         .navigationTitle(workspace.current?.title ?? "Scribe")
