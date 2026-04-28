@@ -29,10 +29,14 @@ struct FindInFilesSidebar: View {
     // MARK: - Inputs
 
     private var inputs: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
+            // Query — primary input. The leading glyph + textfield
+            // pair shape is repeated in every row for visual rhythm.
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
+                    .font(.system(size: 12))
+                    .frame(width: 14)
                 TextField("Search", text: $find.query)
                     .textFieldStyle(.roundedBorder)
                     .focused($queryFocused)
@@ -40,25 +44,37 @@ struct FindInFilesSidebar: View {
                     .onSubmit { runSearch() }
             }
 
+            // Replace target + Run-replace trigger. The trigger
+            // glyph (text.badge.checkmark) reads more clearly as
+            // "commit replacement" than the previous
+            // rectangle.stack.badge.minus, which leaned negative.
             HStack(spacing: 6) {
-                Image(systemName: "arrow.2.squarepath")
+                Image(systemName: "arrow.triangle.2.circlepath")
                     .foregroundStyle(.secondary)
+                    .font(.system(size: 12))
+                    .frame(width: 14)
                 TextField("Replace", text: $find.replacement)
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 12))
-                    // Enter in the replace field triggers Replace All.
                     .onSubmit { confirmReplace() }
                 Button {
                     confirmReplace()
                 } label: {
-                    Image(systemName: "rectangle.stack.badge.minus")
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(replaceDisabled
+                                         ? Color.secondary.opacity(0.5)
+                                         : Color.accentColor)
                 }
-                .help("Replace all matches")
+                .help("Replace All matches in selected files")
                 .accessibilityLabel("Replace All")
-                .buttonStyle(.borderless)
+                .buttonStyle(.plain)
                 .disabled(replaceDisabled)
             }
 
+            // Option toggles + run-search trigger. Spinner sits
+            // between the two so it reads as "in flight" without
+            // making the layout reflow.
             HStack(spacing: 4) {
                 optionToggle("Aa", help: "Match Case", binding: $find.matchCase)
                 optionToggle("ab\u{2009}|", help: "Whole Word", binding: $find.wholeWord)
@@ -73,34 +89,52 @@ struct FindInFilesSidebar: View {
                     runSearch()
                 } label: {
                     Image(systemName: "arrow.right.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(searchDisabled
+                                         ? Color.secondary.opacity(0.5)
+                                         : Color.accentColor)
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.plain)
                 .help("Run search (Enter)")
-                .disabled(find.query.isEmpty || workspace.folderRoot == nil
-                          || find.isReplacing)
+                .disabled(searchDisabled)
             }
 
-            HStack(spacing: 4) {
-                Image(systemName: "doc.badge.plus")
-                    .foregroundStyle(.secondary)
-                    .font(.system(size: 10))
-                TextField("files to include", text: $find.includeGlob)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 11))
-                    .onSubmit { runSearch() }
-            }
-
-            HStack(spacing: 4) {
-                Image(systemName: "doc.badge.minus")
-                    .foregroundStyle(.secondary)
-                    .font(.system(size: 10))
-                TextField("files to exclude", text: $find.excludeGlob)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 11))
-                    .onSubmit { runSearch() }
-            }
+            // Include / exclude globs. Their inputs are tertiary
+            // controls (most users never use them), so the rows
+            // get a dimmer label glyph + smaller text.
+            globFieldRow(systemImage: "doc.badge.plus",
+                         placeholder: "files to include",
+                         text: $find.includeGlob)
+            globFieldRow(systemImage: "doc.badge.minus",
+                         placeholder: "files to exclude",
+                         text: $find.excludeGlob)
         }
-        .padding(10)
+        .padding(12)
+    }
+
+    /// Disable rule for the run-search button. Pulled out so the
+    /// button's visual treatment + the SwiftUI `.disabled` binding
+    /// stay in sync.
+    private var searchDisabled: Bool {
+        find.query.isEmpty
+            || workspace.folderRoot == nil
+            || find.isReplacing
+    }
+
+    @ViewBuilder
+    private func globFieldRow(systemImage: String,
+                              placeholder: String,
+                              text: Binding<String>) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: systemImage)
+                .foregroundStyle(.tertiary)
+                .font(.system(size: 11))
+                .frame(width: 14)
+            TextField(placeholder, text: text)
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 11))
+                .onSubmit { runSearch() }
+        }
     }
 
     /// Replace All is enabled only when there's something to replace,
@@ -360,11 +394,14 @@ private struct FileGroup: View {
                             .lineLimit(1)
                         Spacer()
                         Text("\(file.matches.count)")
-                            .font(.caption2)
+                            .font(.caption2.monospacedDigit())
                             .foregroundStyle(.secondary)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(Capsule().fill(Color.secondary.opacity(0.15)))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                Capsule()
+                                    .fill(Color.primary.opacity(0.08))
+                            )
                     }
                     .contentShape(Rectangle())
                 }
@@ -415,7 +452,7 @@ private struct MatchRow: View {
             .help(isSelected
                   ? "Include this match in Replace All"
                   : "Skip this match during Replace All")
-            .accessibilityLabel("Line \(match.lineNumber) match selected: \(isSelected)")
+            .accessibilityLabel("Line \(match.lineNumber) match selected: \(isSelected ? "yes" : "no")")
             .frame(width: 18)
             Text("\(match.lineNumber)")
                 .font(.system(size: 10, design: .monospaced))
@@ -431,10 +468,15 @@ private struct MatchRow: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 2)
-        .background(hover ? Color.accentColor.opacity(0.12) : Color.clear)
+        .padding(.vertical, 3)
+        .background(
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(hover ? Color.primary.opacity(0.06) : Color.clear)
+                .padding(.horizontal, 4)
+        )
         .contentShape(Rectangle())
         .onHover { hover = $0 }
+        .animation(.easeOut(duration: 0.12), value: hover)
     }
 
     private var highlighted: AttributedString {
