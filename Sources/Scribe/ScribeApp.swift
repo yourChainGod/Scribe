@@ -453,58 +453,71 @@ struct ScribeApp: App {
 
                 Divider()
 
-                // Phase 20 — multi-cursor commands. They piggy-back on
-                // FindState.commands so the existing Coordinator sink
-                // routes them without an extra Combine subscription.
-                Button("Select Next Occurrence") {
-                    findState.commands.send(.selectNextOccurrence)
-                }
-                .keyboardShortcut("d", modifiers: .command)
+                // Phase 24 — Multi-Cursor commands grouped under a
+                // submenu so the parent Edit menu doesn't sprawl
+                // past 20 items. The submenu's contents are the
+                // accumulated work of phases 20–23. SwiftUI's
+                // Menu view nests inside CommandGroup just fine —
+                // it ends up as an NSMenu submenu in the bridged
+                // AppKit menubar.
+                Menu("Multi-Cursor") {
+                    // Horizontal multi-cursor (Phase 20).
+                    Button("Select Next Occurrence") {
+                        findState.commands.send(.selectNextOccurrence)
+                    }
+                    .keyboardShortcut("d", modifiers: .command)
 
-                Button("Select All Occurrences") {
-                    findState.commands.send(.selectAllOccurrences)
-                }
-                .keyboardShortcut("l", modifiers: [.command, .shift])
+                    Button("Select All Occurrences") {
+                        findState.commands.send(.selectAllOccurrences)
+                    }
+                    .keyboardShortcut("l", modifiers: [.command, .shift])
 
-                Button("Single Cursor") {
-                    findState.commands.send(.collapseToSingleCursor)
-                }
-                // Use ⌃⇧Esc — plain Esc is reserved for "hide find bar".
-                .keyboardShortcut(.escape, modifiers: [.control, .shift])
+                    // Phase 22 — skip the current ⌘D selection and jump
+                    // to the next occurrence. VSCode binds it to the
+                    // chord ⌘K ⌘D, which SwiftUI's KeyboardShortcut
+                    // can't express (single-key only). ⌃⌘D is the
+                    // closest unused single shortcut on Scribe's
+                    // existing key map.
+                    Button("Skip Next Occurrence") {
+                        findState.commands.send(.skipAndSelectNextOccurrence)
+                    }
+                    .keyboardShortcut("d", modifiers: [.command, .control])
 
-                // Phase 21 — vertical multi-cursor. ⌥⌘↑/⌥⌘↓ matches
-                // VSCode + Sublime; on Sublime it's ⌃⇧↑/↓ but the
-                // ⌥⌘ pair feels more macOS-native.
-                Button("Add Cursor Above") {
-                    findState.commands.send(.addCaretAbove)
-                }
-                .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+                    Divider()
 
-                Button("Add Cursor Below") {
-                    findState.commands.send(.addCaretBelow)
-                }
-                .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+                    // Phase 21 — vertical multi-cursor. ⌥⌘↑/⌥⌘↓
+                    // matches VSCode + Sublime; on Sublime it's
+                    // ⌃⇧↑/↓ but the ⌥⌘ pair feels more macOS-native.
+                    Button("Add Cursor Above") {
+                        findState.commands.send(.addCaretAbove)
+                    }
+                    .keyboardShortcut(.upArrow, modifiers: [.command, .option])
 
-                // Phase 22 — skip the current ⌘D selection and jump to
-                // the next occurrence. VSCode binds it to the chord
-                // ⌘K ⌘D, which SwiftUI's KeyboardShortcut can't express
-                // (single-key only). ⌃⌘D is the closest unused single
-                // shortcut on Scribe's existing key map.
-                Button("Skip Next Occurrence") {
-                    findState.commands.send(.skipAndSelectNextOccurrence)
-                }
-                .keyboardShortcut("d", modifiers: [.command, .control])
+                    Button("Add Cursor Below") {
+                        findState.commands.send(.addCaretBelow)
+                    }
+                    .keyboardShortcut(.downArrow, modifiers: [.command, .option])
 
-                // Phase 23 — column / rectangular selection toggle.
-                // ⌘⇧8 matches VSCode + IntelliJ. Independent of the
-                // ⇧⌥+arrow chord (Scintilla cocoa default → rect
-                // extend) — the toggle is for users who want to
-                // type / arrow into a rectangle without holding
-                // a modifier the whole time.
-                Button("Toggle Column Selection Mode") {
-                    findState.commands.send(.toggleColumnSelectionMode)
+                    Divider()
+
+                    // Phase 23 — column / rectangular selection
+                    // toggle. ⌘⇧8 matches VSCode + IntelliJ.
+                    // Independent of the ⇧⌥+arrow chord (Scintilla
+                    // cocoa default → rect extend) — the toggle
+                    // is for users who want to type / arrow into a
+                    // rectangle without holding a modifier the
+                    // whole time.
+                    Button("Toggle Column Selection Mode") {
+                        findState.commands.send(.toggleColumnSelectionMode)
+                    }
+                    .keyboardShortcut("8", modifiers: [.command, .shift])
+
+                    Button("Single Cursor") {
+                        findState.commands.send(.collapseToSingleCursor)
+                    }
+                    // ⌃⇧Esc — plain Esc is reserved for "hide find bar".
+                    .keyboardShortcut(.escape, modifiers: [.control, .shift])
                 }
-                .keyboardShortcut("8", modifiers: [.command, .shift])
 
                 Divider()
 
