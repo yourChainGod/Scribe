@@ -327,6 +327,164 @@ enum GitClient {
         return AheadBehind(ahead: ahead, behind: behind)
     }
 
+    // MARK: - Phase 35b-3 · per-hunk staging plumbing
+
+    /// One unified-diff hunk with full body lines preserved. Unlike
+    /// `GitDiffParser.parse`, which collapses hunks to a per-line
+    /// `[Int: GitGutterStatus]` map (sufficient for the gutter), the
+    /// per-hunk staging path needs the *original* body so we can
+    /// rebuild a self-contained `git apply --cached` patch.
+    ///
+    /// `bodyLines` keeps the leading ' ' / '+' / '-' character intact
+    /// — `git apply` parses by the same convention. The "\ No newline
+    /// at end of file" sentinel line is also preserved verbatim (it
+    /// belongs to the body in unified-diff syntax).
+    struct Hunk: Sendable, Equatable {
+        var oldStart: Int
+        var oldLen: Int
+        var newStart: Int
+        var newLen: Int
+        /// Trailing "@@ section heading" emitted by git to identify
+        /// the enclosing function/symbol. Preserved so a rebuilt
+        /// patch matches the original byte-for-byte; not used for
+        /// any logic.
+        var section: String?
+        var bodyLines: [String]
+
+        /// `@@ -OLDSTART,OLDLEN +NEWSTART,NEWLEN @@ optional-section`
+        /// — exact shape git emits. We always use the explicit
+        /// length form (`,LEN`) even when LEN is 1; older git
+        /// implementations accept both, but pinning the explicit
+        /// form keeps the rebuild deterministic.
+        var headerLine: String {
+            var line = "@@ -\(oldStart),\(oldLen) +\(newStart),\(newLen) @@"
+            if let s = section, !s.isEmpty { line += " \(s)" }
+            return line
+        }
+
+        /// Build a self-contained patch that applies *just this hunk*
+        /// to the file at `path` (relative to the repo root). The
+        /// minimum git apply needs is the `--- a/<path>` + `+++ b/<path>`
+        /// pair followed by the hunk; we don't include the
+        /// `diff --git`/`index ...` preamble because those are
+        /// metadata that don't affect the apply.
+        func minimalPatch(forFilePath path: String) -> String {
+            var lines: [String] = []
+            lines.append("--- a/\(path)")
+            lines.append("+++ b/\(path)")
+            lines.append(headerLine)
+            lines.append(contentsOf: bodyLines)
+            // Trailing newline matters for `git apply` — without it
+            // the last body line gets clipped on some git versions.
+            return lines.joined(separator: "\n") + "\n"
+        }
+    }
+
+    /// Parse a unified-diff text into hunks with full body lines.
+    /// Pure: nonisolated, no I/O. Anything outside `@@`-bounded
+    /// hunks (the `diff --git` preamble, `Binary files differ`
+    /// lines, etc.) is ignored — the caller already knows which
+    /// file the diff is for, so file-level headers are noise here.
+    nonisolated static func parseHunks(_ diff: String) -> [Hunk] {
+        var hunks: [Hunk] = []
+        var current: Hunk?
+        for raw in diff.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = String(raw)
+            if line.hasPrefix("@@ ") {
+                if let finished = current { hunks.append(finished) }
+                current = parseHunkHeaderForApply(line)
+                continue
+            }
+            // Only collect body lines once a hunk header has opened.
+            // This filters out the file-level preamble (`diff --git`,
+            // `index abc..def`, `--- a/`, `+++ b/`) before the first
+            // `@@`, and any tail noise after the diff ends.
+            guard current != nil else { continue }
+            if line.hasPrefix(" ") || line.hasPrefix("+") || line.hasPrefix("-")
+                || line.hasPrefix("\\") {
+                current?.bodyLines.append(line)
+            }
+        }
+        if let last = current { hunks.append(last) }
+        return hunks
+    }
+
+    /// Header parser shared by `parseHunks` (this file) and the
+    /// gutter parser (`GitDiffParser`). They each need slightly
+    /// different output — the gutter only wants coords, this path
+    /// also needs the section heading — so we keep two parsers
+    /// rather than cross-coupling them.
+    fileprivate nonisolated static func parseHunkHeaderForApply(_ line: String) -> Hunk? {
+        // "@@ -O,L +N,L @@ optional heading"
+        let body = line.dropFirst(3)
+        guard let endRange = body.range(of: " @@") else { return nil }
+        let coords = body[..<endRange.lowerBound]
+        let after = body[endRange.upperBound...]
+        let parts = coords.split(separator: " ")
+        guard parts.count == 2,
+              parts[0].hasPrefix("-"),
+              parts[1].hasPrefix("+") else { return nil }
+        guard let oldPair = parseLengthPair(String(parts[0].dropFirst())),
+              let newPair = parseLengthPair(String(parts[1].dropFirst())) else {
+            return nil
+        }
+        let section = after.trimmingCharacters(in: .whitespaces)
+        return Hunk(oldStart: oldPair.start,
+                    oldLen: oldPair.len,
+                    newStart: newPair.start,
+                    newLen: newPair.len,
+                    section: section.isEmpty ? nil : section,
+                    bodyLines: [])
+    }
+
+    /// "5,3" → (5, 3); "5" → (5, 1); "5,0" → (5, 0). Same shape
+    /// `GitDiffParser` uses; duplicated here because `GitDiffParser`'s
+    /// version is fileprivate and we want to keep both modules
+    /// independently testable.
+    fileprivate nonisolated static func parseLengthPair(_ s: String) -> (start: Int, len: Int)? {
+        let parts = s.split(separator: ",")
+        guard let first = parts.first, let start = Int(first) else { return nil }
+        if parts.count == 1 { return (start, 1) }
+        guard parts.count == 2, let len = Int(parts[1]) else { return nil }
+        return (start, len)
+    }
+
+    /// `git diff [--cached] -U3 -- <path>`. Phase 35b-3 — per-hunk
+    /// stage needs the **context-bearing** form so a hunk extracted
+    /// from one place in the file can be located by `git apply`.
+    /// `cached: true` diffs index-vs-HEAD (the source of "unstage
+    /// hunk"); `cached: false` diffs working-tree-vs-index (the
+    /// source of "stage hunk").
+    nonisolated static func diffForApply(path: String,
+                                         repo: URL,
+                                         cached: Bool) -> UnifiedDiffResult {
+        var args: [String] = ["diff", "--no-color", "--no-ext-diff", "-U3"]
+        if cached { args.append("--cached") }
+        args.append(contentsOf: ["--", path])
+        switch run(args, cwd: repo) {
+        case .success(let out): return .diff(out)
+        case .failure(let err): return .error(err)
+        }
+    }
+
+    /// Apply `patch` against the repo's *index* (not the working
+    /// tree). `reverse == true` undoes a hunk that's already in the
+    /// index — that's the unstage path. We always go through the
+    /// stdin pipe (`-`) so multi-line / Unicode patches don't
+    /// collide with macOS argv limits.
+    nonisolated static func applyPatch(_ patch: String,
+                                       repo: URL,
+                                       reverse: Bool) -> WriteResult {
+        var args: [String] = ["apply", "--cached", "--whitespace=nowarn"]
+        if reverse { args.append("--reverse") }
+        args.append("-")    // read patch from stdin
+        let result = runWithStdin(args, stdin: patch, cwd: repo)
+        switch result {
+        case .success: return .ok
+        case .failure(let err): return .error(err)
+        }
+    }
+
     /// Walk parent directories until we find one containing `.git`.
     /// `.git` may be a directory (normal repo) or a regular file
     /// (worktree / submodule pointing back to the gitdir).

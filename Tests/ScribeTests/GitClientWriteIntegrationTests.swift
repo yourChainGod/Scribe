@@ -299,6 +299,160 @@ final class GitClientWriteIntegrationTests: XCTestCase {
                        GitClient.AheadBehind(ahead: 0, behind: 0))
     }
 
+    // MARK: - Phase 35b-3-i · per-hunk apply round-trip
+
+    func test_diffForApply_returnsHunksWithContext() async throws {
+        // -U3 must include 3 surrounding context lines so a hunk
+        // can be located by `git apply` even after an earlier hunk
+        // has shifted line numbers. Pin that contract: a single-
+        // line edit in the middle of the file should produce a
+        // hunk whose body has at least one ' ' context line on
+        // each side of the '+'/'-' pair.
+        try seedFile(name: "src.txt", contents: """
+        line 1
+        line 2
+        line 3
+        line 4
+        line 5
+        line 6
+        line 7
+        line 8
+        """)
+        // Commit the seed so HEAD has src.txt; the tests above
+        // already committed README.md but our seedFile helper
+        // doesn't auto-commit. We need src.txt at HEAD before we
+        // can diff a working-tree edit against it.
+        try runGit(["add", "src.txt"])
+        try runGit(["-c", "user.email=t@s.app", "-c", "user.name=T",
+                    "commit", "-m", "seed src.txt", "--quiet"])
+        // Edit one line in the middle; -U3 should show 3 ctx
+        // lines on each side.
+        try seedFile(name: "src.txt", contents: """
+        line 1
+        line 2
+        line 3
+        line 4 modified
+        line 5
+        line 6
+        line 7
+        line 8
+        """)
+        let result = GitClient.diffForApply(path: "src.txt",
+                                            repo: repoURL,
+                                            cached: false)
+        guard case .diff(let raw) = result else {
+            XCTFail("diffForApply did not return .diff: \(result)")
+            return
+        }
+        let hunks = GitClient.parseHunks(raw)
+        XCTAssertEqual(hunks.count, 1)
+        let body = hunks[0].bodyLines
+        // Count ' ' context lines vs '+'/'-' edits.
+        let context = body.filter { $0.first == " " }
+        let pluses  = body.filter { $0.first == "+" }
+        let minuses = body.filter { $0.first == "-" }
+        XCTAssertEqual(pluses.count, 1)
+        XCTAssertEqual(minuses.count, 1)
+        XCTAssertGreaterThanOrEqual(context.count, 6,
+                                    "expected at least 3 ctx lines on each side; got \(context.count)")
+    }
+
+    func test_applyPatch_stagesSingleHunkOnly() async throws {
+        // Two independent edits in the same file — make sure that
+        // applying just one hunk to the index leaves the other
+        // working-tree change unstaged. This is the smoke test for
+        // the per-hunk stage UX: hover [+] on hunk 1 should not
+        // collapse to "stage everything".
+        try seedFile(name: "src.txt", contents: (1...20).map { "line \($0)" }
+                     .joined(separator: "\n") + "\n")
+        try runGit(["add", "src.txt"])
+        try runGit(["-c", "user.email=t@s.app", "-c", "user.name=T",
+                    "commit", "-m", "seed", "--quiet"])
+
+        var lines = (1...20).map { "line \($0)" }
+        lines[2] = "line 3 EDITED"      // hunk near top
+        lines[15] = "line 16 EDITED"    // hunk near bottom
+        try seedFile(name: "src.txt", contents: lines.joined(separator: "\n") + "\n")
+
+        let diff = GitClient.diffForApply(path: "src.txt",
+                                          repo: repoURL,
+                                          cached: false)
+        guard case .diff(let raw) = diff else {
+            XCTFail("diff failed: \(diff)"); return
+        }
+        let hunks = GitClient.parseHunks(raw)
+        XCTAssertEqual(hunks.count, 2,
+                       "two distant edits should yield two hunks: \(raw)")
+
+        // Stage just the first hunk.
+        let patch = hunks[0].minimalPatch(forFilePath: "src.txt")
+        XCTAssertEqual(GitClient.applyPatch(patch, repo: repoURL, reverse: false),
+                       .ok)
+
+        // After staging hunk 1: cached diff has 1 hunk (the edit
+        // we just staged); working-tree-vs-index diff has 1 hunk
+        // (the edit we left).
+        guard case .diff(let cachedRaw) = GitClient.diffForApply(
+                path: "src.txt", repo: repoURL, cached: true) else {
+            XCTFail("cached diff failed"); return
+        }
+        guard case .diff(let workingRaw) = GitClient.diffForApply(
+                path: "src.txt", repo: repoURL, cached: false) else {
+            XCTFail("working diff failed"); return
+        }
+        XCTAssertEqual(GitClient.parseHunks(cachedRaw).count, 1,
+                       "cached diff should hold the staged hunk: \(cachedRaw)")
+        XCTAssertEqual(GitClient.parseHunks(workingRaw).count, 1,
+                       "working diff should hold the un-staged hunk: \(workingRaw)")
+    }
+
+    func test_applyPatch_reverseUnstagesSingleHunkOnly() async throws {
+        // Mirror of test_applyPatch_stagesSingleHunkOnly but
+        // unstage-first: stage everything, then reverse-apply one
+        // cached hunk to peel just that hunk back into the working
+        // tree.
+        try seedFile(name: "src.txt", contents: (1...20).map { "line \($0)" }
+                     .joined(separator: "\n") + "\n")
+        try runGit(["add", "src.txt"])
+        try runGit(["-c", "user.email=t@s.app", "-c", "user.name=T",
+                    "commit", "-m", "seed", "--quiet"])
+
+        var lines = (1...20).map { "line \($0)" }
+        lines[2] = "line 3 EDITED"
+        lines[15] = "line 16 EDITED"
+        try seedFile(name: "src.txt", contents: lines.joined(separator: "\n") + "\n")
+
+        // Stage everything.
+        XCTAssertEqual(GitClient.stage(path: "src.txt", repo: repoURL), .ok)
+
+        // Pull the cached hunks and reverse-apply hunk 0.
+        guard case .diff(let raw) = GitClient.diffForApply(
+                path: "src.txt", repo: repoURL, cached: true) else {
+            XCTFail("cached diff failed"); return
+        }
+        let hunks = GitClient.parseHunks(raw)
+        XCTAssertEqual(hunks.count, 2)
+        let patch = hunks[0].minimalPatch(forFilePath: "src.txt")
+        XCTAssertEqual(GitClient.applyPatch(patch, repo: repoURL, reverse: true),
+                       .ok)
+
+        // After reverse-apply: cached has 1 hunk (the one we left),
+        // working-tree-vs-index has 1 hunk (the one we peeled
+        // back).
+        guard case .diff(let cachedRaw) = GitClient.diffForApply(
+                path: "src.txt", repo: repoURL, cached: true) else {
+            XCTFail("cached diff failed"); return
+        }
+        guard case .diff(let workingRaw) = GitClient.diffForApply(
+                path: "src.txt", repo: repoURL, cached: false) else {
+            XCTFail("working diff failed"); return
+        }
+        XCTAssertEqual(GitClient.parseHunks(cachedRaw).count, 1)
+        XCTAssertEqual(GitClient.parseHunks(workingRaw).count, 1)
+    }
+
+    // MARK: - Phase 35b-2c · push / pull / fetch round-trip (continued)
+
     func test_pull_fastForwardsBehindCount() async throws {
         let bare = try attachBareRemote()
         defer { try? FileManager.default.removeItem(at: bare) }
