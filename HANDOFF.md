@@ -407,6 +407,7 @@ Phase 0.2/0.3 暂未截图。
 | **Phase 29 · 工程化** | `21e2479` | `.github/workflows/ci.yml` 四道闸 · `check_localization.swift` · `gen_perf_samples.sh` · README 重写 · ROADMAP 追 ADR-006/007 · macOS 14 lockstep |
 | **Phase 28c · SCN_MODIFIED 节流** | `56027f7` | `Document.flushPendingEdit` drain hook · 50 ms debounce · save/echo flush · 113 tests |
 | **Phase 28d · Coordinator 拆分** | `d351e8a` | Theme / Find / MultiCursor 三个 same-module extension · 主文件 1083 → 385 (-64%) |
+| **Phase 30 · Markdown 预览** | `f85d550` | 手写 md→HTML 转换器（453 LOC）· WKWebView pane · ⌘⇧V toggle · 26 converter tests · 零依赖 |
 
 ### 关键架构变化
 
@@ -470,7 +471,7 @@ Task { @MainActor [weak self] in
 
 `.github/workflows/ci.yml` 在 macos-14 跑：
 
-1. `swift test --parallel` — 110 tests 全绿
+1. `swift test --parallel` — 139 tests 全绿
 2. `swift build -c release` — release 编译 0 error
 3. `swift build -Xswiftc -swift-version -Xswiftc 6` — strict 模式 0 error 0 warning（Vendor/ 除外）
 4. `swift Scripts/check_localization.swift` — en ↔ zh-Hans key 一致 + 无 dangling reference
@@ -500,9 +501,10 @@ Task { @MainActor [weak self] in
    `view.string()`。要彻底零拷贝得让 Scintilla 直接读 / 写 Document 的
    backing store（NSMutableString 或 ICU UText）。优先级：低 — 当前
    实测保存 50 MB ~150 ms，可接受。
-2. **Phase 30+ 路线**：见 ROADMAP "Phase 30+ 路线展望"（ndd 核心 / Document
-   Map / Function List / Git Gutter / Snippets / Markdown Preview /
-   HEX View / Sparkle）。
+2. **Markdown Preview v2**：表格 / task list / footnote / 代码块语法高亮 /
+   mermaid 图。当前 v1 覆盖 CommonMark 子集。
+3. **Phase 31+ 路线**：见 ROADMAP "Phase 31+ 路线展望"（ndd 核心 /
+   Document Map / Git Gutter / Snippets / HEX View / Sparkle）。
 
 ---
 
@@ -511,12 +513,13 @@ Task { @MainActor [weak self] in
 ```
 Scribe 已从 0 长到 v1.0-rc ——
 SwiftUI Scene + Scintilla 5.6.1 + 8 主题 + 多光标 + 列选 + 全 i18n（en/zh-Hans）·
+Markdown 实时预览（手写转换器 + WKWebView，零依赖）·
 开 20 MB 文件主线程不卡 · 50 MB typing 不卡（50 ms debounce）·
-Swift 6 strict 0/0 · 113 tests + 4 perf budget · ScintillaCodeEditor.swift
+Swift 6 strict 0/0 · 139 tests + 4 perf budget · ScintillaCodeEditor.swift
 1083 → 385 行 · .app 双击即用 · CI 四道闸 push/PR 都跑 ·
 README/ROADMAP/HANDOFF 同步到位。
 
-下一拍：ndd C++ 核心 + Document Map + Function List。
+下一拍：ndd C++ 核心 + Document Map + Git Gutter。
 ```
 
 ---

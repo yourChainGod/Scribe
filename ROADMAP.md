@@ -416,19 +416,58 @@ sustained typing burst，可调 `Coordinator.docSyncThrottleNanos`。
 - [x] README 重写（badges / features / cheat sheet / architecture / i18n / dev）
 - [x] ROADMAP 节追加（Phase 15-29 集中纪实 + ADR-006）
 
-## Phase 30+ · 路线展望
+## Phase 30 · Markdown 实时预览（2026-04-28，commit `f85d550`）
 
-下面是 v1.0 之后想做的事，按重要度而非时间排：
+**目标**：编辑 README/ROADMAP/HANDOFF 时所见即所得，⌘⇧V 切换。
+
+**改动**：
+- `Sources/Scribe/Models/MarkdownConverter.swift`（453 行）
+  — 纯函数 md → HTML 两阶段扫描器（block: ATX heading / paragraph
+  / fenced code / blockquote / list / hr；inline: code / link /
+  image / bold / italic / strikethrough，全用 `\u{0001}N\u{0001}`
+  占位符保护生成的 HTML 标签不被最终 escape pass 吃掉）。
+  v1 范围：CommonMark 子集，不支持表格 / task list / footnote /
+  inline HTML。
+- `Sources/Scribe/Views/MarkdownPreviewPane.swift`（230 行）
+  — `WKWebView` 包装 + GitHub 风格 inline CSS（亮/暗双调色板，
+  跟随 SwiftUI `@Environment(\.colorScheme)`）。`window.scrollY`
+  跨 reload 持久化，每次按键 50 ms debounce 后局部刷新但不弹回顶。
+  `WKNavigationDelegate` 拦截 `<a>` 点击 → `NSWorkspace.shared.open(_:)`
+  外部浏览器打开。
+- `Sources/Scribe/Models/Document.swift`
+  + `@Published var isMarkdownPreviewVisible: Bool`
+  + `var isMarkdown: Bool`（沿用 Outline 的 "md" / "markdown" 集合）
+- `Sources/Scribe/Views/EditorAreaView.swift`
+  EditorAreaView 现在通过私有 `DocumentEditorPane` 间接持 doc 为
+  `@ObservedObject`，让 toggle 翻 flag 时 body 重新求值。markdown
+  + visible 时画 `HSplitView{ editor | preview minWidth 260 }`。
+- `Sources/Scribe/App/AppCommands.swift`
+  ⌘⇧V Markdown Preview 菜单项，✓ 当 on，非 markdown doc 时 disabled。
+- 新 i18n key `menu.view.markdownPreview` × en/zh-Hans。
+
+**测试**：`Tests/ScribeTests/MarkdownConverterTests.swift` 26 例覆盖：
+heading 各级 / 软硬换行 / `***x***` 嵌套 / `snake_case` 不被 italic /
+inline code 保护 emphasis / fenced code 含 lang hint + HTML escape +
+内部不解析 markdown / 有序/无序/blockquote/list-blank-closes / 链接 /
+图片 / `---` 与 `- - -` thematic break / CRLF normalisation /
+未闭 fence / 敌意输入 escape / 空输入。
+
+**为什么手写而不用 cmark / Foundation**：Foundation 的 Markdown
+API 输出 AttributedString 不是 HTML，覆盖子集还更小；Apple
+swift-cmark 加 SwiftPM 依赖。手写 ~400 LOC 比 FFI + 格式翻译更便宜。
+
+## Phase 31+ · 路线展望
+
+下面是想做的事，按重要度而非时间排：
 
 1. **ndd C++ 核心移植**：`Encode.cpp` / `CmpareMode.cpp` / `HEXMode.cpp` / `LargeFile.cpp`
    通过 ObjC++ shim 桥到 Swift；保留 GPL-3.0 copyleft。
 2. **Document Map**：右侧缩略图侧栏（学 npp-mac，仅 SwiftUI）。
-3. **Function List / Symbol Outline**：当前 Outline 仅识别 Swift / Markdown，扩到 cpp / py / js。
-4. **Git Gutter**：旁注 ▎ ▎ +/- 的行级 git diff（libgit2 还是直接调 `git diff` CLI 待定）。
-5. **Snippets / Templates**：⌘⇧T 弹出 + tab key 触发。
-6. **Markdown Preview**：右侧 split，`WKWebView` 渲染。
-7. **HEX View**：参考 ndd 的 `HEXMode.cpp`。
-8. **官方 disk image** + Sparkle 自动更新。
+3. **Git Gutter**：旁注 ▎ ▎ +/- 的行级 git diff（libgit2 还是直接调 `git diff` CLI 待定）。
+4. **Snippets / Templates**：⌘⇧T 弹出 + tab key 触发。
+5. **Markdown Preview v2**：表格 / task list / footnote / mermaid / 代码块语法高亮。
+6. **HEX View**：参考 ndd 的 `HEXMode.cpp`。
+7. **官方 disk image** + Sparkle 自动更新。
 
 ---
 
