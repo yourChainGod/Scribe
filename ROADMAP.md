@@ -1421,20 +1421,79 @@ SwiftUI / Scintilla / Engine 依赖，下一拍直接调用即可。
 
 **测试**：+9 闸 (309 → 318)。pure unit，无 git / 无 fixture。
 
-**未覆盖 (Phase 35c-ii-β)**：GitBlameEngine actor (per-URL
-[Int: BlameLine] cache + invalidate on save + Workspace
-绑定)。
-
 **未覆盖 (Phase 35c-ii-γ)**：Coordinator+InlineBlame
 Scintilla EOLAnnotation 集成 + caret line change hook +
 hover tooltip。
+
+## Phase 35c-ii-β · GitBlameEngine + Workspace 绑定（2026-04-29）
+
+**背景**：35c-i 把 `GitClient.blame()` 封到位、35c-ii-α 把
+"3 days ago" 翻译器封到位。但要让 Inline Blame UI 真在
+caret 行末显示，得有一个长寿命对象在后台维护 per-URL `[Int:
+BlameLine]` cache，跟 `GitGutterEngine` / `GitStatusEngine`
+同形：`bind` / `request` / `refresh` / `invalidateAll`，
+随 Workspace 生命周期收放。本拍交付这个 actor 与 Workspace
+hook，下一拍 35c-ii-γ 把 Scintilla EOLAnnotation 接上。
+
+**交付**：
+
+- `Sources/Scribe/Models/GitBlameEngine.swift` (new) ·
+  - `@MainActor final class GitBlameEngine: ObservableObject`
+    Sendable @Published `blameByURL: [URL: [Int:
+    BlameLine]]` (per-URL cache，nil = 未问过 / [:]= 问过
+    且无 / 非空 = blame 数据)。
+  - `request(for:url:)` cache-hit + in-flight 双短路 ⇒ 同
+    URL 重复请求 0 spawn。Task.detached(.userInitiated) 跑
+    `GitClient.blame`，await main hop 写回。
+  - `refresh(for:)` 先 invalidate 再 request — save / FSEvents
+    走这条；`invalidate(for:)` 仅清不重 fetch；`invalidateAll()`
+    folder 切换走这条。
+  - `blameLine(for:line:)` 是 UI 唯一读路径，O(1)。
+  - URL 全部 `.standardizedFileURL` 归一化，`/path/./foo` 与
+    `/path/foo` cache 命中相等。
+  - `.error` 不清缓存（瞬态保留旧 blame，与 GitStatusEngine
+    一致）；`.untracked` / `.notInRepo` 落空 map 让 UI 知
+    "问过、无 blame"。
+- `Sources/Scribe/Models/Workspace.swift` 4 处 hook：
+  - `let gitBlameEngine = GitBlameEngine()` 与
+    `gitGutterEngine` / `gitStatusEngine` 同列。
+  - `openFolder(at:)` 进 ⇒ `invalidateAll()` (新 folder 可
+    能映射同名路径不同文件)。
+  - `closeFolder()` 进 ⇒ `invalidateAll()` 。
+  - `applyLoadResult` 成功分支 ⇒ `request(for: doc.url)`
+    (placeholder doc → 实文档完成 ⇒ 起 blame)。
+  - `handleExternalChange` 末尾 + `write(...)` 普通 + chunked
+    成功分支 ⇒ `refresh(for: doc.url)` (落盘后行号可能搬动 +
+    新行变 uncommitted)。
+- `Tests/ScribeTests/GitClientWriteIntegrationTests.swift`
+  (+5 测试) ·
+  - `request_populatesCacheForTrackedFile` ⇒ 等 cache 落地
+    后 `blameLine(for:line:1)` 验 author。
+  - `request_isCacheHitOnSecondCall` ⇒ 二次 request 100ms
+    grace window 后 dictionary instance 仍等于 snapshot。
+  - `refresh_replacesCacheAfterEdit` ⇒ 工作树 + 1 行 →
+    refresh → 重 fetch → line 2 isUncommitted == true。
+  - `invalidateAll_dropsEveryEntry` ⇒ folder 切换路径模拟。
+  - `untrackedURL_storesEmptyMapNotNil` ⇒ 未跟踪文件落 [:]
+    而非 nil，UI 才能 "问过且空" 短路。
+  - `waitForBlame(engine:url:allowEmpty:)` polling helper，
+    25ms cadence + 3s timeout。
+
+**测试**：+5 闸 (318 → 323)。real-repo integration，gated
+on `/usr/bin/git`。
+
+**未覆盖 (Phase 35c-ii-γ)**：Coordinator+InlineBlame.swift
+Scintilla `SCI_EOLANNOTATIONSETTEXT` 集成 + caret line
+change hook + 灰色 fg + hover tooltip 出 commit summary +
+未跟踪 / 未保存 silent skip + 多 cursor 仅显示 main caret 行
+blame。
 
 ## Phase 35+ · 路线展望
 
 下面是想做的事，按重要度而非时间排。多条路线是 zed 调研后决定插入的。
 
 1. **Git v2 polish (Phase 35b-4-g)**：in-place 编辑 hunk excerpt（zed 风可编辑 diff，目前 ProjectDiffView 仍是 read-only）+ submodule diff + 流式 diff load。Phase 35b-1/2a/2b/2c/3/4-a/4-b/4-c/4-d/4-e/4-f 交付了读面 + file-level 写面 + commit + remote sync + per-hunk stage/unstage + 分支 picker + force-with-lease + Project Diff multibuffer (read-only) + Stage All / Unstage All + Revert Hunk + 侧栏右键跳 multibuffer + ⌘F 跨文件 search + ⌘G/⇧⌘G 行级 next/prev 闭环。
-2. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末 annotation 显示 author/time/commit、冲突区上方 Accept/Reject 按钮。35c-i 已交付数据层（GitClient.blame + parseBlamePorcelain + BlameLine + BlameResult），35c-ii-α 已交付 RelativeTime helper（"3 days ago"/"刚刚" 6 buckets），35c-ii-β 接 GitBlameEngine actor + Workspace 绑定，35c-ii-γ 接 Scintilla EOLAnnotation + caret hook + tooltip，35c-iii 加 Settings 开关 + i18n。
+2. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末 annotation 显示 author/time/commit、冲突区上方 Accept/Reject 按钮。35c-i 已交付数据层（GitClient.blame + parseBlamePorcelain + BlameLine + BlameResult），35c-ii-α 已交付 RelativeTime helper（"3 days ago"/"刚刚" 6 buckets），35c-ii-β 已交付 GitBlameEngine actor + Workspace 4 处 hook (open / close folder + load + save + external change)，35c-ii-γ 接 Scintilla EOLAnnotation + caret hook + tooltip，35c-iii 加 Settings 开关 + i18n。
 3. **LargeFile v3 (Phase 34d+)**：中途 cancel save、external-change
    mtime+size detection、SymbolOutline 读 buffer、细粒度 progress。
 4. **CLI shim v2 (Phase 35d+)**：IPC fifo 让 `--wait` 不再冷启动、bash/zsh completion、brew formula。

@@ -985,6 +985,120 @@ final class GitClientWriteIntegrationTests: XCTestCase {
         }
     }
 
+    // MARK: - Phase 35c-ii-β · GitBlameEngine round-trips
+
+    func test_blameEngine_request_populatesCacheForTrackedFile() async throws {
+        // request(for:) hops to a detached task that shells out
+        // to `git blame --porcelain`; the parsed [Int: BlameLine]
+        // map lands on `blameByURL[url]` once the task hops back
+        // to main. Pin the round-trip so a future refactor can't
+        // silently break the engine's only consumer contract.
+        let engine = GitBlameEngine()
+        engine.request(for: readmeURL())
+        try await waitForBlame(engine: engine, url: readmeURL())
+        let line1 = engine.blameLine(for: readmeURL(), line: 1)
+        XCTAssertNotNil(line1)
+        XCTAssertEqual(line1?.author, "Scribe Test")
+        XCTAssertFalse(line1?.isUncommitted ?? true)
+    }
+
+    func test_blameEngine_request_isCacheHitOnSecondCall() async throws {
+        // The second call within the same engine lifetime must
+        // be a no-op — cache hit means the inline-blame UI's
+        // "tab switch back to a file we just blamed" path is
+        // free, no shell-out fan-out.
+        let engine = GitBlameEngine()
+        engine.request(for: readmeURL())
+        try await waitForBlame(engine: engine, url: readmeURL())
+        let snapshot = engine.blameByURL[readmeURL().standardizedFileURL]
+        // Re-request: cache hit should keep the *exact same*
+        // dictionary instance (no mutation, no replace).
+        engine.request(for: readmeURL())
+        // Brief grace window so any *spurious* spawn would have
+        // landed by now; the cache entry should still equal the
+        // original snapshot.
+        try await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertEqual(engine.blameByURL[readmeURL().standardizedFileURL],
+                       snapshot,
+                       "cache hit must not re-fetch")
+    }
+
+    func test_blameEngine_refresh_replacesCacheAfterEdit() async throws {
+        // After a working-tree edit (no commit), refresh(for:)
+        // re-blames and the new line shows up with the all-
+        // zeros uncommitted SHA. This is the path Workspace
+        // calls on save / external change.
+        let engine = GitBlameEngine()
+        engine.request(for: readmeURL())
+        try await waitForBlame(engine: engine, url: readmeURL())
+        XCTAssertEqual(engine.blameByURL[readmeURL().standardizedFileURL]?.count, 1)
+
+        try seedFile(name: "README.md", contents: "initial\nadded\n")
+        engine.refresh(for: readmeURL())
+        // Cache cleared synchronously by refresh; wait for the
+        // re-fetch to land.
+        try await waitForBlame(engine: engine, url: readmeURL())
+        let map = engine.blameByURL[readmeURL().standardizedFileURL]
+        XCTAssertEqual(map?.count, 2)
+        XCTAssertEqual(map?[2]?.isUncommitted, true)
+    }
+
+    func test_blameEngine_invalidateAll_dropsEveryEntry() async throws {
+        // Folder switch should drop every cached row so the new
+        // folder doesn't see stale rows for the same paths. The
+        // engine doesn't auto-refetch — it waits for the next
+        // explicit request().
+        let engine = GitBlameEngine()
+        engine.request(for: readmeURL())
+        try await waitForBlame(engine: engine, url: readmeURL())
+        XCTAssertFalse(engine.blameByURL.isEmpty)
+
+        engine.invalidateAll()
+        XCTAssertTrue(engine.blameByURL.isEmpty)
+    }
+
+    func test_blameEngine_untrackedURL_storesEmptyMapNotNil() async throws {
+        // .untracked / .notInRepo land an empty map (not nil)
+        // so the inline-blame UI knows we asked, the answer is
+        // nothing, and stops re-requesting on every caret tick.
+        try seedFile(name: "scratch.txt", contents: "hi\n")
+        let url = repoURL.appendingPathComponent("scratch.txt")
+        let engine = GitBlameEngine()
+        engine.request(for: url)
+        // For untracked the engine's map ends up explicitly empty;
+        // wait until it transitions out of "not yet asked" (nil)
+        // to "asked, empty" ([:]).
+        try await waitForBlame(engine: engine,
+                               url: url,
+                               allowEmpty: true)
+        let map = engine.blameByURL[url.standardizedFileURL]
+        XCTAssertNotNil(map, "engine should pin asked-and-empty")
+        XCTAssertTrue(map?.isEmpty ?? false)
+    }
+
+    /// Spin until `engine.blameByURL[url]` is non-nil. Default
+    /// requires at least one BlameLine to land; pass
+    /// `allowEmpty: true` for the untracked / not-in-repo cases
+    /// where the engine pins an empty dictionary.
+    private func waitForBlame(engine: GitBlameEngine,
+                              url: URL,
+                              allowEmpty: Bool = false,
+                              timeoutMs: Int = 3_000) async throws {
+        let deadline = Date().addingTimeInterval(Double(timeoutMs) / 1000)
+        let key = url.standardizedFileURL
+        while true {
+            if let map = engine.blameByURL[key] {
+                if allowEmpty || !map.isEmpty { return }
+            }
+            if Date() > deadline {
+                XCTFail("GitBlameEngine never populated \(key) "
+                        + "(allowEmpty: \(allowEmpty))")
+                return
+            }
+            try await Task.sleep(nanoseconds: 25_000_000)
+        }
+    }
+
     // MARK: - Helpers
 
     /// Run a git invocation against `repoURL`. Throws on non-zero

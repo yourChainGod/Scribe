@@ -98,6 +98,13 @@ final class Workspace: ObservableObject {
     /// cover every mutation we care about).
     let gitStatusEngine = GitStatusEngine()
 
+    /// Phase 35c-ii-β — single shared engine that runs `git blame
+    /// --porcelain` for the active document, keyed by absolute
+    /// URL. Inline-blame UI reads from this on every caret tick;
+    /// the engine itself only re-fetches on open / save / external
+    /// change so a moving caret on an unchanged file is free.
+    let gitBlameEngine = GitBlameEngine()
+
     /// Sink for `selectedID` changes — re-binds the gutter engine to
     /// the newly-selected doc whenever the user switches tabs. Held
     /// internally so the engine + sink share Workspace's lifetime.
@@ -145,6 +152,12 @@ final class Workspace: ObservableObject {
         // a non-repo folder; the engine handles that as `.notInRepo`
         // and shows the empty state.
         gitStatusEngine.bind(repo: GitClient.findRepoRoot(for: normalized))
+        // Phase 35c-ii-β — a folder switch invalidates every
+        // cached blame entry. The new folder may reopen the same
+        // path as a totally different file (e.g. two checkouts of
+        // the same repo); leaving stale blame would mis-annotate
+        // it for one caret tick before the re-fetch lands.
+        gitBlameEngine.invalidateAll()
         let root = FileNode(url: normalized)
         root.isExpanded = true
         root.loadChildren()
@@ -157,6 +170,8 @@ final class Workspace: ObservableObject {
         // Phase 35b-1 — clear the Source Control sidebar in lockstep
         // so it doesn't keep showing rows from the old repo.
         gitStatusEngine.bind(repo: nil)
+        // Phase 35c-ii-β — same reasoning for inline blame.
+        gitBlameEngine.invalidateAll()
     }
 
     var current: Document? {
@@ -305,6 +320,12 @@ final class Workspace: ObservableObject {
             doc.lineEnding = payload.lineEnding
             doc.isLoading = false
             startWatching(doc)
+            // Phase 35c-ii-β — kick off the blame fetch alongside
+            // the watcher install. The cache-hit short-circuit
+            // means a re-open of the same path is free; the first
+            // open hops to a detached task so the editor draws
+            // before git blame returns.
+            gitBlameEngine.request(for: doc.url)
         case .failure(let error):
             doc.isLoading = false
             // Drop the placeholder — it represents a doc the user
@@ -385,6 +406,12 @@ final class Workspace: ObservableObject {
         // sidebar; an external editor saving a file we have open
         // changes its git status (added → modified, etc).
         gitStatusEngine.refresh()
+        // Phase 35c-ii-β — external write moved the file's
+        // bytes; blame for new lines now reads as uncommitted
+        // (the all-zeros sentinel) and existing lines may have
+        // shifted line numbers. Force re-fetch so the inline
+        // annotation tracks reality.
+        gitBlameEngine.refresh(for: doc.url)
     }
 
     /// Silent re-read of `doc` from disk using its current encoding.
@@ -528,6 +555,12 @@ final class Workspace: ObservableObject {
                     // chunked save just rewrote the on-disk bytes
                     // git compares against.
                     self?.gitStatusEngine.refresh()
+                    // Phase 35c-ii-β — same trigger drives
+                    // inline blame: the just-written file
+                    // commits no new history (yet) but its
+                    // line numbers may have shifted, so the
+                    // cached blame is stale.
+                    self?.gitBlameEngine.refresh(for: docRef.url)
                 } catch {
                     docRef.saveProgress = -1
                     NSAlert(error: error).runModal()
@@ -566,6 +599,10 @@ final class Workspace: ObservableObject {
             if doc.id == selectedID { gitGutterEngine.refresh() }
             // Phase 35b-1 — Source Control sidebar same trigger.
             gitStatusEngine.refresh()
+            // Phase 35c-ii-β — inline blame catches up to the
+            // just-written bytes so newly-uncommitted lines pick
+            // up the all-zeros sentinel SHA on the next caret tick.
+            gitBlameEngine.refresh(for: doc.url)
         } catch {
             NSAlert(error: error).runModal()
         }
