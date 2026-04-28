@@ -250,6 +250,44 @@ final class GitStatusEngine: ObservableObject {
         handleWriteResult(result, action: .pushForce)
     }
 
+    /// Phase 35b-4-b — full Project Diff payload. Walks every row
+    /// in the current `state` and pulls staged + working hunks for
+    /// each one; entries whose hunk lists are both empty (e.g. a
+    /// pure untracked row whose `git diff` produces nothing) are
+    /// filtered out so the multibuffer view stays trivial.
+    ///
+    /// Returns an empty array when:
+    ///   - no repo is bound (`repo == nil`)
+    ///   - status hasn't loaded yet (`rows.isEmpty` is fine —
+    ///     callers refresh on a polling interval)
+    ///
+    /// We deliberately call `hunks(forPath:cached:)` per row
+    /// sequentially rather than fanning out via `withTaskGroup`.
+    /// Each call already detaches its own work, and a 50-file
+    /// dirty tree resolves in well under 200 ms in practice; if a
+    /// future repo has thousands of dirty files the bottleneck is
+    /// the SwiftUI render of that many hunks, not the diff pulls.
+    func projectDiff() async -> [ProjectDiffEntry] {
+        guard repo != nil else { return [] }
+        var out: [ProjectDiffEntry] = []
+        for row in rows {
+            // Short-circuit on the per-column flags so untracked
+            // rows don't pay for two no-op git diffs.
+            let staged: [GitClient.Hunk] = row.hasStagedChanges
+                ? await hunks(forPath: row.path, cached: true)
+                : []
+            let working: [GitClient.Hunk] = row.hasUnstagedChanges
+                ? await hunks(forPath: row.path, cached: false)
+                : []
+            guard !(staged.isEmpty && working.isEmpty) else { continue }
+            out.append(ProjectDiffEntry(path: row.path,
+                                        url: row.url,
+                                        stagedHunks: staged,
+                                        workingHunks: working))
+        }
+        return out
+    }
+
     /// Phase 35b-3-ii — fetch hunks for a single file. `cached: false`
     /// returns working-tree-vs-index hunks (the source of "stage
     /// hunk"); `cached: true` returns index-vs-HEAD hunks (the

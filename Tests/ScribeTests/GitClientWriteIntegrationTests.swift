@@ -646,6 +646,107 @@ final class GitClientWriteIntegrationTests: XCTestCase {
         }
     }
 
+    // MARK: - Phase 35b-4-b · projectDiff() multibuffer payload
+
+    func test_projectDiff_returnsEmptyOnCleanRepo() async throws {
+        // Seed-only repo, no edits. projectDiff() walks the rows
+        // list, which is empty here, so the result is empty
+        // regardless of `repo == nil` short-circuiting. Pin the
+        // "no rows ⇒ no entries" path so a later refactor that
+        // accidentally reaches into `git status` directly still
+        // returns the same empty.
+        let engine = GitStatusEngine()
+        engine.bind(repo: repoURL)
+        try await waitForEngineLoaded(engine)
+        let entries = await engine.projectDiff()
+        XCTAssertEqual(entries, [])
+    }
+
+    func test_projectDiff_includesWorkingHunksOnly() async throws {
+        // Edit-without-stage → `git diff` shows the hunk in the
+        // working column, `git diff --cached` shows nothing.
+        // projectDiff() must reflect that asymmetry: stagedHunks
+        // empty, workingHunks non-empty.
+        try seedFile(name: "README.md", contents: "edited\n")
+        let engine = GitStatusEngine()
+        engine.bind(repo: repoURL)
+        try await waitForEngineLoaded(engine)
+        let entries = await engine.projectDiff()
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(entries[0].path, "README.md")
+        XCTAssertTrue(entries[0].stagedHunks.isEmpty)
+        XCTAssertFalse(entries[0].workingHunks.isEmpty)
+    }
+
+    func test_projectDiff_includesStagedHunksOnly() async throws {
+        // Edit + stage → working column is clean again (the edit
+        // moved into the index), staged column has the hunk.
+        try seedFile(name: "README.md", contents: "edited\n")
+        XCTAssertEqual(GitClient.stage(path: "README.md", repo: repoURL),
+                       .ok)
+        let engine = GitStatusEngine()
+        engine.bind(repo: repoURL)
+        try await waitForEngineLoaded(engine)
+        let entries = await engine.projectDiff()
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertFalse(entries[0].stagedHunks.isEmpty)
+        XCTAssertTrue(entries[0].workingHunks.isEmpty)
+    }
+
+    func test_projectDiff_includesBothWhenMixed() async throws {
+        // Edit + stage, then edit again before commit → file is
+        // simultaneously "different in index vs HEAD" and
+        // "different in working tree vs index". Both hunk lists
+        // populate. Pin the contract because the multibuffer view
+        // surfaces them as two visually-distinct strips per file.
+        try seedFile(name: "README.md", contents: "edited\n")
+        XCTAssertEqual(GitClient.stage(path: "README.md", repo: repoURL),
+                       .ok)
+        try seedFile(name: "README.md", contents: "edited again\n")
+        let engine = GitStatusEngine()
+        engine.bind(repo: repoURL)
+        try await waitForEngineLoaded(engine)
+        let entries = await engine.projectDiff()
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertFalse(entries[0].stagedHunks.isEmpty)
+        XCTAssertFalse(entries[0].workingHunks.isEmpty)
+    }
+
+    func test_projectDiff_skipsUntrackedFiles() async throws {
+        // Untracked files show up in `git status` but `git diff`
+        // produces nothing for them (no base to diff against). The
+        // engine drops the resulting empty entry — otherwise the
+        // multibuffer would render an empty file section that
+        // can't be acted on.
+        try seedFile(name: "newfile.txt", contents: "hello\n")
+        let engine = GitStatusEngine()
+        engine.bind(repo: repoURL)
+        try await waitForEngineLoaded(engine)
+        let entries = await engine.projectDiff()
+        XCTAssertEqual(entries, [],
+                       "untracked file should not appear in projectDiff: \(entries)")
+    }
+
+    /// Spin-wait until the engine reports `.loaded`. We use an
+    /// active poll rather than wiring up a Combine sink because
+    /// `GitStatusEngine.refresh()` always reaches a terminal
+    /// state (`.loaded`, `.notInRepo`, or `.idle`) within a few
+    /// hundred ms in practice; spinning at 25ms cadence keeps
+    /// the test cost negligible while staying robust to
+    /// scheduler jitter.
+    private func waitForEngineLoaded(_ engine: GitStatusEngine,
+                                     timeoutMs: Int = 3_000) async throws {
+        let deadline = Date().addingTimeInterval(Double(timeoutMs) / 1000)
+        while engine.state != .loaded {
+            if Date() > deadline {
+                XCTFail("GitStatusEngine never reached .loaded "
+                        + "(last state: \(engine.state))")
+                return
+            }
+            try await Task.sleep(nanoseconds: 25_000_000)
+        }
+    }
+
     /// Run a git invocation in `cwd`. Used by the pull test which
     /// needs to drive a sibling clone in addition to `repoURL`.
     private func runGitIn(_ cwd: URL, _ args: [String]) throws {

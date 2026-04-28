@@ -148,3 +148,37 @@ enum GitChangeKind: Sendable, Equatable, Hashable {
         }
     }
 }
+
+/// Phase 35b-4-b — one file's contribution to the Project Diff
+/// multibuffer. Carries both the staged (index-vs-HEAD) and the
+/// working-tree (working-vs-index) hunk lists so the multibuffer
+/// view can render them in two visually-distinct strips per file
+/// without re-running git itself. Files with no hunks on either
+/// side never end up in `GitStatusEngine.projectDiff()`'s output —
+/// the filter happens upstream so the SwiftUI side stays trivial.
+///
+/// `Identifiable` keys off `path` so a file moving between staged-
+/// only and unstaged-only between refreshes still keeps the same
+/// SwiftUI row identity (and any expand / scroll state attached
+/// to it).
+struct ProjectDiffEntry: Equatable, Sendable, Identifiable {
+    /// Repo-relative POSIX path (matches `GitFileStatus.path`).
+    let path: String
+    /// Absolute file URL — handy for the "Open File" jump button
+    /// without re-resolving against the repo root.
+    let url: URL
+    /// Hunks reported by `git diff --cached` for this file. Apply-
+    /// reverse on these unstages them.
+    let stagedHunks: [GitClient.Hunk]
+    /// Hunks reported by `git diff` (no `--cached`) for this file.
+    /// Apply-forward on these stages them.
+    let workingHunks: [GitClient.Hunk]
+
+    var id: String { path }
+
+    /// True when neither hunk list has anything — used by the
+    /// engine to drop entries before they reach the view.
+    var isEmpty: Bool {
+        stagedHunks.isEmpty && workingHunks.isEmpty
+    }
+}
