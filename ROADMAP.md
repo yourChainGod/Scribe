@@ -923,11 +923,50 @@ amend 不增加 commit count + 主题重写 · Unicode/多行体 stdin
 indicator、remote branch picker、per-hunk stage (`git apply
 --cached <patch>`)、Project Diff multibuffer。
 
+## Phase 35b-2c · remote sync（2026-04-28，commit `eab2dd0`）
+
+**背景**：35b-2b 交付 commit 面，这拍闭环：侧栏顶部 ahead/
+behind 胶囊 + fetch / pull / push 三按钮。推送环节不出
+Scribe。
+
+**交付**：
+- `Sources/Scribe/Models/GitClient.swift` + `AheadBehind { ahead,
+  behind }` (Sendable + Equatable，带 isUpToDate / diverged) ·
+  fetch/pull/push (`git fetch --quiet` / `git pull --ff-only` /
+  `git push --quiet`) · aheadBehind(repo:) 走 `git rev-list
+  --left-right --count HEAD...@{upstream}` · parseAheadBehind 纯
+  函数（tab-separated 与 column-aligned 两种 shape 统一走
+  whitespace-split）。`--ff-only` 是故意：非 fast-forward
+  走 rebase 还是 merge 该是主动选择，不能点按钮手滑。
+- `Sources/Scribe/Models/GitStatusEngine.swift` + `@Published
+  aheadBehind: AheadBehind?` (refresh 同拉 status + branch +
+  ab) · `fetch() / pull() / push() async` · WriteAction
+  .{fetch,pull,push} cases + `sourceControl.alert.{fetch,pull,
+  push}Failed`。
+- `Sources/Scribe/Views/SourceControlSidebar.swift` branchHeader
+  扩：分支名 · ahead/behind capsule（仅 non-nil & 非 0/0 显）
+  · fetch/pull/push 3 borderless icon 按钮 · push glyph 在
+  ahead>0 时 swap .fill 变体。remoteButton helper 塑体与
+  35b-2a row-action cluster 一致。
+- `Sources/Scribe/Resources/{en,zh-Hans}.lproj/Localizable.strings`
+  + sourceControl.action.{fetch,pull,push} + .alert.{fetch,pull,
+  push}Failed。
+
+**测试**：+10 闸 (总 26 个 Source Control test)。`GitAheadBehindParserTests`
+纯函数 6 闸（tab/space/0·0/发散/空/畸形）· +4 integration
+(`bare init` + `git push -u` + sibling clone 模拟 remote 推送后
+拉取 round-trip)。走 `XCTSkipUnless /usr/bin/git`。
+
+**未覆盖 (Phase 35b-3 / 35c / 后续)**：per-hunk stage (`git
+apply --cached <patch>`)、Project Diff multibuffer、remote
+branch picker、`--force-with-lease` push UX、inline blame +
+merge conflict UI。
+
 ## Phase 35+ · 路线展望
 
 下面是想做的事，按重要度而非时间排。多条路线是 zed 调研后决定插入的。
 
-1. **Git v2 (Phase 35b-2c/3)**：push/pull/fetch + ahead/behind indicator + per-hunk stage/unstage + Project Diff multibuffer。复用 Phase 31/31b/35b-1/2a/2b 的 GitDiffParser/Hunks/StatusParser/WriteResult/commit 路径。Phase 35b-1/2a/2b 交付了读面 + file-level 写面 + commit。
+1. **Git v2 (Phase 35b-3 / 35b-4)**：per-hunk stage/unstage (`git apply --cached`) + Project Diff multibuffer + remote branch picker。Phase 35b-1/2a/2b/2c 交付了读面 + file-level 写面 + commit + remote sync 闭环。
 2. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末 annotation 显示 author/time/commit、冲突区上方 Accept/Reject 按钮。复用现有 GitClient。
 3. **LargeFile v3 (Phase 34d+)**：中途 cancel save、external-change
    mtime+size detection、SymbolOutline 读 buffer、细粒度 progress。
