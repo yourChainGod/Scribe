@@ -11,6 +11,22 @@ struct OutlineSidebar: View {
     @EnvironmentObject var workspace: Workspace
     @ObservedObject var outline: SymbolOutline
 
+    /// Symbol whose line range contains the editor caret. Drives the
+    /// "you are here" highlight in OutlineRow. Cheapest sufficient
+    /// algorithm: linear scan; symbol counts in real files top out
+    /// in low hundreds, well below the threshold where this matters.
+    private var activeSymbolID: SymbolEntry.ID? {
+        guard let doc = workspace.current else { return nil }
+        let line = doc.cursorLine
+        // Pick the deepest symbol whose start ≤ caret. Tie-break by
+        // line so a symbol declared on the same line as the caret
+        // takes precedence over the file's enclosing scope.
+        return outline.symbols
+            .filter { $0.lineNumber <= line }
+            .max(by: { $0.lineNumber < $1.lineNumber })?
+            .id
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
@@ -40,13 +56,16 @@ struct OutlineSidebar: View {
                 Text("\(outline.symbols.count)")
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 1)
-                    .background(Capsule().fill(Color.secondary.opacity(0.15)))
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(
+                        Capsule()
+                            .fill(Color.primary.opacity(0.08))
+                    )
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.vertical, 8)
     }
 
     @ViewBuilder
@@ -59,7 +78,7 @@ struct OutlineSidebar: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(outline.symbols) { sym in
-                        OutlineRow(symbol: sym)
+                        OutlineRow(symbol: sym, isActive: sym.id == activeSymbolID)
                             .onTapGesture { jump(to: sym) }
                     }
                 }
@@ -92,6 +111,7 @@ struct OutlineSidebar: View {
 
 private struct OutlineRow: View {
     let symbol: SymbolEntry
+    let isActive: Bool
     @State private var hover = false
 
     var body: some View {
@@ -107,20 +127,39 @@ private struct OutlineRow: View {
                 .font(.system(size: 11))
                 .frame(width: 14)
             Text(symbol.name)
-                .font(.system(size: 12))
+                .font(.system(size: 12, weight: isActive ? .medium : .regular))
+                .foregroundStyle(isActive ? Color.primary : Color.primary.opacity(0.85))
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: 0)
             Text("\(symbol.lineNumber)")
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundStyle(.tertiary)
+                .monospacedDigit()
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 3)
-        .background(hover
-                    ? Color.accentColor.opacity(0.12)
-                    : Color.clear)
+        .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(backgroundFill)
+                .padding(.horizontal, 4)
+        )
         .contentShape(Rectangle())
         .onHover { hover = $0 }
+        .animation(.easeOut(duration: 0.12), value: hover)
+        .animation(.easeOut(duration: 0.18), value: isActive)
+    }
+
+    private var backgroundFill: Color {
+        if isActive {
+            // Caret-is-here highlight. Same accent 14% pill the
+            // sidebar mode switcher uses, keeping the visual
+            // language consistent across the sidebar.
+            return Color.accentColor.opacity(0.14)
+        } else if hover {
+            return Color.primary.opacity(0.06)
+        } else {
+            return Color.clear
+        }
     }
 }

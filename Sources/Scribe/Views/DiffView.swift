@@ -27,12 +27,13 @@ struct DiffView: View {
     // MARK: - Toolbar
 
     private var toolbar: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             Button {
                 session.chooseAndCompare()
             } label: {
                 Label("Open Pair…", systemImage: "doc.on.doc")
             }
+            .controlSize(.regular)
 
             Button {
                 swap()
@@ -41,7 +42,7 @@ struct DiffView: View {
             }
             .disabled(session.result == nil)
 
-            Spacer().frame(width: 12)
+            DiffToolbarSeparator()
 
             Button {
                 session.previousHunk()
@@ -72,9 +73,22 @@ struct DiffView: View {
             }
             .keyboardShortcut(.escape, modifiers: [])
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
         .background(.bar)
+    }
+
+    /// Hairline vertical separator inside the diff toolbar — same
+    /// visual recipe as `StatusBarSeparator`. Keeps the toolbar
+    /// from looking like an undifferentiated row of icons by
+    /// cleaving file-ops from navigation-ops.
+    private struct DiffToolbarSeparator: View {
+        var body: some View {
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor).opacity(0.6))
+                .frame(width: 1, height: 16)
+                .padding(.horizontal, 4)
+        }
     }
 
     @ViewBuilder
@@ -145,12 +159,13 @@ struct DiffView: View {
 
     @ViewBuilder
     private func paneHeader(title: String, path: String) -> some View {
-        HStack {
+        HStack(spacing: 6) {
             Image(systemName: "doc")
                 .foregroundStyle(.secondary)
                 .font(.system(size: 11))
             Text(title)
                 .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.primary)
             if !path.isEmpty {
                 Text(path)
                     .font(.system(size: 10))
@@ -160,28 +175,39 @@ struct DiffView: View {
             }
             Spacer()
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
         .background(Color(nsColor: .controlBackgroundColor))
+        .overlay(alignment: .bottom) {
+            // Hairline so the pane header reads as a distinct
+            // strip rather than melting into the editor body.
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor).opacity(0.5))
+                .frame(height: 0.5)
+        }
     }
 
     // MARK: - Empty state
 
     private var placeholder: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 16) {
             Image(systemName: "rectangle.split.2x1")
-                .font(.system(size: 44, weight: .ultraLight))
+                .font(.system(size: 52, weight: .ultraLight))
                 .foregroundStyle(.tertiary)
-            Text("Compare Files")
-                .font(.system(size: 22, weight: .light))
-            Text("Pick two files to see a side-by-side diff with synchronized scrolling.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 380)
+            VStack(spacing: 6) {
+                Text("Compare Files")
+                    .font(.system(size: 22, weight: .light))
+                Text("Pick two files to see a side-by-side diff\nwith synchronized scrolling.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(2)
+                    .frame(maxWidth: 380)
+            }
             Button("Choose Files…") { session.chooseAndCompare() }
                 .controlSize(.large)
                 .buttonStyle(.borderedProminent)
+                .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))

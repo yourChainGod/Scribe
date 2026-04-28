@@ -59,16 +59,34 @@ struct CommandPalette: View {
         registry.activeRoute(for: query)?.placeholder ?? placeholder
     }
 
+    /// Glyph in the leading slot of the search bar. Reflects the
+    /// active prefix-route so users get a visual cue when they've
+    /// pivoted from "type to filter all commands" to "@symbol",
+    /// ":line", etc. Falls back to magnifyingglass when no route
+    /// matches.
+    private var routeIcon: String {
+        switch registry.activeRoute(for: query)?.id {
+        case "symbol":  return "number"
+        case "line":    return "arrow.right.to.line"
+        case "command": return "command"
+        default:        return "magnifyingglass"
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            // Search field
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
+            // Search field — slightly taller than the macOS default
+            // so the palette feels like a focused command surface
+            // rather than a sidebar input.
+            HStack(spacing: 10) {
+                Image(systemName: routeIcon)
                     .foregroundStyle(.secondary)
-                    .font(.system(size: 14))
+                    .font(.system(size: 15))
+                    .frame(width: 18)
+                    .animation(.easeOut(duration: 0.15), value: routeIcon)
                 TextField(effectivePlaceholder, text: $query)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 14))
+                    .font(.system(size: 15))
                     .focused($queryFocused)
                     .onSubmit { invokeSelected() }
                     .onKeyPress(.upArrow) {
@@ -85,8 +103,8 @@ struct CommandPalette: View {
                     }
                     .onChange(of: query) { _, _ in selection = 0 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
             .background(Color(nsColor: .windowBackgroundColor))
 
             Divider()
@@ -167,6 +185,7 @@ private struct CommandRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 highlightedTitle
                     .font(.system(size: 13))
+                    .foregroundStyle(isSelected ? Color.primary : Color.primary.opacity(0.9))
                     .lineLimit(1)
                 if let subtitle = match.command.subtitle {
                     Text(subtitle)
@@ -178,8 +197,18 @@ private struct CommandRow: View {
             Spacer(minLength: 8)
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 7)
-        .background(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
+        .padding(.vertical, 8)
+        .background(
+            // Use a borderless rounded fill rather than a sharp
+            // rectangle so the selection indicator doesn't fight
+            // the rounded outer container. The 14% opacity matches
+            // every other "active" state in the app's chrome
+            // (sidebar mode pill, file tree active row).
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(isSelected ? Color.accentColor.opacity(0.14) : Color.clear)
+                .padding(.horizontal, 6)
+        )
+        .animation(.easeOut(duration: 0.12), value: isSelected)
     }
 
     /// Title with the matched-char ranges drawn bold.
