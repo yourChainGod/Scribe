@@ -38,15 +38,20 @@ final class MultiCursorTests: XCTestCase {
         state.commands.send(.selectNextOccurrence)
         state.commands.send(.selectAllOccurrences)
         state.commands.send(.collapseToSingleCursor)
+        // Phase 21 — vertical multi-cursor.
+        state.commands.send(.addCaretAbove)
+        state.commands.send(.addCaretBelow)
 
-        XCTAssertEqual(received.count, 3)
+        XCTAssertEqual(received.count, 5)
         // Pattern-match on each case so the compiler catches a
         // future enum-rename.
         for cmd in received {
             switch cmd {
             case .selectNextOccurrence,
                  .selectAllOccurrences,
-                 .collapseToSingleCursor:
+                 .collapseToSingleCursor,
+                 .addCaretAbove,
+                 .addCaretBelow:
                 continue
             default:
                 XCTFail("Unexpected command: \(cmd)")

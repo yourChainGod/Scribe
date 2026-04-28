@@ -62,6 +62,8 @@ private enum SCI {
     static let GETTARGETEND:     UInt32 = 2193
     static let REPLACETARGET:    UInt32 = 2194
     static let REPLACETARGETRE:  UInt32 = 2195
+    static let REPLACESEL:       UInt32 = 2170
+    static let INSERTTEXT:       UInt32 = 2003
     static let SEARCHINTARGET:   UInt32 = 2197
     static let SETSEARCHFLAGS:   UInt32 = 2198
     // Indicators (for "highlight all matches")
@@ -89,6 +91,12 @@ private enum SCI {
     static let WORDSTARTPOSITION:           UInt32 = 2266
     static let WORDENDPOSITION:             UInt32 = 2267
     static let GETTEXTRANGE:                UInt32 = 2162
+    static let GETLINECOUNT:                UInt32 = 2154
+    /// Phase 21 — `SCI_FINDCOLUMN(line, column)` returns the byte
+    /// position at the given visual column on the given line, or
+    /// the line-end position if the line is shorter. Cleanest way
+    /// to project a caret column onto an adjacent line.
+    static let FINDCOLUMN:                  UInt32 = 2456
 }
 
 /// Search flags as documented in Scintilla.h.
@@ -286,6 +294,9 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                     case .selectNextOccurrence: self.selectNextOccurrence()
                     case .selectAllOccurrences: self.selectAllOccurrences()
                     case .collapseToSingleCursor: self.collapseToSingleCursor()
+                    case .addCaretAbove: self.addCaretAbove()
+                    case .addCaretBelow: self.addCaretBelow()
+                    case .insertAtCarets(let s): self.insertAtCarets(s, in: view)
                     }
                 }
         }
@@ -740,6 +751,125 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                 cursor = r.upperBound
             }
             view.message(SCI.SCROLLCARET)
+        }
+
+        /// ⌥⌘↑ / "Add Cursor Above". Projects every existing caret
+        /// onto the line above (preserving column) and adds those
+        /// projections as additional selections. Carets that are
+        /// already on line 0 are skipped — there's nothing above.
+        ///
+        /// Same column-snapping semantics as VSCode: if the upper
+        /// line is shorter than the source caret column, the new
+        /// caret pins at the line end. Implemented via SCI_FINDCOLUMN
+        /// which already does that snap natively.
+        func addCaretAbove() {
+            extendCaretsByLine(delta: -1)
+        }
+
+        /// ⌥⌘↓ / "Add Cursor Below". Mirror of `addCaretAbove`.
+        /// Carets on the last line are skipped.
+        func addCaretBelow() {
+            extendCaretsByLine(delta: +1)
+        }
+
+        /// Shared body for the two `addCaret{Above,Below}` commands.
+        /// `delta` must be ±1; anything else is meaningless.
+        ///
+        /// Walks every existing selection's caret, projects it onto
+        /// the target line via SCI_FINDCOLUMN, deduplicates against
+        /// the current set so a no-op press doesn't grow the
+        /// selection, and ADDSELECTION's the survivors. Main
+        /// selection is updated to the FIRST new caret so vertical
+        /// repeats keep walking outward — matches VSCode's "the
+        /// last caret added is the one driving the next add"
+        /// intuition.
+        private func extendCaretsByLine(delta: Int) {
+            guard let view, abs(delta) == 1 else { return }
+            let n = Int(view.message(SCI.GETSELECTIONS))
+            guard n > 0 else { return }
+            let lineCount = Int(view.message(SCI.GETLINECOUNT))
+            // Snapshot existing carets first so the in-loop ADDSELECTION
+            // calls don't widen the count we iterate over.
+            var pending: [Int] = []
+            var existing: Set<Int> = []
+            for i in 0..<n {
+                let caret = Int(view.message(SCI.GETSELECTIONNCARET, wParam: UInt(i)))
+                existing.insert(caret)
+            }
+            for i in 0..<n {
+                let caret = Int(view.message(SCI.GETSELECTIONNCARET, wParam: UInt(i)))
+                let line = Int(view.message(SCI.LINEFROMPOSITION, wParam: UInt(caret)))
+                let col = Int(view.message(SCI.GETCOLUMN, wParam: UInt(caret)))
+                let target = line + delta
+                guard target >= 0, target < lineCount else { continue }
+                let pos = Int(view.message(SCI.FINDCOLUMN,
+                                           wParam: UInt(bitPattern: target),
+                                           lParam: col))
+                // Skip projections that land on top of an already-
+                // selected caret — keeps repeated presses idempotent
+                // when a column-block of carets is already filled in.
+                if existing.contains(pos) { continue }
+                pending.append(pos)
+                existing.insert(pos)
+            }
+            // ADDSELECTION on macOS Scintilla 5.x leaves the new
+            // caret/anchor at 0 even when wParam/lParam are non-zero
+            // (likely a uptr_t / Sci_Position size mismatch through
+            // the ObjC bridge). Setting them explicitly via
+            // SETSELECTIONNCARET / SETSELECTIONNANCHOR right after
+            // gives us the position we wanted.
+            for pos in pending {
+                view.message(SCI.ADDSELECTION,
+                             wParam: UInt(bitPattern: pos),
+                             lParam: pos)
+                let idx = Int(view.message(SCI.GETSELECTIONS)) - 1
+                view.message(SCI.SETSELECTIONNCARET,
+                             wParam: UInt(bitPattern: idx),
+                             lParam: pos)
+                view.message(SCI.SETSELECTIONNANCHOR,
+                             wParam: UInt(bitPattern: idx),
+                             lParam: pos)
+            }
+            if !pending.isEmpty {
+                view.message(SCI.SCROLLCARET)
+            }
+        }
+
+        /// Test-only: insert `text` at every active caret. Bypasses
+        /// the responder chain so the Phase 21 verification hook
+        /// can prove all carets received the same input —
+        /// `NSApp.sendAction(insertText:)` doesn't reach
+        /// ScintillaView's text input path.
+        ///
+        /// Implementation: SCI_REPLACESEL only mutates the *main*
+        /// selection in multi-selection mode (despite what the
+        /// 5.x docs imply), and SCI_SETSEL collapses the
+        /// multi-selection back to a single range. So we use
+        /// SCI_INSERTTEXT — which inserts at an absolute
+        /// position without touching the selection state — and
+        /// walk caret positions from highest to lowest so each
+        /// insert doesn't shift a position we still need to use.
+        func insertAtCarets(_ text: String, in view: ScintillaView) {
+            let n = Int(view.message(SCI.GETSELECTIONS))
+            guard n > 0 else { return }
+            // Snapshot caret positions before the loop — INSERTTEXT
+            // shifts everything past it, but our snapshot stays
+            // valid because we apply highest-first.
+            var positions: [Int] = []
+            for i in 0..<n {
+                let caret = Int(view.message(SCI.GETSELECTIONNCARET, wParam: UInt(i)))
+                positions.append(caret)
+            }
+            positions.sort(by: >)            // descending
+            let bytes = Array(text.utf8) + [0]   // C string for INSERTTEXT
+            for pos in positions {
+                bytes.withUnsafeBufferPointer { buf in
+                    guard let base = buf.baseAddress else { return }
+                    view.message(SCI.INSERTTEXT,
+                                 wParam: UInt(bitPattern: pos),
+                                 lParam: Int(bitPattern: base))
+                }
+            }
         }
 
         /// Esc / "Single Cursor". Drops every additional selection

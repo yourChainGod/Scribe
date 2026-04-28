@@ -73,6 +73,15 @@ final class FindState: ObservableObject {
         case selectNextOccurrence
         case selectAllOccurrences
         case collapseToSingleCursor
+        // Phase 21 — vertical (column-direction) multi-cursor.
+        case addCaretAbove
+        case addCaretBelow
+        /// Test-only: inserts the literal string at every caret via
+        /// `SCI_REPLACESEL`. Used by the Phase 21 verification hook
+        /// to render visible markers at the multi-caret positions —
+        /// keystrokes via NSApp.sendAction don't reach ScintillaView.
+        /// Not a user-facing command; the menu doesn't expose it.
+        case insertAtCarets(String)
     }
     let commands = PassthroughSubject<Command, Never>()
 

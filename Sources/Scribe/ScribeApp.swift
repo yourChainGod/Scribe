@@ -115,6 +115,31 @@ struct ScribeApp: App {
                         fileIndex.rebuild(at: root)
                     }
                     outline.update(for: workspace.current)
+                    // Phase 21 verification hook: SCRIBE_TEST_MULTI_VERTICAL
+                    // = "<count>" sends `addCaretBelow` <count> times,
+                    // then sends a literal "* " typing event so the
+                    // screenshot script gets a visible proof that all
+                    // stacked carets received the keystroke. Pure
+                    // caret bars are tough to capture in a static
+                    // screenshot — the inserted markers tell the
+                    // story instead.
+                    if let raw = ProcessInfo.processInfo.environment["SCRIBE_TEST_MULTI_VERTICAL"],
+                       let n = Int(raw), n > 0 {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                            for _ in 0..<n {
+                                findState.commands.send(.addCaretBelow)
+                            }
+                            // After the carets are stacked, inject a
+                            // marker into all of them via SCI_REPLACESEL
+                            // so the screenshot has visible proof. The
+                            // responder-chain insertText: path doesn't
+                            // reach ScintillaView, so we route through
+                            // the Coordinator instead.
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                findState.commands.send(.insertAtCarets("★"))
+                            }
+                        }
+                    }
                     // Phase 20 verification hook: SCRIBE_TEST_MULTI_SELECT
                     // takes a literal needle, finds it in the active
                     // document, selects every occurrence as a multi-
@@ -407,6 +432,19 @@ struct ScribeApp: App {
                 }
                 // Use ⌃⇧Esc — plain Esc is reserved for "hide find bar".
                 .keyboardShortcut(.escape, modifiers: [.control, .shift])
+
+                // Phase 21 — vertical multi-cursor. ⌥⌘↑/⌥⌘↓ matches
+                // VSCode + Sublime; on Sublime it's ⌃⇧↑/↓ but the
+                // ⌥⌘ pair feels more macOS-native.
+                Button("Add Cursor Above") {
+                    findState.commands.send(.addCaretAbove)
+                }
+                .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+
+                Button("Add Cursor Below") {
+                    findState.commands.send(.addCaretBelow)
+                }
+                .keyboardShortcut(.downArrow, modifiers: [.command, .option])
 
                 Divider()
 
