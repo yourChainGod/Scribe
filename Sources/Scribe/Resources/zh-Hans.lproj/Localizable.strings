@@ -39,6 +39,17 @@
 "sourceControl.section.untracked"  = "未跟踪";
 "sourceControl.section.conflicts"  = "冲突";
 
+// 行操作 (Phase 35b-2a)
+"sourceControl.action.stage"     = "暂存改动";
+"sourceControl.action.unstage"   = "取消暂存";
+"sourceControl.action.discard"   = "放弃改动";
+"sourceControl.discard.confirm.title"   = "放弃此文件的改动？";
+"sourceControl.discard.confirm.message" = "“%@” 的工作树改动将丢失，未跟踪文件将从磁盘删除。Scribe 内无法撤销此操作。";
+"sourceControl.alert.stageFailed"   = "暂存失败。";
+"sourceControl.alert.unstageFailed" = "取消暂存失败。";
+"sourceControl.alert.discardFailed" = "放弃改动失败。";
+"alert.button.ok"                = "好";
+
 // MARK: - Tabs
 
 "tab.untitled"            = "未命名";

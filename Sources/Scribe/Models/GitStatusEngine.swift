@@ -29,6 +29,7 @@
 //    surface explicit at every call site.
 //
 
+import AppKit
 import Combine
 import Foundation
 
@@ -78,6 +79,96 @@ final class GitStatusEngine: ObservableObject {
     func bind(repo: URL?) {
         if self.repo == repo { return }
         self.repo = repo
+        refresh()
+    }
+
+    // MARK: - Phase 35b-2a · file-level write ops
+
+    /// Stage every change for `row.path`. Runs `git add -- <path>`
+    /// on a background task (the binary is binary-stable and
+    /// nonisolated) and refreshes once it returns. On failure we
+    /// surface the git error as an `NSAlert`; the previous status
+    /// stays visible so the user can retry without losing context.
+    ///
+    /// We accept a `GitFileStatus` rather than just a path so the
+    /// caller can't accidentally pass an absolute URL into a
+    /// command that needs a repo-relative one.
+    func stage(_ row: GitFileStatus) async {
+        guard let repo else { return }
+        let result = await Task.detached(priority: .userInitiated) {
+            GitClient.stage(path: row.path, repo: repo)
+        }.value
+        handleWriteResult(result, action: .stage)
+    }
+
+    /// Unstage. Symmetrical to `stage` — see its comment for the
+    /// reasoning behind running on a background task.
+    func unstage(_ row: GitFileStatus) async {
+        guard let repo else { return }
+        let result = await Task.detached(priority: .userInitiated) {
+            GitClient.unstage(path: row.path, repo: repo)
+        }.value
+        handleWriteResult(result, action: .unstage)
+    }
+
+    /// Discard working-tree changes. Untracked files have no index
+    /// version to restore from, so we delete the file outright via
+    /// `FileManager`; tracked ones go through `git restore`.
+    /// Caller is expected to have already shown a confirmation
+    /// dialog (the operation is destructive — restoring an
+    /// untracked file is impossible).
+    func discard(_ row: GitFileStatus) async {
+        guard let repo else { return }
+        let result = await Task.detached(priority: .userInitiated) {
+            () -> GitClient.WriteResult in
+            if row.isUntracked {
+                // git has nothing to restore; remove the file.
+                // `removeItem` returns void / throws — convert to
+                // the same WriteResult shape.
+                do {
+                    try FileManager.default.removeItem(at: row.url)
+                    return .ok
+                } catch {
+                    return .error(error.localizedDescription)
+                }
+            } else {
+                return GitClient.discardWorkingTree(path: row.path, repo: repo)
+            }
+        }.value
+        handleWriteResult(result, action: .discard)
+    }
+
+    /// Internal — write-op kinds used to label the failure alert.
+    /// The `failureKey` indirection feeds L10n at the time the
+    /// alert is built so the message follows the system language.
+    private enum WriteAction {
+        case stage, unstage, discard
+
+        var failureKey: String {
+            switch self {
+            case .stage:   return "sourceControl.alert.stageFailed"
+            case .unstage: return "sourceControl.alert.unstageFailed"
+            case .discard: return "sourceControl.alert.discardFailed"
+            }
+        }
+    }
+
+    /// Show an `NSAlert` for the failure case, then refresh
+    /// regardless of outcome — even a failed git command may have
+    /// partially mutated state, and the next refresh is the
+    /// authoritative source of truth.
+    private func handleWriteResult(_ result: GitClient.WriteResult,
+                                   action: WriteAction) {
+        if case .error(let message) = result {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = L10n.t(action.failureKey)
+            // git errors can be multi-line; show them verbatim so
+            // a power user can copy-paste into a terminal.
+            alert.informativeText = message
+            alert.addButton(withTitle: L10n.t("alert.button.ok"))
+            alert.runModal()
+        }
         refresh()
     }
 

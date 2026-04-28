@@ -114,7 +114,7 @@ struct SourceControlSidebar: View {
         .padding(.vertical, 4)
 
         ForEach(rows) { row in
-            SourceControlRow(row: row)
+            SourceControlRow(row: row, engine: engine)
                 .onTapGesture {
                     workspace.openFile(at: row.url)
                 }
@@ -144,6 +144,7 @@ struct SourceControlSidebar: View {
 /// file from "Changes" → "Staged" without it disappearing).
 private struct SourceControlRow: View {
     let row: GitFileStatus
+    let engine: GitStatusEngine
     @State private var hover = false
 
     var body: some View {
@@ -171,6 +172,13 @@ private struct SourceControlRow: View {
                 .truncationMode(.head)
                 .layoutPriority(0)
             Spacer(minLength: 4)
+            // Phase 35b-2a — hover-revealed action cluster. We keep
+            // the buttons hidden by default so a wide list isn't
+            // visually noisy; they appear only when the cursor lands
+            // on a row (matches the convention zed / VSCode picked).
+            if hover {
+                rowActions
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 3)
@@ -182,6 +190,80 @@ private struct SourceControlRow: View {
         )
         .onHover { hover = $0 }
         .help(row.path)
+    }
+
+    // MARK: - Hover actions
+
+    /// Cluster of [discard] [+] / [-] buttons. Layout shape mirrors
+    /// zed: discard sits leftmost (it's the destructive one and we
+    /// surround it with whitespace), then either stage or unstage
+    /// based on which column the row populates. A row with both
+    /// staged AND unstaged changes (e.g. "AM" — staged-add then
+    /// modified) shows BOTH so the user can deal with each
+    /// independently.
+    @ViewBuilder
+    private var rowActions: some View {
+        actionButton(
+            system: "arrow.uturn.backward",
+            tooltipKey: "sourceControl.action.discard",
+            tint: .red,
+            action: discardWithConfirm
+        )
+        if row.hasStagedChanges {
+            actionButton(
+                system: "minus",
+                tooltipKey: "sourceControl.action.unstage",
+                tint: .orange,
+                action: { Task { await engine.unstage(row) } }
+            )
+        }
+        if row.hasUnstagedChanges || row.isUntracked {
+            actionButton(
+                system: "plus",
+                tooltipKey: "sourceControl.action.stage",
+                tint: .green,
+                action: { Task { await engine.stage(row) } }
+            )
+        }
+    }
+
+    private func actionButton(system: String,
+                              tooltipKey: String,
+                              tint: Color,
+                              action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: system)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 16, height: 16)
+                .background(
+                    Circle().fill(tint.opacity(0.12))
+                )
+        }
+        .buttonStyle(.plain)
+        .help(L10n.t(tooltipKey))
+    }
+
+    /// Discard is destructive — restoring an untracked file is
+    /// impossible (we delete it) and restoring a tracked file
+    /// silently throws away unstaged edits. Confirm via NSAlert
+    /// before handing off to the engine.
+    private func discardWithConfirm() {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = L10n.t("sourceControl.discard.confirm.title")
+        alert.informativeText = String(
+            format: L10n.t("sourceControl.discard.confirm.message"),
+            row.path
+        )
+        alert.addButton(withTitle: L10n.t("sourceControl.action.discard"))
+        alert.addButton(withTitle: L10n.t("alert.button.cancel"))
+        // First button gets the default highlight; we want destructive
+        // to require an explicit click rather than default-Enter.
+        alert.buttons.first?.hasDestructiveAction = true
+        if alert.runModal() == .alertFirstButtonReturn {
+            Task { await engine.discard(row) }
+        }
     }
 
     /// Two-glyph status label, e.g. " M" (modified, unstaged) or

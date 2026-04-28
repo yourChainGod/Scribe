@@ -41,6 +41,17 @@
 "sourceControl.section.untracked"  = "UNTRACKED";
 "sourceControl.section.conflicts"  = "CONFLICTS";
 
+// Source Control row actions (Phase 35b-2a)
+"sourceControl.action.stage"     = "Stage Changes";
+"sourceControl.action.unstage"   = "Unstage Changes";
+"sourceControl.action.discard"   = "Discard Changes";
+"sourceControl.discard.confirm.title"   = "Discard changes in this file?";
+"sourceControl.discard.confirm.message" = "Working-tree edits to “%@” will be lost. Untracked files are deleted from disk. This cannot be undone from inside Scribe.";
+"sourceControl.alert.stageFailed"   = "Couldn’t stage file.";
+"sourceControl.alert.unstageFailed" = "Couldn’t unstage file.";
+"sourceControl.alert.discardFailed" = "Couldn’t discard changes.";
+"alert.button.ok"                = "OK";
+
 // MARK: - Tabs
 
 "tab.untitled"            = "Untitled";

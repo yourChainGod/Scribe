@@ -149,6 +149,49 @@ enum GitClient {
         }
     }
 
+    /// Outcome of a write operation (`stage` / `unstage` / `discard`).
+    /// Phase 35b-2a — the Source Control sidebar's row buttons run
+    /// these and surface the failure as an `NSAlert` so users see
+    /// what git complained about (e.g. dirty index, file moved).
+    enum WriteResult: Sendable, Equatable {
+        case ok
+        case error(String)
+    }
+
+    /// Phase 35b-2a — stage `path` in `repo`. `git add` rather than
+    /// `git update-index` because `add` handles new files,
+    /// modifications, and deletions uniformly; the latter only
+    /// stages the index against an existing tree entry.
+    nonisolated static func stage(path: String, repo: URL) -> WriteResult {
+        switch run(["add", "--", path], cwd: repo) {
+        case .success: return .ok
+        case .failure(let err): return .error(err)
+        }
+    }
+
+    /// Unstage `path` — `git restore --staged` matches what zed and
+    /// modern git docs recommend over the deprecated `git reset HEAD`
+    /// dance. Effect is identical: tree entry stays, index goes back
+    /// to HEAD's view of the file.
+    nonisolated static func unstage(path: String, repo: URL) -> WriteResult {
+        switch run(["restore", "--staged", "--", path], cwd: repo) {
+        case .success: return .ok
+        case .failure(let err): return .error(err)
+        }
+    }
+
+    /// Discard working-tree changes for a tracked file —
+    /// `git restore` (no `--staged`) overwrites the on-disk content
+    /// with the index version. Untracked files don't fit this
+    /// command; `Workspace.discardFile` handles them via
+    /// `FileManager.removeItem` instead.
+    nonisolated static func discardWorkingTree(path: String, repo: URL) -> WriteResult {
+        switch run(["restore", "--", path], cwd: repo) {
+        case .success: return .ok
+        case .failure(let err): return .error(err)
+        }
+    }
+
     /// Walk parent directories until we find one containing `.git`.
     /// `.git` may be a directory (normal repo) or a regular file
     /// (worktree / submodule pointing back to the gitdir).
