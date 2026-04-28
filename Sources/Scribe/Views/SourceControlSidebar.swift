@@ -109,6 +109,16 @@ struct SourceControlSidebar: View {
                 aheadBehindChip(ab)
             }
             Spacer()
+            // Phase 35b-4-b — Project Diff multibuffer entry
+            // point. Disabled when the engine has nothing to
+            // show, so a click never lands on an empty
+            // multibuffer pane (which would just say "no
+            // changes" and waste a context switch).
+            remoteButton(systemName: "rectangle.split.3x1",
+                         titleKey: "projectDiff.action.open") {
+                workspace.projectDiffVisible = true
+            }
+            .disabled(engine.rows.isEmpty)
             remoteButton(systemName: "arrow.down.circle",
                          titleKey: "sourceControl.action.fetch") {
                 Task { await engine.fetch() }

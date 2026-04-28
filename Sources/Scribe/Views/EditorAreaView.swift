@@ -11,7 +11,16 @@ struct EditorAreaView: View {
     @EnvironmentObject var findState: FindState
 
     var body: some View {
-        if let doc = workspace.current {
+        // Phase 35b-4-b — Project Diff multibuffer overlay. We
+        // check the workspace flag *before* the document branch
+        // so the multibuffer can render even when no document is
+        // selected (e.g. after closeAll). The TabBar stays live
+        // above us, so re-selecting a tab still flips the flag
+        // off via SourceControlSidebar / ESC.
+        if workspace.projectDiffVisible {
+            ProjectDiffView(engine: workspace.gitStatusEngine)
+                .environmentObject(workspace)
+        } else if let doc = workspace.current {
             // Indirect through a Document-aware sub-view so SwiftUI
             // tracks per-doc @Published changes (e.g. toggling the
             // markdown preview) and re-evaluates body without us

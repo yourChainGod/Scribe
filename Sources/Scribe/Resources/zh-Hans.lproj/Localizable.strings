@@ -68,6 +68,21 @@
 "sourceControl.alert.pullFailed"       = "pull 失败。";
 "sourceControl.alert.pushFailed"       = "push 失败。";
 
+// Project Diff 多 buffer 视图（Phase 35b-4-b）
+"projectDiff.action.open"           = "打开 Project Diff";
+"projectDiff.action.refresh"        = "刷新";
+"projectDiff.action.done"           = "完成";
+"projectDiff.action.openFile"       = "打开文件";
+"projectDiff.action.stageHunk"      = "暂存";
+"projectDiff.action.unstageHunk"    = "取消暂存";
+"projectDiff.title"                 = "Project Diff";
+"projectDiff.loading"               = "正在加载 Project Diff…";
+"projectDiff.empty"                 = "工作树没有任何改动。";
+"projectDiff.section.staged"        = "已暂存";
+"projectDiff.section.changes"       = "未暂存改动";
+"projectDiff.count.one"             = "（%d 个文件）";
+"projectDiff.count.many"            = "（%d 个文件）";
+
 // 分支 picker + force-with-lease 推送（Phase 35b-4-a）
 "sourceControl.branch.picker.hint"       = "切换分支";
 "sourceControl.branch.loading"           = "正在加载分支…";

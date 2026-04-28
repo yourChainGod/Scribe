@@ -35,6 +35,19 @@ final class Workspace: ObservableObject {
     /// lifetime; toggling here just shows / hides the screen.
     @Published var compareSession: DiffSession?
 
+    /// Phase 35b-4-b — `true` ⇒ EditorAreaView renders the Project
+    /// Diff multibuffer overlay instead of the per-document editor.
+    /// Per-window state (not per-Document) because the multibuffer
+    /// is a workspace-wide view, not a tab; toggled from the Source
+    /// Control sidebar header. We deliberately don't model it as a
+    /// new tab kind — Documents carry too much file-specific state
+    /// (encoding, lineEnding, isDirty, gitGutter…) for a virtual
+    /// "Project Diff" entry to slot in cleanly. An overlay keeps the
+    /// tab strip and sidebar live behind it so the user can still
+    /// see status updates as they stage/unstage from inside the
+    /// multibuffer.
+    @Published var projectDiffVisible: Bool = false
+
     /// Phase 18 — last-known selection text from the focused editor.
     /// Non-published on purpose: SCN_UPDATEUI fires on every cursor
     /// move, so a @Published bind would thrash every observer

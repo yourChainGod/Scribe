@@ -70,6 +70,21 @@
 "sourceControl.alert.pullFailed"       = "Couldn’t pull.";
 "sourceControl.alert.pushFailed"       = "Couldn’t push.";
 
+// Project Diff multibuffer (Phase 35b-4-b)
+"projectDiff.action.open"           = "Open Project Diff";
+"projectDiff.action.refresh"        = "Refresh";
+"projectDiff.action.done"           = "Done";
+"projectDiff.action.openFile"       = "Open File";
+"projectDiff.action.stageHunk"      = "Stage";
+"projectDiff.action.unstageHunk"    = "Unstage";
+"projectDiff.title"                 = "Project Diff";
+"projectDiff.loading"               = "Loading project diff…";
+"projectDiff.empty"                 = "No changes in the working tree.";
+"projectDiff.section.staged"        = "Staged";
+"projectDiff.section.changes"       = "Changes";
+"projectDiff.count.one"             = "(%d file)";
+"projectDiff.count.many"            = "(%d files)";
+
 // Branch picker + force-with-lease push (Phase 35b-4-a)
 "sourceControl.branch.picker.hint"       = "Switch branch";
 "sourceControl.branch.loading"           = "Loading branches…";

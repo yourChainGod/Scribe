@@ -1063,11 +1063,71 @@ integration 走 `XCTSkipUnless /usr/bin/git`。
 **未覆盖 (Phase 35b-4-b / 35c / 后续)**：Project Diff multibuffer
 （zed 风可编辑 diff excerpts）、inline blame、merge conflict UI。
 
+## Phase 35b-4-b · Project Diff multibuffer（2026-04-29）
+
+**背景**：35b-4-a 收完分支 picker + force-with-lease，Git v2 写
+面只剩"一面里看全工作区 diff"这块。zed 的 Project Diff 是把所
+有 changed file 的 hunk 摞在一个面里，逐个 stage/unstage/打
+开 —— 比一个文件一个文件展开侧栏 hunk 强一档。这一拍按 i
++ ii 两步交付：i 是 plumbing，ii 是 SwiftUI 视图 + 入口。
+
+**交付（i 拍 plumbing）**：
+
+- `Sources/Scribe/Models/GitStatus.swift` + `struct
+  ProjectDiffEntry { path, url, stagedHunks, workingHunks }`
+  Equatable + Sendable + Identifiable（id == path 让 SwiftUI
+  ForEach 在文件 staged↔unstaged 状态切换时保持 row identity）·
+  `var isEmpty` 给 engine 做 pre-publish 过滤。
+- `Sources/Scribe/Models/GitStatusEngine.swift` + `func
+  projectDiff() async -> [ProjectDiffEntry]` 走 `rows` 列表，
+  对每行用 `hasStagedChanges` / `hasUnstagedChanges` short-
+  circuit 后调既有 `hunks(forPath:cached:)` 拉 staged + working
+  两套，filter 掉 isEmpty 的（如纯 untracked 行）。
+
+**交付（ii 拍 UI）**：
+
+- `Sources/Scribe/Views/ProjectDiffView.swift`（新文件）·
+  顶部 header (title + N 文件计数 + Refresh + Done ESC 关闭) ·
+  3 态 (loading / empty / scroll list) · per-file section
+  (path + Open File 跳转按钮 + 边框) · per-section strip
+  (Staged 深色 / Changes 浅色) · per-hunk excerpt (header @@
+  line + Stage/Unstage 按钮 + 行 monospace + 按 +/- 染色 ·
+  绿/红 fg + 10% bg tint) · `.task(id: engine.rows)` 跟随
+  engine 自动刷新。
+- `Sources/Scribe/Models/Workspace.swift` + `@Published var
+  projectDiffVisible: Bool = false` (workspace-wide 状态、
+  非 per-Document)。
+- `Sources/Scribe/Views/EditorAreaView.swift` body 加分支：
+  `projectDiffVisible` true 时渲 ProjectDiffView 替代
+  DocumentEditorPane / WelcomeView，sidebar + tabbar 保留可见
+  让用户能看到 status 同步刷新。
+- `Sources/Scribe/Views/SourceControlSidebar.swift` header
+  按钮 `rectangle.split.3x1` "Open Project Diff" · 在
+  `engine.rows.isEmpty` 时禁用避免落到空多 buffer 浪费上下
+  文切换。
+- `Sources/Scribe/Resources/{en,zh-Hans}.lproj/Localizable.strings`
+  + projectDiff.{action.open, .refresh, .done, .openFile,
+  .stageHunk, .unstageHunk} + .title + .loading + .empty +
+  .section.{staged, changes} + .count.{one, many}（暂手动
+  挑 key，未来切 stringsdict）。
+
+**测试**：+5 闸 (总 292)。`GitClientWriteIntegrationTests`
+projectDiff 5 case 真仓库 (空仓 / 仅 working / 仅 staged /
+mixed 双列 / untracked 过滤) · 加 `waitForEngineLoaded` helper
+（25 ms cadence active poll，3 s timeout）等 GitStatusEngine
+refresh 落地。SwiftUI 视图层不写 unit test (与 35b-3-ii 同策
+略，依赖 NSAlert/NSModal/SwiftUI layout)，走人工烟测。
+
+**未覆盖 (后续)**：in-place 编辑 hunk excerpt（zed 让 user
+直接在 diff 面里改源文件）· Stage All / Unstage All 整文件
+按钮 · 多文件选择 · 跨文件 diff search · 滚动到第一个 hunk
+auto-jump · 远程文件 / submodule diff。
+
 ## Phase 35+ · 路线展望
 
 下面是想做的事，按重要度而非时间排。多条路线是 zed 调研后决定插入的。
 
-1. **Git v2 (Phase 35b-4-b)**：Project Diff multibuffer（zed 风可编辑 diff excerpts，跳出侧栏走 editor pane）。Phase 35b-1/2a/2b/2c/3/4-a 交付了读面 + file-level 写面 + commit + remote sync + per-hunk stage/unstage + 分支 picker + force-with-lease 闭环。
+1. **Git v2 polish (Phase 35b-4-c)**：in-place 编辑 hunk excerpt（zed 风可编辑 diff，目前 ProjectDiffView 是 read-only）+ Stage All / Unstage All 整文件按钮 + 滚动到首个 hunk auto-jump。Phase 35b-1/2a/2b/2c/3/4-a/4-b 交付了读面 + file-level 写面 + commit + remote sync + per-hunk stage/unstage + 分支 picker + force-with-lease + Project Diff multibuffer (read-only) 闭环。
 2. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末 annotation 显示 author/time/commit、冲突区上方 Accept/Reject 按钮。复用现有 GitClient。
 3. **LargeFile v3 (Phase 34d+)**：中途 cancel save、external-change
    mtime+size detection、SymbolOutline 读 buffer、细粒度 progress。
