@@ -115,6 +115,28 @@ struct ScribeApp: App {
                         fileIndex.rebuild(at: root)
                     }
                     outline.update(for: workspace.current)
+                    // Phase 22 verification hook: SCRIBE_TEST_SKIP_NEXT
+                    // = "<needle>" runs ⌘D twice (so two occurrences
+                    // are selected), then ⌃⌘D once (skip current,
+                    // pick next). Used by the screenshot script to
+                    // demonstrate the skip-and-advance behaviour.
+                    if let needle = ProcessInfo.processInfo.environment["SCRIBE_TEST_SKIP_NEXT"],
+                       !needle.isEmpty {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                            findState.query = needle
+                            findState.commands.send(.findCurrent)   // selects first match
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                findState.commands.send(.selectNextOccurrence) // 2 selections
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                    findState.commands.send(.selectNextOccurrence) // 3 selections
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                        // skip the current main and replace with the next match
+                                        findState.commands.send(.skipAndSelectNextOccurrence)
+                                    }
+                                }
+                            }
+                        }
+                    }
                     // Phase 21 verification hook: SCRIBE_TEST_MULTI_VERTICAL
                     // = "<count>" sends `addCaretBelow` <count> times,
                     // then sends a literal "* " typing event so the
@@ -445,6 +467,16 @@ struct ScribeApp: App {
                     findState.commands.send(.addCaretBelow)
                 }
                 .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+
+                // Phase 22 — skip the current ⌘D selection and jump to
+                // the next occurrence. VSCode binds it to the chord
+                // ⌘K ⌘D, which SwiftUI's KeyboardShortcut can't express
+                // (single-key only). ⌃⌘D is the closest unused single
+                // shortcut on Scribe's existing key map.
+                Button("Skip Next Occurrence") {
+                    findState.commands.send(.skipAndSelectNextOccurrence)
+                }
+                .keyboardShortcut("d", modifiers: [.command, .control])
 
                 Divider()
 

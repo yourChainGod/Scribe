@@ -82,12 +82,25 @@ private enum SCI {
     static let GETSELECTIONS:               UInt32 = 2570
     static let CLEARSELECTIONS:             UInt32 = 2571
     static let ADDSELECTION:                UInt32 = 2573
-    static let SETSELECTIONNCARET:          UInt32 = 2582
-    static let SETSELECTIONNANCHOR:         UInt32 = 2584
-    static let GETSELECTIONNCARET:          UInt32 = 2583
-    static let GETSELECTIONNANCHOR:         UInt32 = 2585
+    // Selection N caret/anchor — message IDs verified against
+    // Vendor/scintilla/include/Scintilla.h. Earlier phases of
+    // this codebase had them swapped with the
+    // *VIRTUALSPACE / *START variants, which presented as
+    // GETSELECTIONNCARET returning the selection START instead
+    // of the caret end. Phase 22 caught it because reading the
+    // caret of a forward-anchored selection always returned
+    // anchor+0, which broke the maxEnd computation in
+    // selectNextOccurrence.
+    static let SETSELECTIONNCARET:          UInt32 = 2576
+    static let GETSELECTIONNCARET:          UInt32 = 2577
+    static let SETSELECTIONNANCHOR:         UInt32 = 2578
+    static let GETSELECTIONNANCHOR:         UInt32 = 2579
     static let SETMAINSELECTION:            UInt32 = 2574
     static let GETMAINSELECTION:            UInt32 = 2575
+    /// Phase 22 — `SCI_DROPSELECTIONN(int selection)` removes the
+    /// numbered selection from the multi-selection set without
+    /// touching the others.
+    static let DROPSELECTIONN:              UInt32 = 2671
     static let WORDSTARTPOSITION:           UInt32 = 2266
     static let WORDENDPOSITION:             UInt32 = 2267
     static let GETTEXTRANGE:                UInt32 = 2162
@@ -296,6 +309,7 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                     case .collapseToSingleCursor: self.collapseToSingleCursor()
                     case .addCaretAbove: self.addCaretAbove()
                     case .addCaretBelow: self.addCaretBelow()
+                    case .skipAndSelectNextOccurrence: self.skipAndSelectNextOccurrence()
                     case .insertAtCarets(let s): self.insertAtCarets(s, in: view)
                     }
                 }
@@ -722,6 +736,73 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                              lParam: range.lowerBound)
                 view.message(SCI.SCROLLCARET)
             }
+        }
+
+        /// ⌘K ⌘D / "Skip Next Occurrence". The user has selected a
+        /// run of matches via ⌘D and wants to *un*-select the
+        /// current main selection because it's an odd one out, then
+        /// jump to the next match instead. VSCode + Sublime spell
+        /// it the same way.
+        ///
+        /// Implementation: drop the main selection from the multi-
+        /// set via SCI_DROPSELECTIONN, then run a normal "select
+        /// next" pass anchored at the rightmost remaining caret —
+        /// that's exactly the same body as `selectNextOccurrence`.
+        /// If only one selection exists going in, dropping it would
+        /// leave the document in a weird empty-selection state, so
+        /// we fall back to plain selectNextOccurrence in that case
+        /// (the user gets the next occurrence; the original is
+        /// kept because there's nothing to skip into).
+        func skipAndSelectNextOccurrence() {
+            guard let view else { return }
+            let n = Int(view.message(SCI.GETSELECTIONS))
+            // Single selection: nothing to "skip", behave like ⌘D.
+            // Otherwise dropping the only selection would leave 0,
+            // which Scintilla treats as undefined.
+            guard n > 1 else {
+                selectNextOccurrence()
+                return
+            }
+            // 1. Capture the needle + the rightmost edge of the
+            //    main selection BEFORE we drop it. The next-match
+            //    search needs to start past that edge so we don't
+            //    just refind the slot we're supposedly skipping.
+            let mainIdx = Int(view.message(SCI.GETMAINSELECTION))
+            let mainAnchor = Int(view.message(SCI.GETSELECTIONNANCHOR,
+                                              wParam: UInt(bitPattern: mainIdx)))
+            let mainCaret = Int(view.message(SCI.GETSELECTIONNCARET,
+                                             wParam: UInt(bitPattern: mainIdx)))
+            let mainStart = min(mainAnchor, mainCaret)
+            let mainEnd = max(mainAnchor, mainCaret)
+            guard mainEnd > mainStart else { return }
+            let needle = textInRange(in: view, range: mainStart..<mainEnd)
+            guard !needle.isEmpty else { return }
+
+            // 2. Drop the main selection. Scintilla auto-promotes
+            //    one of the remaining ones to be the new main.
+            view.message(SCI.DROPSELECTIONN, wParam: UInt(bitPattern: mainIdx))
+
+            // 3. Search forward starting *past* the dropped range,
+            //    skipping any selection that's still active so we
+            //    can't pick another existing match by accident.
+            //    Wraps around the doc end like selectNextOccurrence.
+            let docLen = Int(view.message(SCI.GETLENGTH))
+            let existing = currentSelectionRanges(in: view)
+            let range = findNext(needle: needle,
+                                 in: view,
+                                 from: mainEnd,
+                                 to: docLen,
+                                 skip: existing)
+                ?? findNext(needle: needle,
+                            in: view,
+                            from: 0,
+                            to: mainEnd,
+                            skip: existing)
+            guard let r = range else { return }
+            view.message(SCI.ADDSELECTION,
+                         wParam: UInt(bitPattern: r.upperBound),
+                         lParam: r.lowerBound)
+            view.message(SCI.SCROLLCARET)
         }
 
         /// ⌘⇧L / "Select All Occurrences". Picks the same needle as

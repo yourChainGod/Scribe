@@ -76,6 +76,8 @@ final class FindState: ObservableObject {
         // Phase 21 — vertical (column-direction) multi-cursor.
         case addCaretAbove
         case addCaretBelow
+        // Phase 22 — skip current ⌘D selection and jump to the next.
+        case skipAndSelectNextOccurrence
         /// Test-only: inserts the literal string at every caret via
         /// `SCI_REPLACESEL`. Used by the Phase 21 verification hook
         /// to render visible markers at the multi-caret positions —
