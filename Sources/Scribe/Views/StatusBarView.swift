@@ -16,7 +16,23 @@ struct StatusBarView: View {
                 Text("status.ready", bundle: .module)
             }
             Spacer()
-            if let doc = workspace.current, doc.isDirty {
+            // Phase 34b — large-file load banner. Sits on the right
+            // before the dirty marker so a user reading "modified"
+            // alongside a still-loading doc gets the priority cue
+            // (loading = the bytes aren't your edit yet) first.
+            if let doc = workspace.current,
+               doc.isLargeFile,
+               doc.loadProgress >= 0,
+               doc.loadProgress < 1 {
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .controlSize(.small)
+                        .scaleEffect(0.7, anchor: .center)
+                        .frame(width: 12, height: 12)
+                    Text("status.largeFileLoading", bundle: .module)
+                        .foregroundStyle(.secondary)
+                }
+            } else if let doc = workspace.current, doc.isDirty {
                 HStack(spacing: 4) {
                     Circle()
                         .fill(Color.accentColor)

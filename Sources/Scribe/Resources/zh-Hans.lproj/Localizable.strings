@@ -36,10 +36,11 @@
 
 // MARK: - Status bar
 
-"status.ready"        = "准备就绪";
+"status.ready"        = "就绪";
 "status.modified"     = "已修改";
-"status.lineCol"      = "第 %lld 行，第 %lld 列";
-"status.charCount"    = "%lld 个字符";
+"status.lineCol"      = "行 %lld, 列 %lld";
+"status.charCount"    = "%lld 字符";
+"status.largeFileLoading" = "正在加载大文件…";
 
 "status.menu.syntax"           = "语法高亮";
 "status.menu.resetAuto"        = "恢复自动检测";

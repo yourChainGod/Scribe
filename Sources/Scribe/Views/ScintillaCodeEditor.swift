@@ -58,6 +58,10 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         // up to SwiftUI's gesture system, which then renders our
         // localised menu.
         view.message(SCI.USEPOPUP, wParam: UInt(0))   // SC_POPUP_NEVER
+        // Phase 34b — kick off the chunked large-file load if the doc
+        // was tagged in Workspace.openFile. No-op for normal-sized
+        // files — they keep the standard `applyText(doc.text)` path.
+        context.coordinator.beginLargeFileLoadIfNeeded(in: view)
         return view
     }
 
@@ -151,6 +155,14 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         /// Module-internal so `Coordinator+GitGutter.swift` can read +
         /// write it.
         var lastAppliedGitGutter: [Int: GitGutterStatus] = [:]
+
+        /// Phase 34b — gate so we don't kick off a second chunked
+        /// load when SwiftUI re-runs `attach(view:)` (rare, but
+        /// possible if the host swaps the underlying NSView). Reset
+        /// on doc rebind via the SwiftUI representable's
+        /// `updateNSView` wiring — see `beginLargeFileLoadIfNeeded`
+        /// in `Coordinator+LargeFile.swift`.
+        var largeFileLoadStarted: Bool = false
 
         /// 50 ms feels imperceptible to the user but covers the
         /// common burst-typing window (sustained typing rarely sees

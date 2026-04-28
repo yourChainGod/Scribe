@@ -42,6 +42,7 @@
 "status.modified"     = "Modified";
 "status.lineCol"      = "Ln %lld, Col %lld";
 "status.charCount"    = "%lld chars";
+"status.largeFileLoading" = "Loading large file…";
 
 "status.menu.syntax"           = "Syntax Highlighting";
 "status.menu.resetAuto"        = "Reset to Auto Detect";

@@ -157,9 +157,35 @@ final class Workspace: ObservableObject {
                            url: normalized)
         doc.isLoading = true
         if let line { doc.pendingScrollLine = line }
+
+        // Phase 34b — fast file-size probe to decide which load path
+        // owns this document. Cheap (one stat() in URL.resourceValues);
+        // doing it before the async hop keeps the placeholder doc
+        // tagged correctly from the moment the Coordinator first sees
+        // it, so we never mis-apply a String-path to a multi-GB file
+        // and OOM. `fileSize == 0` either means "tiny / empty file"
+        // (safe — String path handles it fine) or "couldn't stat"
+        // (also safe — Data(contentsOf:) will surface the error from
+        // its own retry on the background queue).
+        let fileSize = ChunkedFileReader(url: normalized).fileSize()
+        if LargeFilePolicy.shouldUseChunkedLoad(forSize: fileSize) {
+            doc.isLargeFile = true
+            doc.loadProgress = 0
+        }
+
         documents.append(doc)
         selectedID = doc.id
         prefs.addRecent(normalized)
+
+        // Large-file path: skip loadAndDecode entirely. The editor
+        // Coordinator owns the chunked pipeline (it has the live
+        // ScintillaView; we don't). It looks at doc.isLargeFile in
+        // attach() and kicks off the LargeFileLoader.
+        if doc.isLargeFile {
+            // isLoading stays true; the Coordinator clears it once
+            // SCI_SETDOCPOINTER lands and the document is on screen.
+            return
+        }
 
         // Two-stage Task: the outer body lives on the main actor and
         // is the only place we ever touch `self` — the inner

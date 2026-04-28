@@ -62,6 +62,25 @@ final class Document: ObservableObject, Identifiable {
     /// `updateNSView` only when the dict actually changed.
     @Published var gitGutter: [Int: GitGutterStatus] = [:]
 
+    /// Phase 34b — `true` when this document was opened via the
+    /// chunked large-file path (file size >= LargeFilePolicy.threshold-
+    /// Bytes). Workspace sets it before async open kicks off; the
+    /// editor's Coordinator reads it to decide whether to drive its
+    /// own ILoader pipeline (chunked → SCI_SETDOCPOINTER) instead of
+    /// the standard `applyText(doc.text)` push.
+    /// Implication: `text` stays empty for the lifetime of the
+    /// document — Find / Markdown preview / git gutter that read
+    /// `text` will see no content; Phase 34c is what teaches them to
+    /// read straight from the Scintilla buffer instead.
+    @Published var isLargeFile: Bool = false
+
+    /// Phase 34b — 0…1 chunked-load progress for the large-file
+    /// path. -1 means "not loading"; the editor Coordinator and the
+    /// status bar both read this — the bar surfaces a percentage,
+    /// the Coordinator uses `>= 1` as the "load is done, repaint
+    /// once" signal.
+    @Published var loadProgress: Double = -1
+
     init(title: String = L10n.t("tab.untitled"), text: String = "", url: URL? = nil) {
         self.title = title
         self.text = text
