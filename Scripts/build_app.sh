@@ -30,32 +30,50 @@ mkdir -p "$APP_DIR/Contents/Resources"
 
 cp "$BIN" "$APP_DIR/Contents/MacOS/Scribe"
 
-# Generate .icns from icon.svg if iconutil is available
+# Generate .icns from icon.svg.
+# Three render paths in priority order:
+#   1. AppKit's NSImage(contentsOf:) — system-native SVG via CoreSVG.
+#      Always available on macOS 13+. We invoke it through the small
+#      Swift script in Scripts/render_icon.swift so we get every
+#      .iconset size (16 / 32 / 128 / 256 / 512 at 1x and 2x) in one
+#      pass. This is the path we expect to take on a normal dev
+#      machine.
+#   2. rsvg-convert — `brew install librsvg`. Falls back to this if
+#      the AppKit script is missing for any reason.
+#   3. qlmanage — Quick Look thumbnail. Last-resort, low-fidelity;
+#      kept so the build doesn't fail outright on stripped systems.
 ICON_SVG="$ROOT/Resources/icon.svg"
 ICONSET="$ROOT/Resources/AppIcon.iconset"
-if [[ -f "$ICON_SVG" ]] && command -v rsvg-convert &>/dev/null; then
-    echo "==> Rendering .icns via rsvg-convert"
-    mkdir -p "$ICONSET"
-    for size in 16 32 64 128 256 512; do
-        rsvg-convert -w $size -h $size "$ICON_SVG" -o "$ICONSET/icon_${size}x${size}.png"
-        rsvg-convert -w $((size*2)) -h $((size*2)) "$ICON_SVG" -o "$ICONSET/icon_${size}x${size}@2x.png"
-    done
-    iconutil -c icns "$ICONSET" -o "$APP_DIR/Contents/Resources/AppIcon.icns"
-elif [[ -f "$ICON_SVG" ]]; then
-    echo "==> Rendering .icns via qlmanage (rsvg-convert not found, using fallback)"
-    mkdir -p "$ICONSET"
-    # Use sips through PNG snapshot of the SVG - fallback
-    # Convert SVG to PNG via Quick Look
-    qlmanage -t -s 1024 -o /tmp "$ICON_SVG" >/dev/null 2>&1 || true
-    SRC_PNG="/tmp/icon.svg.png"
-    if [[ -f "$SRC_PNG" ]]; then
-        for size in 16 32 64 128 256 512; do
-            sips -z $size $size "$SRC_PNG" --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
-            sips -z $((size*2)) $((size*2)) "$SRC_PNG" --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
+ICON_SCRIPT="$ROOT/Scripts/render_icon.swift"
+
+if [[ -f "$ICON_SVG" ]]; then
+    rm -rf "$ICONSET"
+    if [[ -f "$ICON_SCRIPT" ]]; then
+        echo "==> Rendering .icns via AppKit (Scripts/render_icon.swift)"
+        swift "$ICON_SCRIPT" "$ICON_SVG" "$ICONSET" >/dev/null
+        iconutil -c icns "$ICONSET" -o "$APP_DIR/Contents/Resources/AppIcon.icns"
+    elif command -v rsvg-convert &>/dev/null; then
+        echo "==> Rendering .icns via rsvg-convert"
+        mkdir -p "$ICONSET"
+        for size in 16 32 128 256 512; do
+            rsvg-convert -w $size -h $size "$ICON_SVG" -o "$ICONSET/icon_${size}x${size}.png"
+            rsvg-convert -w $((size*2)) -h $((size*2)) "$ICON_SVG" -o "$ICONSET/icon_${size}x${size}@2x.png"
         done
         iconutil -c icns "$ICONSET" -o "$APP_DIR/Contents/Resources/AppIcon.icns"
     else
-        echo "(warning) Could not render SVG to PNG; .app will use generic icon."
+        echo "==> Rendering .icns via qlmanage (no AppKit script or rsvg-convert; expect lower fidelity)"
+        mkdir -p "$ICONSET"
+        qlmanage -t -s 1024 -o /tmp "$ICON_SVG" >/dev/null 2>&1 || true
+        SRC_PNG="/tmp/icon.svg.png"
+        if [[ -f "$SRC_PNG" ]]; then
+            for size in 16 32 128 256 512; do
+                sips -z $size $size "$SRC_PNG" --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
+                sips -z $((size*2)) $((size*2)) "$SRC_PNG" --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
+            done
+            iconutil -c icns "$ICONSET" -o "$APP_DIR/Contents/Resources/AppIcon.icns"
+        else
+            echo "(warning) Could not render SVG to PNG; .app will use generic icon."
+        fi
     fi
 fi
 

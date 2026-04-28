@@ -1,34 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Scribe app icon — macOS Big Sur+ squircle.
+  Design language:
+    Background : 22% rounded square (the macOS 11+ system shape) with
+                 a vertical blue gradient (#60A5FA → #1D4ED8) and a
+                 soft top highlight to mimic Apple's "lit from above"
+                 finish.
+    Foreground : a single document silhouette tilted -4° so the icon
+                 reads as "a piece of writing" at a glance, with four
+                 styled text rows (one accent-blue heading + three
+                 grey body lines) and a fountain-pen nib hovering at
+                 the bottom-right corner.
+    Accent     : the pen nib uses a warm amber → deep brown gradient
+                 so it stays distinct from the cool blue background
+                 even at 16pt.
+
+  All metrics are tuned to read at 32×32 (Dock mini-icon) without
+  losing the document/pen relationship; finer details only become
+  visible at 256×256+.
+-->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#5AC8FA"/>
-      <stop offset="1" stop-color="#007AFF"/>
+    <!-- Background: Apple Notes blue, vertical -->
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"   stop-color="#60A5FA"/>
+      <stop offset="0.5" stop-color="#3B82F6"/>
+      <stop offset="1"   stop-color="#1D4ED8"/>
     </linearGradient>
-    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+
+    <!-- Top "lit-from-above" highlight -->
+    <linearGradient id="highlight" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0"    stop-color="white" stop-opacity="0.22"/>
+      <stop offset="0.55" stop-color="white" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Paper -->
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F1F5F9"/>
+    </linearGradient>
+
+    <!-- Pen body -->
+    <linearGradient id="penBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#475569"/>
+      <stop offset="1" stop-color="#0F172A"/>
+    </linearGradient>
+
+    <!-- Pen nib -->
+    <linearGradient id="nib" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FCD34D"/>
+      <stop offset="1" stop-color="#B45309"/>
+    </linearGradient>
+
+    <!-- Drop shadow under the paper -->
+    <filter id="paperShadow" x="-10%" y="-10%" width="120%" height="120%">
       <feGaussianBlur stdDeviation="14"/>
       <feOffset dx="0" dy="14"/>
-      <feComponentTransfer><feFuncA type="linear" slope="0.35"/></feComponentTransfer>
-      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.30"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Drop shadow under the pen -->
+    <filter id="penShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="10"/>
+      <feOffset dx="0" dy="10"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.45"/>
+      </feComponentTransfer>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
     </filter>
   </defs>
-  <!-- Rounded square (macOS app shape, ~22% radius) -->
+
+  <!-- macOS 11+ squircle background, ~22% radius -->
   <rect x="48" y="48" width="928" height="928" rx="208" ry="208" fill="url(#bg)"/>
-  <!-- Subtle inner highlight -->
-  <rect x="48" y="48" width="928" height="464" rx="208" ry="208" fill="white" opacity="0.10"/>
-  <!-- Pencil mark -->
-  <g transform="translate(512 512)" filter="url(#shadow)">
-    <!-- Stylized "S" with serif feel; pencil-like terminator -->
-    <path d="M -150 -210
-             C -150 -300, -10 -310, 90 -270
-             L 70 -190
-             C -10 -240, -80 -230, -80 -180
-             C -80 -130, 30 -100, 100 -50
-             C 200 20, 220 90, 200 160
-             C 170 250, 30 280, -130 240
-             L -110 160
-             C -10 200, 90 200, 110 160
-             C 130 110, 30 80, -50 30
-             C -130 -20, -150 -130, -150 -210 Z"
-          fill="white"/>
+  <!-- Top half highlight -->
+  <rect x="48" y="48" width="928" height="464" rx="208" ry="208" fill="url(#highlight)"/>
+
+  <!-- Paper, tilted -4° so the icon reads as a written document -->
+  <g transform="translate(512 512) rotate(-4)" filter="url(#paperShadow)">
+    <rect x="-280" y="-340" width="560" height="680" rx="32" ry="32" fill="url(#paper)"/>
+
+    <!-- Heading -->
+    <rect x="-220" y="-260" width="300" height="20" rx="10" ry="10" fill="#1E40AF"/>
+
+    <!-- Body lines (paragraph 1) -->
+    <rect x="-220" y="-200" width="440" height="14" rx="7" ry="7" fill="#94A3B8"/>
+    <rect x="-220" y="-170" width="380" height="14" rx="7" ry="7" fill="#94A3B8"/>
+    <rect x="-220" y="-140" width="420" height="14" rx="7" ry="7" fill="#94A3B8"/>
+    <rect x="-220" y="-110" width="280" height="14" rx="7" ry="7" fill="#94A3B8"/>
+
+    <!-- Sub-heading -->
+    <rect x="-220" y="-40" width="240" height="20" rx="10" ry="10" fill="#1E40AF"/>
+
+    <!-- Body lines (paragraph 2) -->
+    <rect x="-220" y="20"  width="440" height="14" rx="7" ry="7" fill="#94A3B8"/>
+    <rect x="-220" y="50"  width="380" height="14" rx="7" ry="7" fill="#94A3B8"/>
+    <rect x="-220" y="80"  width="420" height="14" rx="7" ry="7" fill="#94A3B8"/>
+    <rect x="-220" y="110" width="220" height="14" rx="7" ry="7" fill="#94A3B8"/>
+
+    <!-- Caret on the last line — implies "live editing" -->
+    <rect x="20" y="105" width="6" height="26" rx="2" ry="2" fill="#1D4ED8"/>
+  </g>
+
+  <!-- Fountain pen, hovering above the bottom-right corner of the paper.
+       Rotated 30° so it angles into the page like a hand-held pen. -->
+  <g transform="translate(640 700) rotate(30)" filter="url(#penShadow)">
+    <!-- Body -->
+    <rect x="-280" y="-22" width="320" height="44" rx="10" ry="10" fill="url(#penBody)"/>
+    <!-- Body highlight strip -->
+    <rect x="-280" y="-22" width="320" height="14" rx="7" ry="7" fill="white" opacity="0.18"/>
+    <!-- Tail cap -->
+    <circle cx="-280" cy="0" r="22" fill="#0F172A"/>
+    <circle cx="-280" cy="0" r="8"  fill="#FCD34D"/>
+    <!-- Nib (gold triangle) -->
+    <polygon points="40,-22 110,0 40,22" fill="url(#nib)"/>
+    <!-- Nib slit -->
+    <rect x="40" y="-2" width="60" height="4" rx="1" ry="1" fill="#7C2D12" opacity="0.7"/>
   </g>
 </svg>
