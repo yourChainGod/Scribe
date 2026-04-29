@@ -11,11 +11,17 @@ import AppKit
 import SwiftUI
 
 enum TextToolsMetrics {
-    static let frameWidth: CGFloat = 920
-    static let frameHeight: CGFloat = 600
-    static let panelPadding: CGFloat = 18
+    /// Phase 40 — single-column layout. The Phase 38 dual-pane
+    /// (920×600) made sense for three modes; with the merger as
+    /// the only surface, a 720pt-wide vertical flow reads better
+    /// (source → palette → composer → output) and gives chips
+    /// more horizontal breathing room when the table has many
+    /// columns.
+    static let frameWidth: CGFloat = 720
+    static let frameHeight: CGFloat = 620
+    static let panelPadding: CGFloat = 16
     static let panelRadius: CGFloat = 8
-    static let resultMinHeight: CGFloat = 110
+    static let resultMinHeight: CGFloat = 130
 }
 
 /// Section header inside a panel (e.g. "Source", "Result"). Lives in
@@ -68,31 +74,6 @@ struct TextToolsEditorFrame: View {
         .overlay {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .stroke(Color.primary.opacity(0.10))
-        }
-    }
-}
-
-/// "Result" header + read-only editor + line/char summary. Drawn
-/// identically in every mode so the user always knows where the
-/// output of the current operation lives.
-struct TextToolsResultPanel: View {
-    let result: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("textTools.result.title", bundle: .module)
-                    .font(.system(size: 12, weight: .semibold))
-                Spacer()
-                Text(L10n.t("textTools.result.summary",
-                            result.components(separatedBy: "\n").count,
-                            result.count))
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-            }
-            TextToolsEditorFrame(text: .constant(result),
-                                 minHeight: TextToolsMetrics.resultMinHeight,
-                                 editable: false)
         }
     }
 }

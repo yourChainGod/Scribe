@@ -22,12 +22,6 @@ enum SidebarMode: String {
     case sourceControl
 }
 
-enum TextToolsMode: String, CaseIterable {
-    case columns
-    case shuffle
-    case transform
-}
-
 struct ExternalChangePrompt: Identifiable {
     var id: UUID { documentID }
     let documentID: UUID
@@ -62,14 +56,13 @@ final class Workspace: ObservableObject {
     /// multibuffer.
     @Published var projectDiffVisible: Bool = false
 
-    /// Phase 37 — visible while the split / merge / shuffle text
-    /// operations workbench sheet is attached to the main editor window.
+    /// Phase 37 → Phase 40 — visible while the column-merger
+    /// workbench sheet is attached to the main editor window. The
+    /// Phase 38 multi-mode picker (columns / shuffle / transform)
+    /// was retired in Phase 40; line shuffle and base/encoding
+    /// transforms now live exclusively in the editor's right-click
+    /// ▸ Transform submenu (see TextTransformCommandButtons).
     @Published var isTextToolsPresented: Bool = false
-
-    /// Phase 37 — deterministic entry mode for the Text Tools workbench.
-    /// Production UI uses the same value so command-palette and screenshot
-    /// hooks can open the sheet on the intended tab without keystrokes.
-    @Published var textToolsMode: TextToolsMode = .columns
 
     /// Phase 35b-4-d — repo-relative path the multibuffer should
     /// scroll into view on its next render. Used by the sidebar's

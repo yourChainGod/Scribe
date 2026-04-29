@@ -1,10 +1,27 @@
 //
 //  TextToolsWorkbench.swift
-//  Phase 38 — host shell of the split / merge / shuffle / transform
-//  workbench sheet. Owns the shared TextToolsModel and routes to the
-//  three mode panes (Columns / Shuffle / Transform) below the mode
-//  picker. The 1002-line monolith from Phase 37 is now broken into
-//  six focused files under Sources/Scribe/Views/TextTools/.
+//  Phase 40 — host shell of the column merger sheet.
+//
+//  Phase 38 had three modes (columns / shuffle / transform) and a
+//  HSplitView that placed Source on the left and the active mode
+//  pane on the right (920×600). Phase 40 collapses the workbench
+//  to a single mode — line shuffle and base/encoding transforms
+//  live exclusively in the editor's right-click ▸ Transform
+//  submenu — and reorganises the surface as a single vertical
+//  flow that mirrors the data path:
+//
+//      ┌─ Source (textarea, split-mode) ─┐
+//      │                                  │
+//      ├─ Column palette (chip grid) ────┤
+//      │                                  │
+//      ├─ Token composer (chip bar) ─────┤
+//      │                                  │
+//      ├─ Live output ───────────────────┤
+//      │                                  │
+//      └─ Output buttons row ────────────┘
+//
+//  The whole stack lives inside a ScrollView so smaller windows
+//  / many imported sources still degrade gracefully.
 //
 
 import SwiftUI
@@ -17,34 +34,31 @@ struct TextToolsWorkbench: View {
         VStack(spacing: 0) {
             header
             Divider()
-            modePicker
-            Divider()
-            modeBody
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    TextToolsSourcePanel(model: model,
+                                         showsSplitControls: true)
+                    Divider()
+                    TextToolsTokenComposer(model: model)
+                    Divider()
+                    TextToolsLiveOutput(model: model)
+                }
+                .padding(TextToolsMetrics.panelPadding)
+            }
         }
         .frame(width: TextToolsMetrics.frameWidth,
                height: TextToolsMetrics.frameHeight)
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
-            model.mode = workspace.textToolsMode
             model.seedInitialText(workspace: workspace)
         }
-        .onChange(of: model.mode) { _, mode in
-            workspace.textToolsMode = mode
-        }
-        .onChange(of: workspace.textToolsMode) { _, mode in
-            model.mode = mode
-        }
-        .onChange(of: model.columnCount) { _, count in
-            model.syncColumnState(columnCount: count)
+        .onChange(of: model.columnCount) { _, _ in
+            model.syncTokensWithColumnCount()
         }
     }
 
     // MARK: Header
 
-    /// Compact 40pt header — single row with title, subtitle, and a
-    /// close button. The Phase 37 header used a 30pt accent icon and
-    /// stacked title/subtitle, which felt heavy for what is, at the
-    /// end of the day, a utilities sheet.
     private var header: some View {
         HStack(spacing: 12) {
             Image(systemName: "tablecells")
@@ -72,46 +86,5 @@ struct TextToolsWorkbench: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-    }
-
-    // MARK: Mode picker
-
-    private var modePicker: some View {
-        HStack {
-            Picker("", selection: $model.mode) {
-                Text("textTools.mode.columns", bundle: .module).tag(TextToolsMode.columns)
-                Text("textTools.mode.shuffle", bundle: .module).tag(TextToolsMode.shuffle)
-                Text("textTools.mode.transform", bundle: .module).tag(TextToolsMode.transform)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 320)
-            Spacer()
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-    }
-
-    // MARK: Mode body
-
-    @ViewBuilder
-    private var modeBody: some View {
-        HSplitView {
-            TextToolsSourcePanel(model: model,
-                                 showsSplitControls: model.mode == .columns)
-                .frame(minWidth: 320, idealWidth: 380)
-
-            switch model.mode {
-            case .columns:
-                TextToolsColumnsMode(model: model)
-                    .frame(minWidth: 480, idealWidth: 540)
-            case .shuffle:
-                TextToolsShuffleMode(model: model)
-                    .frame(minWidth: 360, idealWidth: 420)
-            case .transform:
-                TextToolsTransformMode(model: model)
-                    .frame(minWidth: 360, idealWidth: 420)
-            }
-        }
     }
 }

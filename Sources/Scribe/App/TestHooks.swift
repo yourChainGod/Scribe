@@ -291,27 +291,22 @@ enum TestHooks {
         }
     }
 
-    // MARK: Phase 37 — text tools workbench
+    // MARK: Phase 37 → Phase 40 — text tools workbench
 
-    /// SCRIBE_TEST_TEXT_TOOLS = "1" opens the Text Tools sheet.
-    /// SCRIBE_TEST_TEXT_TOOLS_MODE = "columns" | "shuffle" | "transform" selects
-    /// the initial segmented-control mode. SCRIBE_TEST_TEXT_TOOLS_DELAY
-    /// can be used by screenshot scripts that first need another hook,
-    /// such as inline-blame tooltip rendering, to settle.
+    /// SCRIBE_TEST_TEXT_TOOLS = "1" opens the column-merger sheet.
+    /// SCRIBE_TEST_TEXT_TOOLS_DELAY can be used by screenshot scripts
+    /// that first need another hook, such as inline-blame tooltip
+    /// rendering, to settle. Phase 40 retired the per-mode hook
+    /// (SCRIBE_TEST_TEXT_TOOLS_MODE) along with the multi-mode UI.
     private static func runTextTools(env: [String: String],
                                      ctx: TestHookContext) {
-        let requested = env["SCRIBE_TEST_TEXT_TOOLS"]
-        let modeRaw = env["SCRIBE_TEST_TEXT_TOOLS_MODE"]
-        guard requested != nil || modeRaw != nil else { return }
+        guard env["SCRIBE_TEST_TEXT_TOOLS"] != nil else { return }
 
-        let mode = modeRaw
-            .flatMap(TextToolsMode.init(rawValue:)) ?? .columns
         let delay = env["SCRIBE_TEST_TEXT_TOOLS_DELAY"]
             .flatMap(Double.init) ?? 1.0
 
         DispatchQueue.main.asyncAfter(deadline: .now() + max(0, delay)) {
             ctx.findState.commands.send(.hideInlineBlameTooltip)
-            ctx.workspace.textToolsMode = mode
             ctx.workspace.isTextToolsPresented = true
         }
     }

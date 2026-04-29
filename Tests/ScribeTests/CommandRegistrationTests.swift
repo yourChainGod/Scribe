@@ -201,31 +201,9 @@ final class CommandRegistrationTests: XCTestCase {
         XCTAssertTrue(workspace.isTextToolsPresented)
     }
 
-    func test_textTransformWorkbenchCommand_opensTransformMode() {
-        let prefs = makePrefs()
-        let workspace = Workspace(prefs: prefs, openInitialUntitled: false)
-        let doc = Document(title: "scratch.txt", text: "a b")
-        workspace.documents = [doc]
-        workspace.selectedID = doc.id
-        workspace.textToolsMode = .columns
-        let findState = FindState(defaults: UserDefaults(suiteName: "scribe-command-transform-tools-\(UUID().uuidString)")!)
-
-        let registry = CommandRegistry()
-        CommandRegistration.refresh(registry: registry,
-                                    workspace: workspace,
-                                    prefs: prefs,
-                                    findState: findState,
-                                    localize: testLocalizer)
-
-        let command = registry.search("transform workbench").first?.command
-        XCTAssertEqual(command?.id, "text.openTransformTools")
-        XCTAssertFalse(workspace.isTextToolsPresented)
-
-        command?.perform()
-
-        XCTAssertTrue(workspace.isTextToolsPresented)
-        XCTAssertEqual(workspace.textToolsMode, .transform)
-    }
+    // Phase 40 retired the per-mode "Transform Workbench" palette
+    // entry — line shuffle and base/encoding transforms now live
+    // exclusively in the editor's right-click ▸ Transform submenu.
 
     private func testLocalizer(_ key: String) -> String {
         switch key {

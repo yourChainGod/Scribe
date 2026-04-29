@@ -1,10 +1,25 @@
 //
 //  TextToolsModel.swift
-//  Phase 38 — shared state for the Text Tools workbench. All
-//  @Published fields used to live as @State on the monolithic
-//  TextToolsWorkbench; pulling them into one ObservableObject lets
-//  each mode view (Columns / Shuffle / Transform) read and write
-//  through bindings without re-routing through the host view.
+//  Phase 40 — single-mode "Column Merger" model.
+//
+//  The Phase 38 model carried state for three modes (columns /
+//  shuffle / transform). Phase 40 collapses the workbench down to
+//  the merger only — line shuffle and base / encoding transforms
+//  already live in the editor's right-click ▸ Transform submenu,
+//  so duplicating them here was redundant. The redesigned UI is a
+//  Token Composer: a horizontal bar of draggable chips where
+//  every chip is either a `.column(idx)` reference or a `.literal
+//  (text)` snippet. The chip list maps 1:1 onto the existing
+//  ColumnRecipePart pipeline, so rendering still goes through
+//  ColumnRecipe.render(table:).
+//
+//  Removed fields (vs Phase 38):
+//    mode, preserveFirstLine, preserveBlankLinePositions,
+//    shuffleSeed, transformPreset, selectedColumns, columnOrder,
+//    draggingColumn, prefixText, suffixText, joinDelimiter
+//
+//  New field:
+//    tokens: [ColumnToken] — drives the entire output
 //
 
 import AppKit
@@ -13,12 +28,6 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 // MARK: - Shared enums / value types
-
-enum TextToolsSourceScope: String {
-    case selection
-    case document
-    case manual
-}
 
 enum TextToolsSplitMode: String, CaseIterable, Identifiable {
     case csv
@@ -36,63 +45,6 @@ enum TextToolsImportedJoinMode: String {
     case key
 }
 
-enum TextToolsTransformPreset: String, CaseIterable, Identifiable {
-    case urlEncode
-    case urlDecode
-    case base64Encode
-    case base64Decode
-    case htmlEscape
-    case htmlUnescape
-    case jsonEscape
-    case jsonUnescape
-    case binaryToDecimal
-    case decimalToBinary
-    case octalToDecimal
-    case decimalToOctal
-    case hexToDecimal
-    case decimalToHex
-
-    var id: String { rawValue }
-
-    var titleKey: LocalizedStringKey {
-        switch self {
-        case .urlEncode: "transform.url.encode"
-        case .urlDecode: "transform.url.decode"
-        case .base64Encode: "transform.base64.encode"
-        case .base64Decode: "transform.base64.decode"
-        case .htmlEscape: "transform.html.escape"
-        case .htmlUnescape: "transform.html.unescape"
-        case .jsonEscape: "transform.json.escape"
-        case .jsonUnescape: "transform.json.unescape"
-        case .binaryToDecimal: "transform.base.binaryToDecimal"
-        case .decimalToBinary: "transform.base.decimalToBinary"
-        case .octalToDecimal: "transform.base.octalToDecimal"
-        case .decimalToOctal: "transform.base.decimalToOctal"
-        case .hexToDecimal: "transform.base.hexToDecimal"
-        case .decimalToHex: "transform.base.decimalToHex"
-        }
-    }
-
-    var action: TextTransformAction {
-        switch self {
-        case .urlEncode: .urlEncode
-        case .urlDecode: .urlDecode
-        case .base64Encode: .base64Encode
-        case .base64Decode: .base64Decode
-        case .htmlEscape: .htmlEscape
-        case .htmlUnescape: .htmlUnescape
-        case .jsonEscape: .jsonStringEscape
-        case .jsonUnescape: .jsonStringUnescape
-        case .binaryToDecimal: .convertBase(fromBase: 2, toBase: 10)
-        case .decimalToBinary: .convertBase(fromBase: 10, toBase: 2)
-        case .octalToDecimal: .convertBase(fromBase: 8, toBase: 10)
-        case .decimalToOctal: .convertBase(fromBase: 10, toBase: 8)
-        case .hexToDecimal: .convertBase(fromBase: 16, toBase: 10)
-        case .decimalToHex: .convertBase(fromBase: 10, toBase: 16)
-        }
-    }
-}
-
 struct TextToolsImportedSource: Identifiable, Equatable {
     let id = UUID()
     let name: String
@@ -103,9 +55,7 @@ struct TextToolsImportedSource: Identifiable, Equatable {
 
 @MainActor
 final class TextToolsModel: ObservableObject {
-    // Mode + source
-    @Published var mode: TextToolsMode = .columns
-    @Published var sourceScope: TextToolsSourceScope = .document
+    // Source
     @Published var inputText = ""
     @Published var importedText = ""
     @Published var importedSources: [TextToolsImportedSource] = []
@@ -113,28 +63,39 @@ final class TextToolsModel: ObservableObject {
     @Published var importedJoinMode: TextToolsImportedJoinMode = .rows
     @Published var keyColumnText = "1"
 
-    // Columns mode
+    // Split
     @Published var splitMode: TextToolsSplitMode = .csv
     @Published var delimiter = ","
     @Published var regexPattern = "\\s+"
     @Published var fixedWidths = "8, 12"
-    @Published var joinDelimiter = ", "
-    @Published var prefixText = ""
-    @Published var suffixText = ""
+
+    // Token composer (replaces selectedColumns / columnOrder /
+    // prefix / suffix / joinDelimiter from Phase 38).
+    @Published var tokens: [ColumnToken] = []
     @Published var missingCellPlaceholder = ""
-    @Published var selectedColumns: Set<Int> = []
-    @Published var columnOrder: [Int] = []
-    @Published var draggingColumn: Int?
 
-    // Shuffle mode
-    @Published var preserveFirstLine = true
-    @Published var preserveBlankLinePositions = true
-    @Published var shuffleSeed = "37"
+    /// Ephemeral drag-source identity for the cross-container DnD
+    /// between palette and composer. Mirrors the `draggingColumn`
+    /// pattern from Phase 38's column row reorder.
+    @Published var draggingTokenSource: TokenDragSource?
 
-    // Transform mode
-    @Published var transformPreset: TextToolsTransformPreset = .urlEncode
+    /// True while the user is actively editing a literal chip's
+    /// inline TextField. Prevents `syncTokensWithColumnCount` from
+    /// stomping on a half-typed value if the columnCount happens to
+    /// shift mid-edit (rare, but cheap to guard).
+    @Published var editingLiteralID: UUID?
 
     let previewRowLimit = 80
+
+    /// Phase 40c — cap for the live output preview. Big files
+    /// (10k+ rows) used to re-render the entire ColumnRecipe on
+    /// every keystroke; SwiftUI's TextEditor would also choke on
+    /// the resulting megabyte-sized string. Now the preview is
+    /// truncated to the first N rows, while Copy / New Tab /
+    /// Replace Selection / Replace Document still operate on the
+    /// full rendering. 20 rows is enough to verify the template
+    /// is doing what the user expects.
+    let outputPreviewLineLimit = 20
 
     // MARK: Source resolution
 
@@ -220,53 +181,41 @@ final class TextToolsModel: ObservableObject {
         table.columnCount
     }
 
-    var orderedSelectedColumns: [Int] {
-        columnOrder.filter { selectedColumns.contains($0) }
+    // MARK: Recipe / result
+
+    var recipeParts: [ColumnRecipePart] {
+        tokens.map(\.asRecipePart)
     }
 
-    // MARK: Recipes / results
-
-    var columnRecipeParts: [ColumnRecipePart] {
-        guard !orderedSelectedColumns.isEmpty else { return [] }
-        var parts: [ColumnRecipePart] = []
-        if !prefixText.isEmpty { parts.append(.literal(prefixText)) }
-        for (offset, index) in orderedSelectedColumns.enumerated() {
-            if offset > 0, !joinDelimiter.isEmpty {
-                parts.append(.literal(joinDelimiter))
-            }
-            parts.append(.column(index))
-        }
-        if !suffixText.isEmpty { parts.append(.literal(suffixText)) }
-        return parts
-    }
-
+    /// Full rendering — used by Copy / Replace Document / etc.
+    /// Costs O(rows × tokens). Computed lazily; consumers should
+    /// only invoke this on user action, not in `body`.
     var columnResult: String {
-        guard !orderedSelectedColumns.isEmpty else { return "" }
-        return ColumnRecipe(parts: columnRecipeParts,
+        guard tokens.contains(where: { $0.isColumn }) else { return "" }
+        return ColumnRecipe(parts: recipeParts,
                             missingCellPlaceholder: missingCellPlaceholder)
             .render(table: table)
     }
 
-    var shuffleResult: String {
-        TextLineShuffler.shuffle(sourceText,
-                                 seed: UInt64(shuffleSeed) ?? 37,
-                                 preserveFirstLine: preserveFirstLine,
-                                 preserveBlankLinePositions: preserveBlankLinePositions)
+    /// Truncated rendering — used by the live preview surface to
+    /// cap re-render cost on large inputs. Slices the parsed
+    /// table down to the first `outputPreviewLineLimit` rows
+    /// before piping through ColumnRecipe.
+    var columnResultPreview: String {
+        guard tokens.contains(where: { $0.isColumn }) else { return "" }
+        let full = table
+        let truncated = TextTable(rows: Array(full.rows.prefix(outputPreviewLineLimit)))
+        return ColumnRecipe(parts: recipeParts,
+                            missingCellPlaceholder: missingCellPlaceholder)
+            .render(table: truncated)
     }
 
-    var transformResult: String {
-        (try? transformPreset.action.apply(to: sourceText)) ?? ""
-    }
-
-    var transformErrorKey: String? {
-        do {
-            _ = try transformPreset.action.apply(to: sourceText)
-            return nil
-        } catch let error as TextTransformError {
-            return error.messageKey
-        } catch {
-            return "transform.error.generic"
-        }
+    /// Total row count of the parsed table — for the "showing X of
+    /// Y" header. Cheap (just a count). Kept separate from the
+    /// preview string so the header doesn't have to reach into
+    /// columnResult.
+    var totalRowCount: Int {
+        table.rowCount
     }
 
     // MARK: Helpers
@@ -277,36 +226,97 @@ final class TextToolsModel: ObservableObject {
         }?[index] ?? ""
     }
 
-    func seedInitialText(workspace: Workspace, force: Bool = false) {
-        if inputText.isEmpty, !workspace.activeTextSelection.isEmpty {
-            sourceScope = .selection
+    /// Append a column token; auto-prepend a default ", " separator
+    /// if the composer already has content. This is the single-click
+    /// "add to template" path from the palette.
+    func appendColumn(_ index: Int, separator: String = ", ") {
+        if !tokens.isEmpty, !separator.isEmpty {
+            tokens.append(.literal(separator))
         }
-        applySourceScope(workspace: workspace, force: force)
-        syncColumnState(columnCount: columnCount)
+        tokens.append(.column(index))
     }
 
-    func applySourceScope(workspace: Workspace, force: Bool = false) {
-        guard force || inputText.isEmpty else { return }
-        switch sourceScope {
-        case .selection:
+    /// Insert a column token at a precise position — used by the
+    /// drag-and-drop path. No auto-separator; the user picked the
+    /// position so they own the surrounding text.
+    func insertColumn(_ index: Int, at position: Int) {
+        let clamped = min(max(0, position), tokens.count)
+        tokens.insert(.column(index), at: clamped)
+    }
+
+    /// Reorder an existing token (by id) to a new index.
+    func moveToken(id: UUID, to position: Int) {
+        guard let from = tokens.firstIndex(where: { $0.id == id }) else { return }
+        let target = min(max(0, position), tokens.count)
+        tokens.move(fromOffsets: IndexSet(integer: from),
+                    toOffset: target > from ? target + 1 : target)
+    }
+
+    func removeToken(id: UUID) {
+        tokens.removeAll { $0.id == id }
+    }
+
+    func updateLiteral(id: UUID, text: String) {
+        guard let idx = tokens.firstIndex(where: { $0.id == id }) else { return }
+        tokens[idx] = .literal(id: id, text: text)
+    }
+
+    /// Append a fresh empty literal — invoked by "+ 文本" button.
+    /// Returns the new token's id so the view can immediately focus
+    /// the inline TextField.
+    @discardableResult
+    func appendEmptyLiteral() -> UUID {
+        let token = ColumnToken.literal("")
+        tokens.append(token)
+        return token.id
+    }
+
+    func clearTokens() {
+        tokens.removeAll()
+    }
+
+    /// Refill composer with all columns + ", " separators —
+    /// triggered by "全部加入" button. Always overwrites; the button
+    /// label communicates that intent.
+    func reseedAllColumns(separator: String = ", ") {
+        tokens = ColumnTokenSeed.defaultTokens(columnCount: columnCount,
+                                               separator: separator)
+    }
+
+    /// Called whenever columnCount may have changed (split-mode
+    /// switch, source edit, imported-source toggle…). Two jobs:
+    ///   1. Drop column tokens whose index is now out of range.
+    ///   2. If the composer is empty and we have columns, seed a
+    ///      sensible default so the user sees output immediately.
+    func syncTokensWithColumnCount() {
+        let count = columnCount
+        let valid = 0..<count
+        tokens.removeAll { token in
+            if case .column(_, let index) = token, !valid.contains(index) {
+                return true
+            }
+            return false
+        }
+        if tokens.isEmpty, count > 0 {
+            tokens = ColumnTokenSeed.defaultTokens(columnCount: count)
+        }
+    }
+
+    /// Auto-seed the source textarea on workbench open. The Phase
+    /// 38 model exposed a Selection / Document / Scratch picker;
+    /// Phase 40 collapsed that into one textarea with two header
+    /// reload buttons. The picker is gone, but the smart-default
+    /// behaviour stays: prefer the active selection if there is
+    /// one (the user almost certainly opened the sheet to operate
+    /// on it), otherwise fall back to the current document.
+    func seedInitialText(workspace: Workspace) {
+        guard inputText.isEmpty else { return }
+        if !workspace.activeTextSelection.isEmpty {
             inputText = workspace.activeTextSelection
-        case .document:
+        } else {
             inputText = workspace.current?.text ?? ""
-        case .manual:
-            if force { inputText = "" }
         }
-    }
-
-    func syncColumnState(columnCount: Int) {
-        let valid = Set(0..<columnCount)
-        columnOrder = columnOrder.filter { valid.contains($0) }
-        for index in 0..<columnCount where !columnOrder.contains(index) {
-            columnOrder.append(index)
-        }
-        selectedColumns = selectedColumns.intersection(valid)
-        if selectedColumns.isEmpty, columnCount > 0 {
-            selectedColumns = valid
-        }
+        syncTokensWithColumnCount()
     }
 
     func importTextFromDisk() {
@@ -322,15 +332,11 @@ final class TextToolsModel: ObservableObject {
             }
             importedSources.append(contentsOf: sources)
             includeImportedText = true
-            syncColumnState(columnCount: columnCount)
+            syncTokensWithColumnCount()
         }
     }
 
     func currentResult() -> String {
-        switch mode {
-        case .columns: return columnResult
-        case .shuffle: return shuffleResult
-        case .transform: return transformResult
-        }
+        columnResult
     }
 }

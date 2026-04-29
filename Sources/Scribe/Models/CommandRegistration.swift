@@ -149,14 +149,6 @@ enum CommandRegistration {
                           title: localize("palette.command.text.openTools"),
                           subtitle: localize("palette.badge.text"),
                           keywords: ["text tools", "text", "tools", "split", "merge", "columns", "workbench"]) {
-                workspace.textToolsMode = .columns
-                workspace.isTextToolsPresented = true
-            },
-            ScribeCommand(id: "text.openTransformTools",
-                          title: localize("palette.command.text.openTransformTools"),
-                          subtitle: localize("palette.badge.text"),
-                          keywords: ["text tools", "text", "transform", "workbench", "encode", "decode", "base", "conversion"]) {
-                workspace.textToolsMode = .transform
                 workspace.isTextToolsPresented = true
             }
         ]

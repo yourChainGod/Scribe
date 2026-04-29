@@ -456,8 +456,7 @@
 "palette.command.saveAsEncoding" = "保存为 %@";
 "palette.command.useLineEndings" = "使用 %@ 行尾";
 "palette.command.setLanguage"   = "设置语言：%@";
-"palette.command.text.openTools" = "文本工具…";
-"palette.command.text.openTransformTools" = "文本转换工作台…";
+"palette.command.text.openTools" = "分列合并器…";
 "palette.command.text.urlEncode" = "URL 编码选区";
 "palette.command.text.urlDecode" = "URL 解码选区";
 "palette.command.text.base64Encode" = "Base64 编码选区";
@@ -492,19 +491,14 @@
 "symbol.kind.heading"           = "标题";
 "symbol.kind.test"              = "测试";
 
-// MARK: - Text tools
+// MARK: - Text tools (Phase 40 — column merger only)
 
-"textTools.title"                    = "文本工具";
-"textTools.subtitle"                 = "分列、重排列、合并文本源，并打乱行顺序。";
-"textTools.mode.columns"             = "列";
-"textTools.mode.shuffle"             = "打乱";
-"textTools.mode.transform"           = "转换";
-"textTools.source.title"             = "来源";
-"textTools.source.selection"         = "选区";
-"textTools.source.document"          = "文档";
-"textTools.source.manual"            = "草稿";
-"textTools.source.refresh"           = "刷新";
-"textTools.source.currentDocument"   = "当前文档";
+"textTools.title"                    = "分列合并器";
+"textTools.subtitle"                 = "按列拆分文本，编排模板，合并输出。";
+"textTools.source.title"             = "源";
+"textTools.source.summary"           = "%lld 行 · %@";
+"textTools.source.useDocument"       = "重载当前文档";
+"textTools.source.useSelection"      = "取当前选区";
 "textTools.source.import"            = "导入文本…";
 "textTools.source.import.help"       = "导入一个或多个文本文件，并按行合并。";
 "textTools.source.includeImported"   = "将导入来源与当前来源合并";
@@ -514,8 +508,6 @@
 "textTools.source.rows"              = "%lld 行";
 "textTools.source.rowMismatch"       = "%lld vs %lld 行";
 "textTools.source.rowMismatch.help"  = "导入文本行数不同，缺失单元格会按空值处理。";
-"textTools.preview.title"            = "分列预览";
-"textTools.preview.truncated"        = "显示前 %lld 行，共 %lld 行";
 "textTools.split.kind"               = "分列";
 "textTools.split.csv"                = "CSV";
 "textTools.split.tsv"                = "TSV";
@@ -527,47 +519,44 @@
 "textTools.split.delimiterField"     = "分隔符";
 "textTools.split.regexField"         = "表达式";
 "textTools.split.widthsField"        = "宽度";
-"textTools.split.csvHint"            = "按逗号分列，支持引号包裹和双引号转义。";
-"textTools.split.tsvHint"            = "按制表符分列，并保留空单元格。";
-"textTools.split.pipeHint"           = "按竖线 | 分列。";
-"textTools.split.whitespaceHint"     = "连续空格、制表符和换行会作为列分隔。";
-"textTools.column.number"            = "第 %lld 列";
-"textTools.column.short"             = "%lld";
-"textTools.column.position"          = "第 %lld 位 · 列 %lld";
 "textTools.column.noSample"          = "（空）";
-"textTools.columns.summary"          = "已选 %lld / 共 %lld";
-"textTools.columns.selectAll"        = "全选";
-"textTools.columns.deselectAll"      = "清空";
-"textTools.columns.empty"            = "在左侧粘贴或导入文本，以开始分列。";
-"textTools.preview.summary"          = "显示 %lld / 共 %lld 行";
-"textTools.recipe.template"          = "模板：";
-"textTools.recipe.template.empty"    = "（请至少选中一列）";
-"textTools.column.empty"             = "列";
-"textTools.columns.title"            = "列";
-"textTools.columns.joinDelimiter"    = "合并符";
-"textTools.columns.dragHelp"         = "拖动调整列顺序，点击包含或排除。";
-"textTools.columns.moveUp"           = "上移列";
-"textTools.columns.moveDown"         = "下移列";
-"textTools.recipe.title"             = "组合";
-"textTools.recipe.prefix"            = "前缀";
-"textTools.recipe.between"           = "间隔";
-"textTools.recipe.suffix"            = "后缀";
-"textTools.recipe.missing"           = "缺失";
-"textTools.accessibility.columnToggle" = "包含第 %lld 列";
-"textTools.result.title"             = "结果";
-"textTools.result.summary"           = "%lld 行 · %lld 字符";
+
+// — Column palette (top of merger)
+"textTools.palette.title"            = "列盘";
+"textTools.palette.hint"             = "单击追加，或拖入下方";
+"textTools.palette.addAll"           = "全部加入";
+"textTools.palette.empty"            = "在左侧粘贴或导入文本，以开始分列。";
+"textTools.palette.chip.help"        = "单击追加 列%lld；或拖入下方模板自定义位置。";
+
+// — Token composer (middle of merger)
+"textTools.composer.title"           = "模板";
+"textTools.composer.empty"           = "点击右上「+」按钮，从中选列或加文本块开始";
+"textTools.composer.addLiteral"      = "+ 文本";
+"textTools.composer.addLiteral.help" = "追加一个文本块（如 \", \" / \" | \" / 换行）";
+"textTools.composer.addLiteral.menu" = "文本块（如 \", \"、\" - \"）";
+"textTools.composer.addNewline.menu" = "换行";
+"textTools.composer.addMenu.title"   = "添加到模板";
+"textTools.composer.addMenu.help"    = "添加列或文本块到模板";
+"textTools.composer.addMenu.columns" = "列（单击追加 / 拖入指定位置）";
+"textTools.composer.addMenu.literals" = "文本";
+"textTools.composer.clear"           = "清空";
+"textTools.composer.literalPlaceholder" = "字面量";
+"textTools.composer.remove"          = "移除";
+"textTools.composer.tokenCount"      = "%lld 列 · 共 %lld 块";
+"textTools.composer.missing"         = "缺失填充";
+"textTools.composer.missing.placeholder" = "（留空）";
+
+// — Live output (bottom of merger)
+"textTools.live.title"               = "实时预览";
+"textTools.live.summary"             = "前 %lld / 共 %lld 行 · 约 %@";
+"textTools.live.truncated"           = "…还有 %lld 行（拷贝 / 替换会处理全量）";
+
+// — Output buttons (shared)
 "textTools.output.copy"              = "拷贝";
 "textTools.output.newTab"            = "新标签";
 "textTools.output.replaceSelection"  = "替换选区";
 "textTools.output.replaceDocument"   = "替换文档";
-"textTools.output.resultTabTitle"    = "文本工具结果";
-"textTools.shuffle.title"            = "行打乱";
-"textTools.shuffle.preserveFirstLine" = "保留首行";
-"textTools.shuffle.preserveBlankLines" = "保留空行位置";
-"textTools.shuffle.seed"             = "种子";
-"textTools.shuffle.randomSeed"       = "随机种子";
-"textTools.transform.title"          = "文本转换";
-"textTools.transform.operation"      = "操作";
+"textTools.output.resultTabTitle"    = "分列合并结果";
 
 // MARK: - Settings
 

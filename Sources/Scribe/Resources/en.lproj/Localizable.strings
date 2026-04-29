@@ -458,8 +458,7 @@
 "palette.command.saveAsEncoding" = "Save as %@";
 "palette.command.useLineEndings" = "Use %@ Line Endings";
 "palette.command.setLanguage"   = "Set Language: %@";
-"palette.command.text.openTools" = "Text Tools…";
-"palette.command.text.openTransformTools" = "Text Transform Workbench…";
+"palette.command.text.openTools" = "Column Merger…";
 "palette.command.text.urlEncode" = "URL Encode Selection";
 "palette.command.text.urlDecode" = "URL Decode Selection";
 "palette.command.text.base64Encode" = "Base64 Encode Selection";
@@ -494,19 +493,14 @@
 "symbol.kind.heading"           = "heading";
 "symbol.kind.test"              = "test";
 
-// MARK: - Text tools
+// MARK: - Text tools (Phase 40 — column merger only)
 
-"textTools.title"                    = "Text Tools";
-"textTools.subtitle"                 = "Split columns, reorder fields, merge text sources, and shuffle rows.";
-"textTools.mode.columns"             = "Columns";
-"textTools.mode.shuffle"             = "Shuffle";
-"textTools.mode.transform"           = "Transform";
+"textTools.title"                    = "Column Merger";
+"textTools.subtitle"                 = "Split text into columns, compose a template, and merge.";
 "textTools.source.title"             = "Source";
-"textTools.source.selection"         = "Selection";
-"textTools.source.document"          = "Document";
-"textTools.source.manual"            = "Scratch";
-"textTools.source.refresh"           = "Refresh";
-"textTools.source.currentDocument"   = "Current Document";
+"textTools.source.summary"           = "%lld lines · %@";
+"textTools.source.useDocument"       = "Reload from current document";
+"textTools.source.useSelection"      = "Use current selection";
 "textTools.source.import"            = "Import Text…";
 "textTools.source.import.help"       = "Import one or more text files and merge them by row.";
 "textTools.source.includeImported"   = "Merge imported sources with source";
@@ -516,8 +510,6 @@
 "textTools.source.rows"              = "%lld rows";
 "textTools.source.rowMismatch"       = "%lld vs %lld rows";
 "textTools.source.rowMismatch.help"  = "Imported text has a different row count. Missing cells are rendered as empty.";
-"textTools.preview.title"            = "Split Preview";
-"textTools.preview.truncated"        = "Showing first %lld of %lld rows";
 "textTools.split.kind"               = "Split";
 "textTools.split.csv"                = "CSV";
 "textTools.split.tsv"                = "TSV";
@@ -529,47 +521,44 @@
 "textTools.split.delimiterField"     = "Delimiter";
 "textTools.split.regexField"         = "Pattern";
 "textTools.split.widthsField"        = "Widths";
-"textTools.split.csvHint"            = "Comma-separated values with quoted cells and escaped quotes.";
-"textTools.split.tsvHint"            = "Tab-separated values; empty cells are preserved.";
-"textTools.split.pipeHint"           = "Pipe-separated values using | as the delimiter.";
-"textTools.split.whitespaceHint"     = "Runs of spaces, tabs, and line breaks separate columns.";
-"textTools.column.number"            = "Column %lld";
-"textTools.column.short"             = "%lld";
-"textTools.column.position"          = "#%lld · Col %lld";
 "textTools.column.noSample"          = "(empty)";
-"textTools.column.empty"             = "Column";
-"textTools.columns.title"            = "Columns";
-"textTools.columns.summary"          = "Selected %lld of %lld";
-"textTools.columns.selectAll"        = "Select All";
-"textTools.columns.deselectAll"      = "Clear";
-"textTools.columns.empty"            = "Paste or import text on the left to split into columns.";
-"textTools.preview.summary"          = "Showing %lld of %lld rows";
-"textTools.recipe.template"          = "Template:";
-"textTools.recipe.template.empty"    = "(select at least one column)";
-"textTools.columns.joinDelimiter"    = "Join";
-"textTools.columns.dragHelp"         = "Drag to reorder columns. Click to include or exclude.";
-"textTools.columns.moveUp"           = "Move column up";
-"textTools.columns.moveDown"         = "Move column down";
-"textTools.recipe.title"             = "Recipe";
-"textTools.recipe.prefix"            = "Before";
-"textTools.recipe.between"           = "Between";
-"textTools.recipe.suffix"            = "After";
-"textTools.recipe.missing"           = "Missing";
-"textTools.accessibility.columnToggle" = "Include column %lld";
-"textTools.result.title"             = "Result";
-"textTools.result.summary"           = "%lld lines · %lld chars";
+
+// — Column palette (top of merger)
+"textTools.palette.title"            = "Columns";
+"textTools.palette.hint"             = "Click to append, or drag onto the template below";
+"textTools.palette.addAll"           = "Add All";
+"textTools.palette.empty"            = "Paste or import text on the left to split into columns.";
+"textTools.palette.chip.help"        = "Click to append column %lld; drag for precise placement.";
+
+// — Token composer (middle of merger)
+"textTools.composer.title"           = "Template";
+"textTools.composer.empty"           = "Click the “+” above to pick a column or add a literal";
+"textTools.composer.addLiteral"      = "+ Text";
+"textTools.composer.addLiteral.help" = "Append a literal chunk (e.g. \", \", \" | \", newline).";
+"textTools.composer.addLiteral.menu" = "Literal text (e.g. “, ”, “ - ”)";
+"textTools.composer.addNewline.menu" = "Newline";
+"textTools.composer.addMenu.title"   = "Add to Template";
+"textTools.composer.addMenu.help"    = "Add a column or literal to the template";
+"textTools.composer.addMenu.columns" = "Columns (click to append / drag for placement)";
+"textTools.composer.addMenu.literals" = "Literals";
+"textTools.composer.clear"           = "Clear";
+"textTools.composer.literalPlaceholder" = "literal";
+"textTools.composer.remove"          = "Remove";
+"textTools.composer.tokenCount"      = "%lld cols · %lld chips";
+"textTools.composer.missing"         = "Missing-cell fill";
+"textTools.composer.missing.placeholder" = "(empty)";
+
+// — Live output (bottom of merger)
+"textTools.live.title"               = "Live Preview";
+"textTools.live.summary"             = "First %lld / %lld lines · ~%@";
+"textTools.live.truncated"           = "…%lld more lines (Copy / Replace use the full output)";
+
+// — Output buttons (shared)
 "textTools.output.copy"              = "Copy";
 "textTools.output.newTab"            = "New Tab";
 "textTools.output.replaceSelection"  = "Replace Selection";
 "textTools.output.replaceDocument"   = "Replace Document";
-"textTools.output.resultTabTitle"    = "Text Tools Result";
-"textTools.shuffle.title"            = "Line Shuffle";
-"textTools.shuffle.preserveFirstLine" = "Preserve first line";
-"textTools.shuffle.preserveBlankLines" = "Preserve blank line positions";
-"textTools.shuffle.seed"             = "Seed";
-"textTools.shuffle.randomSeed"       = "Random seed";
-"textTools.transform.title"          = "Text Transform";
-"textTools.transform.operation"      = "Operation";
+"textTools.output.resultTabTitle"    = "Column Merger Result";
 
 // MARK: - Settings
 
