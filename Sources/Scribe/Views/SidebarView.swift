@@ -8,12 +8,23 @@ import SwiftUI
 struct SidebarView: View {
     @EnvironmentObject var workspace: Workspace
     @EnvironmentObject var outline: SymbolOutline
+    @Environment(\.appTheme) private var appTheme
     let findInFiles: FindInFilesEngine
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            modeSwitcher
-            Divider()
+        GeometryReader { proxy in
+            sidebarContent(showModeSwitcher: proxy.size.width >= 180)
+        }
+        .background(appTheme.sidebarBackground)
+    }
+
+    private func sidebarContent(showModeSwitcher: Bool) -> some View {
+        // Phase 38d — sidebar is just content now. The mode tabs
+        // and collapse button moved up into the full-width chrome
+        // toolbar, so the sidebar starts directly with whatever
+        // pane the active mode wants.
+        _ = showModeSwitcher
+        return VStack(alignment: .leading, spacing: 0) {
             switch workspace.sidebarMode {
             case .files:         filesPane
             case .search:        FindInFilesSidebar(engine: findInFiles)
@@ -21,22 +32,11 @@ struct SidebarView: View {
             case .sourceControl: SourceControlSidebar(engine: workspace.gitStatusEngine)
             }
         }
-        .background(Color(nsColor: .controlBackgroundColor))
+        .background(appTheme.sidebarBackground)
+        .clipped()
     }
 
     // MARK: - Mode switcher
-
-    private var modeSwitcher: some View {
-        HStack(spacing: 2) {
-            modeButton(.files,         system: "folder",                titleKey: "sidebar.mode.files")
-            modeButton(.search,        system: "magnifyingglass",       titleKey: "sidebar.mode.search")
-            modeButton(.outline,       system: "list.bullet.indent",    titleKey: "sidebar.mode.outline")
-            modeButton(.sourceControl, system: "arrow.triangle.branch", titleKey: "sidebar.mode.sourceControl")
-            Spacer()
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-    }
 
     private func modeButton(_ mode: SidebarMode,
                             system: String,
@@ -136,6 +136,24 @@ struct SidebarView: View {
     }
 }
 
+enum SidebarModeSwitcherMetrics {
+    static let iconSize: CGFloat = 12
+    static let itemSpacing: CGFloat = 5
+    static let buttonWidth: CGFloat = 30
+    static let buttonHeight: CGFloat = 26
+    static let activeBackgroundOpacity: Double = 0.14
+    static let usesUnderlineIndicator = false
+    /// Phase 38c — single header row matches the chrome
+    /// commandBar's 36pt so both panes' first content row
+    /// baselines across the splitter.
+    static let headerRowHeight: CGFloat = 36
+    /// Sidebar lives at the window's leading edge, so the macOS
+    /// traffic-light buttons float over its top-left corner. The
+    /// header row needs to clear that 70pt-ish area or the first
+    /// mode tab ends up underneath the close button.
+    static let trafficLightInset: CGFloat = 72
+}
+
 /// Pulled out so the per-button `@State hover` doesn't get reset
 /// every time the parent re-renders. Sibling buttons get
 /// independent hover lifecycles. Lives outside SidebarView so the
@@ -147,35 +165,31 @@ private struct ModeSwitcherButton: View {
     let isActive: Bool
     let tap: () -> Void
     @State private var hover = false
+    @Environment(\.appTheme) private var appTheme
 
     var body: some View {
         Button(action: tap) {
-            HStack(spacing: 5) {
-                Image(systemName: system)
-                    .font(.system(size: 11, weight: isActive ? .semibold : .regular))
-                Text(titleKey, bundle: .module)
-                    .font(.system(size: 11, weight: isActive ? .semibold : .regular))
-            }
-            .foregroundStyle(isActive ? Color.primary : Color.secondary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(
+            ZStack {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(backgroundFill)
-            )
+                Image(systemName: system)
+                    .font(.system(size: SidebarModeSwitcherMetrics.iconSize, weight: .medium))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(isActive ? appTheme.accent : appTheme.secondaryText)
+            }
+            .frame(width: SidebarModeSwitcherMetrics.buttonWidth,
+                   height: SidebarModeSwitcherMetrics.buttonHeight)
             .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
         .buttonStyle(.plain)
+        .help(Text(titleKey, bundle: .module))
+        .accessibilityLabel(Text(titleKey, bundle: .module))
         .onHover { hover = $0 }
-        .animation(.easeOut(duration: 0.12), value: hover)
-        .animation(.easeOut(duration: 0.18), value: isActive)
     }
 
     private var backgroundFill: Color {
         if isActive {
-            // Slightly softer than the previous 18% so the active
-            // pill doesn't fight the surrounding sidebar chrome.
-            return Color.accentColor.opacity(0.14)
+            return appTheme.accent.opacity(SidebarModeSwitcherMetrics.activeBackgroundOpacity)
         } else if hover {
             return Color.primary.opacity(0.06)
         } else {
@@ -204,13 +218,14 @@ private struct DocRow: View {
     @ObservedObject var doc: Document
     let isSelected: Bool
     @EnvironmentObject var workspace: Workspace
+    @Environment(\.appTheme) private var appTheme
     @State private var hover = false
 
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: iconName(for: doc.languageGuess))
                 .frame(width: 14)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
             Text(doc.title)
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -218,7 +233,7 @@ private struct DocRow: View {
             Spacer()
             if doc.isDirty {
                 Circle()
-                    .fill(Color.accentColor)
+                    .fill(appTheme.accent)
                     .frame(width: 6, height: 6)
             }
         }
@@ -227,7 +242,7 @@ private struct DocRow: View {
         .background(
             RoundedRectangle(cornerRadius: 4)
                 .fill(isSelected
-                      ? Color.accentColor.opacity(0.18)
+                      ? appTheme.accent.opacity(0.18)
                       : (hover ? Color.gray.opacity(0.12) : Color.clear))
                 .padding(.horizontal, 4)
         )

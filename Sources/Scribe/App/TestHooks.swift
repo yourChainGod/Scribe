@@ -56,6 +56,8 @@ enum TestHooks {
         runTheme(env: env, ctx: ctx)
         runPaletteQuery(env: env, ctx: ctx)
         runFindInFiles(env: env, ctx: ctx)
+        runInlineBlame(env: env, ctx: ctx)
+        runTextTools(env: env, ctx: ctx)
     }
 
     // MARK: Phase 23 — rectangular selection
@@ -150,6 +152,7 @@ enum TestHooks {
         guard let s = env["SCRIBE_TEST_FIND_FROM_SELECTION"], !s.isEmpty else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
             ctx.workspace.activeSelection = s
+            ctx.workspace.activeTextSelection = s
         }
     }
 
@@ -158,11 +161,14 @@ enum TestHooks {
     /// SCRIBE_TEST_THEME pins the editor to the named theme at
     /// startup so the screenshot script can grab a single palette
     /// without driving the View > Editor Theme menu.
+    /// Phase 36 — drives the *UI* theme; the editor follows by
+    /// default. Tests that need a decoupled editor theme should set
+    /// `editorFollowsUITheme = false` then write `editorThemeID`.
     private static func runTheme(env: [String: String],
                                  ctx: TestHookContext) {
         guard let raw = env["SCRIBE_TEST_THEME"],
               let id = ThemeID(rawValue: raw) else { return }
-        ctx.prefs.themeID = id
+        ctx.prefs.uiThemeID = id
     }
 
     // MARK: Phase 11 — pre-fill ⌘P palette
@@ -246,5 +252,72 @@ enum TestHooks {
                 }
             }
         }
+    }
+
+    // MARK: Phase 35c-iv — Inline Blame verification
+
+    /// SCRIBE_TEST_INLINE_BLAME_MODE = "off" | "currentLine" | "allLines"
+    /// SCRIBE_TEST_INLINE_BLAME_LINE = "<1-based line>"
+    /// SCRIBE_TEST_INLINE_BLAME_TOOLTIP_LINE = "<1-based line>"
+    ///
+    /// Drives the editor through the same command path as the find /
+    /// multi-cursor screenshot hooks. We send the command twice because
+    /// the first tick may land before `git blame` finishes on a freshly
+    /// opened repo; the second tick is cheap and makes the screenshot
+    /// workflow deterministic on slower machines.
+    private static func runInlineBlame(env: [String: String],
+                                       ctx: TestHookContext) {
+        let mode = env["SCRIBE_TEST_INLINE_BLAME_MODE"]
+            .flatMap(InlineBlameMode.init(rawValue:))
+        let caretLine = positiveInt(env["SCRIBE_TEST_INLINE_BLAME_LINE"])
+        let tooltipLine = positiveInt(env["SCRIBE_TEST_INLINE_BLAME_TOOLTIP_LINE"])
+
+        guard mode != nil || caretLine != nil || tooltipLine != nil else { return }
+
+        let resolvedMode = mode ?? ctx.prefs.inlineBlameMode
+        let resolvedCaret = caretLine ?? (resolvedMode == .currentLine ? tooltipLine : nil)
+
+        func sendCommand() {
+            ctx.findState.commands.send(.testInlineBlame(mode: resolvedMode,
+                                                         caretLine: resolvedCaret,
+                                                         tooltipLine: tooltipLine))
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+            sendCommand()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.4) {
+            sendCommand()
+        }
+    }
+
+    // MARK: Phase 37 — text tools workbench
+
+    /// SCRIBE_TEST_TEXT_TOOLS = "1" opens the Text Tools sheet.
+    /// SCRIBE_TEST_TEXT_TOOLS_MODE = "columns" | "shuffle" | "transform" selects
+    /// the initial segmented-control mode. SCRIBE_TEST_TEXT_TOOLS_DELAY
+    /// can be used by screenshot scripts that first need another hook,
+    /// such as inline-blame tooltip rendering, to settle.
+    private static func runTextTools(env: [String: String],
+                                     ctx: TestHookContext) {
+        let requested = env["SCRIBE_TEST_TEXT_TOOLS"]
+        let modeRaw = env["SCRIBE_TEST_TEXT_TOOLS_MODE"]
+        guard requested != nil || modeRaw != nil else { return }
+
+        let mode = modeRaw
+            .flatMap(TextToolsMode.init(rawValue:)) ?? .columns
+        let delay = env["SCRIBE_TEST_TEXT_TOOLS_DELAY"]
+            .flatMap(Double.init) ?? 1.0
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + max(0, delay)) {
+            ctx.findState.commands.send(.hideInlineBlameTooltip)
+            ctx.workspace.textToolsMode = mode
+            ctx.workspace.isTextToolsPresented = true
+        }
+    }
+
+    private static func positiveInt(_ raw: String?) -> Int? {
+        guard let raw, let value = Int(raw), value > 0 else { return nil }
+        return value
     }
 }

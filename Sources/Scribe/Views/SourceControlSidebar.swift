@@ -17,6 +17,7 @@ import SwiftUI
 struct SourceControlSidebar: View {
     @ObservedObject var engine: GitStatusEngine
     @EnvironmentObject var workspace: Workspace
+    @Environment(\.appTheme) private var appTheme
 
     /// Phase 35b-2b — commit panel state lives here (not in the
     /// engine) because it's a *draft* — abandoning the sidebar
@@ -37,7 +38,7 @@ struct SourceControlSidebar: View {
     var body: some View {
         VStack(spacing: 0) {
             branchHeader
-                .background(Color(nsColor: .controlBackgroundColor))
+                .background(appTheme.sidebarBackground)
             Divider()
             Group {
                 switch engine.state {
@@ -259,7 +260,25 @@ struct SourceControlSidebar: View {
         // an otherwise-clean tree.
         let canCommit = hasMessage && (amend || stagedCount > 0)
 
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 6) {
+                Text("sourceControl.commit.section", bundle: .module)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                if stagedCount > 0 {
+                    Text("\(stagedCount)")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(Color.green.opacity(0.15))
+                        )
+                }
+                Spacer()
+            }
+
             // Use a TextEditor (multi-line) rather than TextField so
             // a Linux-kernel-style commit body fits without horizontal
             // scrolling. macOS auto-grows up to maxHeight.
@@ -270,7 +289,11 @@ struct SourceControlSidebar: View {
                 .padding(.vertical, 4)
                 .background(
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .strokeBorder(Color.secondary.opacity(0.25))
+                        .fill(Color(rgb: appTheme.editor.background).opacity(0.65))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .strokeBorder(Color.secondary.opacity(0.18))
                 )
                 .overlay(alignment: .topLeading) {
                     if commitMessage.isEmpty {
@@ -282,8 +305,14 @@ struct SourceControlSidebar: View {
                             .padding(.horizontal, 12)
                             .padding(.vertical, 12)
                             .allowsHitTesting(false)
+                            .accessibilityHidden(true)
                     }
                 }
+                .accessibilityLabel(
+                    Text(amend
+                         ? L10n.t("sourceControl.commit.placeholder.amend")
+                         : L10n.t("sourceControl.commit.placeholder"))
+                )
 
             HStack(spacing: 8) {
                 Toggle(isOn: Binding(
@@ -350,8 +379,15 @@ struct SourceControlSidebar: View {
             }
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(Color(nsColor: .controlBackgroundColor))
+        .padding(.vertical, 9)
+        .background(
+            appTheme.sidebarBackground
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.18))
+                        .frame(height: 1)
+                }
+        )
     }
 
     // MARK: - Row list
@@ -508,7 +544,7 @@ private struct SourceControlRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 6) {
+            HStack(alignment: .center, spacing: 7) {
                 // Phase 35b-3-ii — leading chevron. Tapping toggles
                 // the per-hunk expansion. We render an invisible
                 // 12 pt placeholder for rows without a hunk surface
@@ -531,31 +567,40 @@ private struct SourceControlRow: View {
                 } else {
                     Color.clear.frame(width: 12, height: 12)
                 }
-                Text(statusLabel)
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                Text(statusBadgeLabel)
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
                     .foregroundStyle(statusTint)
-                    .frame(width: 16, alignment: .center)
+                    .frame(width: 22, height: 16, alignment: .center)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(statusTint.opacity(0.12))
+                    )
                 Image(systemName: "doc.text")
                     .foregroundStyle(.secondary)
                     .font(.system(size: 11))
-                Text(displayName)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Text(parentHint)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.head)
-                    .layoutPriority(0)
+                    .frame(width: 13)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(displayName)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    if !parentHint.isEmpty {
+                        Text(parentHint)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.head)
+                    }
+                }
+                .layoutPriority(1)
                 Spacer(minLength: 4)
                 if hover {
                     rowActions
                 }
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 3)
+            .padding(.vertical, 5)
             .contentShape(Rectangle())
             .background(
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
@@ -715,6 +760,15 @@ private struct SourceControlRow: View {
     /// "M " (modified, staged). Mirrors `git status -s` exactly.
     private var statusLabel: String {
         row.staged.glyph + row.unstaged.glyph
+    }
+
+    /// Compact visible badge. The exact XY value is still available
+    /// through `statusLabel`; this trims porcelain's leading spaces
+    /// so the sidebar does not look misaligned for ordinary " M"
+    /// rows.
+    private var statusBadgeLabel: String {
+        let trimmed = statusLabel.trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty ? "•" : trimmed
     }
 
     /// Tint tracks the most "interesting" of the two columns —

@@ -45,6 +45,7 @@ private struct DocumentEditorPane: View {
     @EnvironmentObject var workspace: Workspace
     @EnvironmentObject var prefs: EditorPreferences
     @EnvironmentObject var findState: FindState
+    @Environment(\.appTheme) private var appTheme
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -71,7 +72,7 @@ private struct DocumentEditorPane: View {
     private var editor: some View {
         ScintillaCodeEditor(doc: doc, prefs: prefs, findState: findState)
             .id(doc.id)
-            .background(Color(nsColor: .textBackgroundColor))
+            .background(Color(rgb: appTheme.editor.background))
             .contextMenu {
                 editorContextMenu(doc: doc)
             }
@@ -126,6 +127,34 @@ private struct DocumentEditorPane: View {
         } label: {
             Text("editor.context.find", bundle: .module)
         }
+        Menu {
+            Button {
+                workspace.isTextToolsPresented = true
+            } label: {
+                Text("menu.tools.textTools", bundle: .module)
+            }
+            Divider()
+            TextTransformCommandButtons(findState: findState)
+        } label: {
+            Text("editor.context.transform", bundle: .module)
+        }
+        Divider()
+        Button {
+            findState.commands.send(.hideInlineBlameTooltip)
+            workspace.toggleMarkdownPreview()
+        } label: {
+            if doc.isMarkdownPreviewVisible {
+                Label(L10n.t("menu.view.markdownPreview"),
+                      systemImage: "checkmark")
+            } else {
+                Label(L10n.t("menu.view.markdownPreview"),
+                      systemImage: doc.isMarkdown ? "eye" : "eye.slash")
+            }
+        }
+        .disabled(!doc.isMarkdown)
+        .help(doc.isMarkdown
+              ? L10n.t("menu.view.markdownPreview") + " (⌘⇧V)"
+              : L10n.t("menu.view.markdownPreviewUnavailable"))
         if doc.url != nil {
             Divider()
             Button {
@@ -149,6 +178,7 @@ private struct DocumentEditorPane: View {
 private struct WelcomeView: View {
     @EnvironmentObject var workspace: Workspace
     @EnvironmentObject var prefs: EditorPreferences
+    @Environment(\.appTheme) private var appTheme
 
     var body: some View {
         // Two-column layout: hero on top, recent files in a
@@ -163,7 +193,7 @@ private struct WelcomeView: View {
         }
         .padding(.vertical, 32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .textBackgroundColor))
+        .background(Color(rgb: appTheme.editor.background))
     }
 
     private var hero: some View {

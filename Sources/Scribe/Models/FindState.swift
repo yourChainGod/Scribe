@@ -96,6 +96,20 @@ final class FindState: ObservableObject {
         /// honoured (each caret receives the same multi-line text;
         /// undo treats the burst as one transaction).
         case insertSnippet(String)
+        /// Phase 37 — apply a text operation to the active editor
+        /// selection. The Coordinator owns the Scintilla mutation and
+        /// leaves the buffer unchanged if the operation throws.
+        case transformSelection(TextTransformAction)
+        /// Phase 37 — replace the active editor selection with a
+        /// prepared Text Tools result. This is intentionally distinct
+        /// from `transformSelection` because the workbench computes the
+        /// text outside Scintilla and only needs the mutation path here.
+        case replaceSelectionText(String)
+        /// Phase 37a — cancel any Scintilla calltip before SwiftUI
+        /// presents a sheet or split preview over the editor. Scintilla's
+        /// Cocoa calltip window is above modal panels, so overlays must
+        /// explicitly dismiss it.
+        case hideInlineBlameTooltip
         /// Test-only: inserts the literal string at every caret via
         /// `SCI_REPLACESEL`. Used by the Phase 21 verification hook
         /// to render visible markers at the multi-caret positions —
@@ -108,6 +122,14 @@ final class FindState: ObservableObject {
         /// without keystroke synthesis through System Events.
         /// Tuple is (linesDown, charsRight); both can be 0.
         case testRectSelectExtend(linesDown: Int, charsRight: Int)
+        /// Test-only: drives Inline Blame into a deterministic state
+        /// for screenshot verification. The hook can switch display
+        /// density, move the caret to a 1-based line, and optionally
+        /// force the commit-summary calltip for a 1-based line after
+        /// the blame cache has landed.
+        case testInlineBlame(mode: InlineBlameMode,
+                             caretLine: Int?,
+                             tooltipLine: Int?)
     }
     let commands = PassthroughSubject<Command, Never>()
 

@@ -15,6 +15,15 @@
 
 import SwiftUI
 
+enum CommandPaletteMetrics {
+    static let width: CGFloat = 560
+    static let maxListHeight: CGFloat = 208
+    static let rowIconBox: CGFloat = 20
+    static let rowIconSize: CGFloat = 12
+    static let rowMinHeight: CGFloat = 34
+    static let cornerRadius: CGFloat = 10
+}
+
 struct CommandPalette: View {
     @ObservedObject var registry: CommandRegistry
     var placeholder: String = L10n.t("palette.placeholder.commands")
@@ -28,6 +37,7 @@ struct CommandPalette: View {
     @State private var query: String
     @State private var selection: Int = 0
     @FocusState private var queryFocused: Bool
+    @Environment(\.appTheme) private var appTheme
 
     init(registry: CommandRegistry,
          placeholder: String = L10n.t("palette.placeholder.commands"),
@@ -66,10 +76,10 @@ struct CommandPalette: View {
     /// matches.
     private var routeIcon: String {
         switch registry.activeRoute(for: query)?.id {
-        case "symbol":  return "number"
-        case "line":    return "arrow.right.to.line"
-        case "command": return "command"
-        default:        return "magnifyingglass"
+        case "atSymbol":       return "number"
+        case "gotoLine":       return "arrow.right.to.line"
+        case "commandPalette": return "command"
+        default:               return "magnifyingglass"
         }
     }
 
@@ -80,13 +90,13 @@ struct CommandPalette: View {
             // rather than a sidebar input.
             HStack(spacing: 10) {
                 Image(systemName: routeIcon)
-                    .foregroundStyle(.secondary)
-                    .font(.system(size: 15))
+                    .foregroundStyle(appTheme.secondaryText)
+                    .font(.system(size: 14))
                     .frame(width: 18)
                     .animation(.easeOut(duration: 0.15), value: routeIcon)
                 TextField(effectivePlaceholder, text: $query)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 15))
+                    .font(.system(size: 14))
                     .focused($queryFocused)
                     .onSubmit { invokeSelected() }
                     .onKeyPress(.upArrow) {
@@ -102,10 +112,19 @@ struct CommandPalette: View {
                         return .handled
                     }
                     .onChange(of: query) { _, _ in selection = 0 }
+                Button(action: onCancel) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(appTheme.secondaryText.opacity(0.8))
+                        .frame(width: 18, height: 18)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(L10n.t("palette.action.close"))
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(Color(nsColor: .windowBackgroundColor))
+            .padding(.horizontal, 15)
+            .padding(.vertical, 8)
+            .background(appTheme.panelBackground.opacity(0.92))
 
             Divider()
 
@@ -118,7 +137,7 @@ struct CommandPalette: View {
                                  ? L10n.t("palette.empty.noCommands")
                                  : String(format: L10n.t("palette.empty.noMatches"), query as NSString))
                                 .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(appTheme.secondaryText)
                                 .frame(maxWidth: .infinity, alignment: .center)
                                 .padding(.vertical, 24)
                         } else {
@@ -151,7 +170,7 @@ struct CommandPalette: View {
                         }
                     }
                 }
-                .frame(maxHeight: 360)
+                .frame(maxHeight: CommandPaletteMetrics.maxListHeight)
                 .onChange(of: selection) { _, new in
                     withAnimation(.easeOut(duration: 0.1)) {
                         proxy.scrollTo(new, anchor: .center)
@@ -159,14 +178,14 @@ struct CommandPalette: View {
                 }
             }
         }
-        .frame(width: 560)
-        .background(Color(nsColor: .windowBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .frame(width: CommandPaletteMetrics.width)
+        .background(appTheme.panelBackground)
+        .clipShape(RoundedRectangle(cornerRadius: CommandPaletteMetrics.cornerRadius, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            RoundedRectangle(cornerRadius: CommandPaletteMetrics.cornerRadius, style: .continuous)
+                .stroke(appTheme.separator.opacity(0.5), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.18), radius: 12, y: 6)
+        .shadow(color: .black.opacity(0.16), radius: 14, y: 7)
         .onAppear { queryFocused = true }
     }
 
@@ -181,25 +200,55 @@ struct CommandPalette: View {
 private struct CommandRow: View {
     let match: CommandMatch
     let isSelected: Bool
+    @Environment(\.appTheme) private var appTheme
+
+    private var presentation: CommandPresentation {
+        CommandPresentation(command: match.command)
+    }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
+            Image(systemName: presentation.iconName)
+                .font(.system(size: CommandPaletteMetrics.rowIconSize, weight: .semibold))
+                .foregroundStyle(isSelected ? appTheme.accent : appTheme.secondaryText)
+                .frame(width: CommandPaletteMetrics.rowIconBox, height: CommandPaletteMetrics.rowIconBox)
+                .background(
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(isSelected
+                              ? appTheme.accent.opacity(0.16)
+                              : Color.primary.opacity(0.05))
+                )
+
             VStack(alignment: .leading, spacing: 2) {
                 highlightedTitle
-                    .font(.system(size: 13))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(isSelected ? Color.primary : Color.primary.opacity(0.9))
                     .lineLimit(1)
-                if let subtitle = match.command.subtitle {
-                    Text(subtitle)
+                if let detail = presentation.detail {
+                    Text(detail)
                         .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(appTheme.secondaryText)
                         .lineLimit(1)
+                        .truncationMode(.middle)
                 }
             }
             Spacer(minLength: 8)
+            if let badge = presentation.badge {
+                Text(badge)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(appTheme.secondaryText)
+                    .lineLimit(1)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(
+                        Capsule()
+                            .fill(Color.primary.opacity(isSelected ? 0.08 : 0.05))
+                    )
+            }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .padding(.vertical, 5)
+        .frame(minHeight: CommandPaletteMetrics.rowMinHeight)
         .background(
             // Use a borderless rounded fill rather than a sharp
             // rectangle so the selection indicator doesn't fight
@@ -207,10 +256,11 @@ private struct CommandRow: View {
             // every other "active" state in the app's chrome
             // (sidebar mode pill, file tree active row).
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(isSelected ? Color.accentColor.opacity(0.14) : Color.clear)
-                .padding(.horizontal, 6)
+                .fill(isSelected ? appTheme.accent.opacity(0.14) : Color.clear)
+                .padding(.horizontal, 7)
         )
         .animation(.easeOut(duration: 0.12), value: isSelected)
+        .accessibilityLabel(accessibilityLabel)
     }
 
     /// Title with the matched-char ranges drawn bold.
@@ -219,16 +269,28 @@ private struct CommandRow: View {
     }
 
     private func buildAttributedTitle() -> AttributedString {
-        var attributed = AttributedString(match.command.title)
-        guard let ranges = match.highlightedRanges, !ranges.isEmpty else {
+        var attributed = AttributedString(presentation.title)
+        guard match.command.title == presentation.title,
+              let ranges = match.highlightedRanges,
+              !ranges.isEmpty else {
             return attributed
         }
         for range in ranges {
             if let attrRange = Range(range, in: attributed) {
                 attributed[attrRange].font = .system(size: 13, weight: .bold)
-                attributed[attrRange].foregroundColor = .accentColor
+                attributed[attrRange].foregroundColor = appTheme.accent
             }
         }
         return attributed
+    }
+
+    private var accessibilityLabel: String {
+        [
+            presentation.title,
+            presentation.detail,
+            presentation.badge
+        ]
+        .compactMap { $0 }
+        .joined(separator: ", ")
     }
 }

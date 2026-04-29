@@ -91,4 +91,57 @@ final class MultiCursorTests: XCTestCase {
             XCTFail("expected selectNextOccurrence third, got \(received[2])")
         }
     }
+
+    func test_findStateCommands_publishTextTransformActions() {
+        let state = FindState(defaults: UserDefaults(suiteName: "scribe-transform-\(UUID().uuidString)")!)
+        var received: [FindState.Command] = []
+        state.commands
+            .sink { received.append($0) }
+            .store(in: &bag)
+
+        state.commands.send(.transformSelection(.urlEncode))
+        state.commands.send(.transformSelection(.convertBase(fromBase: 16, toBase: 10)))
+
+        XCTAssertEqual(received.count, 2)
+        guard case let .transformSelection(first) = received[0] else {
+            return XCTFail("expected transformSelection, got \(received[0])")
+        }
+        guard case let .transformSelection(second) = received[1] else {
+            return XCTFail("expected transformSelection, got \(received[1])")
+        }
+        XCTAssertEqual(first, .urlEncode)
+        XCTAssertEqual(second, .convertBase(fromBase: 16, toBase: 10))
+    }
+
+    func test_findStateCommands_publishReplaceSelectionText() {
+        let state = FindState(defaults: UserDefaults(suiteName: "scribe-replace-selection-\(UUID().uuidString)")!)
+        var received: [FindState.Command] = []
+        state.commands
+            .sink { received.append($0) }
+            .store(in: &bag)
+
+        state.commands.send(.replaceSelectionText("merged result"))
+
+        XCTAssertEqual(received.count, 1)
+        guard case let .replaceSelectionText(text) = received[0] else {
+            return XCTFail("expected replaceSelectionText, got \(received[0])")
+        }
+        XCTAssertEqual(text, "merged result")
+    }
+
+    func test_findStateCommands_publishHideInlineBlameTooltip() {
+        let state = FindState(defaults: UserDefaults(suiteName: "scribe-hide-calltip-\(UUID().uuidString)")!)
+        var received: [FindState.Command] = []
+        state.commands
+            .sink { received.append($0) }
+            .store(in: &bag)
+
+        state.commands.send(.hideInlineBlameTooltip)
+
+        XCTAssertEqual(received.count, 1)
+        if case .hideInlineBlameTooltip = received[0] {
+            return
+        }
+        XCTFail("expected hideInlineBlameTooltip, got \(received[0])")
+    }
 }

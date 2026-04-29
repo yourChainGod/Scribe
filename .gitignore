@@ -28,3 +28,7 @@ Vendor/lexilla/access/
 
 # Phase 28b — performance fixtures (regenerate with Scripts/gen_perf_samples.sh)
 Tests/Fixtures/perf_*.txt
+
+# Claude Code harness session state — local only, never commit
+.harness-session-state.json
+.claude/

@@ -7,6 +7,7 @@ import SwiftUI
 
 struct StatusBarView: View {
     @EnvironmentObject var workspace: Workspace
+    @Environment(\.appTheme) private var appTheme
 
     var body: some View {
         HStack(spacing: 10) {
@@ -26,41 +27,61 @@ struct StatusBarView: View {
             if let doc = workspace.current,
                doc.isLargeFile,
                doc.saveProgress >= 0 {
-                HStack(spacing: 6) {
+                StatusBarIndicator {
                     ProgressView(value: max(0, min(1, doc.saveProgress)))
                         .controlSize(.small)
                         .progressViewStyle(.linear)
                         .frame(width: 80)
                     Text("status.largeFileSaving", bundle: .module)
-                        .foregroundStyle(.secondary)
                 }
             } else if let doc = workspace.current,
                       doc.isLargeFile,
                       doc.loadProgress >= 0,
                       doc.loadProgress < 1 {
-                HStack(spacing: 6) {
+                StatusBarIndicator {
                     ProgressView()
                         .controlSize(.small)
                         .scaleEffect(0.7, anchor: .center)
                         .frame(width: 12, height: 12)
                     Text("status.largeFileLoading", bundle: .module)
-                        .foregroundStyle(.secondary)
                 }
             } else if let doc = workspace.current, doc.isDirty {
-                HStack(spacing: 4) {
+                StatusBarIndicator {
                     Circle()
-                        .fill(Color.accentColor)
+                        .fill(appTheme.accent)
                         .frame(width: 6, height: 6)
                     Text("status.modified", bundle: .module)
-                        .foregroundStyle(.secondary)
                 }
             }
         }
         .font(.system(size: 11))
-        .foregroundStyle(.secondary)
+        .foregroundStyle(appTheme.secondaryText)
         .padding(.horizontal, 12)
         .frame(height: 26)
-        .background(.bar)
+        .background(appTheme.barBackground)
+    }
+}
+
+private struct StatusBarIndicator<Content: View>: View {
+    let content: Content
+    @Environment(\.appTheme) private var appTheme
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        HStack(spacing: 5) {
+            content
+        }
+        .font(.system(size: 11, weight: .medium))
+        .foregroundStyle(appTheme.secondaryText)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 2)
+        .background(
+            Capsule(style: .continuous)
+                .fill(appTheme.secondaryText.opacity(0.10))
+        )
     }
 }
 
@@ -69,9 +90,10 @@ struct StatusBarView: View {
 /// is heavier than the surrounding status text — the hairline
 /// reads as a quiet beat between menu items, not a hard wall.
 private struct StatusBarSeparator: View {
+    @Environment(\.appTheme) private var appTheme
     var body: some View {
         Rectangle()
-            .fill(Color(nsColor: .separatorColor).opacity(0.6))
+            .fill(appTheme.separator.opacity(0.6))
             .frame(width: 1, height: 11)
     }
 }

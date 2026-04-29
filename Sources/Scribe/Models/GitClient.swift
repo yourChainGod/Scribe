@@ -230,6 +230,19 @@ enum GitClient {
         }
     }
 
+    /// Phase 35c-iii — display polish for Inline Blame. Reads the
+    /// repo-local user.name so the UI can show "You" for commits
+    /// authored by the current repository identity.
+    nonisolated static func currentUserName(repo: URL) -> String? {
+        switch run(["config", "user.name"], cwd: repo) {
+        case .success(let raw):
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        case .failure:
+            return nil
+        }
+    }
+
     /// Subject (first line) of the HEAD commit. Powers the "Amend"
     /// toggle: enabling it pre-fills the textarea with the previous
     /// message so the user can edit instead of retyping. Returns

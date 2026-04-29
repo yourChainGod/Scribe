@@ -2,11 +2,11 @@
 //  Coordinator+InlineBlame.swift
 //  Phase 35c-ii-γ — Scintilla EOL annotation integration for the
 //  inline-blame chip. The data layer (GitClient.blame), the
-//  formatter (RelativeTime), and the cache (GitBlameEngine) all
-//  landed in earlier sub-phases; this extension is the bridge
-//  between them and the Scintilla view: every caret tick + every
-//  blame-cache update repaints a chip-shaped trailing label on
-//  the active line.
+//  formatter (RelativeTime / InlineBlameFormatter), and the cache
+//  (GitBlameEngine) all landed in earlier sub-phases; this
+//  extension is the bridge between them and the Scintilla view:
+//  every caret tick + every blame-cache update repaints trailing
+//  labels according to the user's Inline Blame mode.
 //
 //  Display rules:
 //    - Active caret line carries
@@ -14,17 +14,21 @@
 //      Two leading spaces give a visual gap between the source
 //      line's last character and the chip; zed uses three but
 //      two read cleaner against Scintilla's caret highlight band.
-//    - Other lines have no annotation. Painting every line
-//      would crowd out the source code and re-rendering on
-//      every scroll would cost O(visible-lines) per redraw.
+//    - Current Line mode keeps the pre-settings behaviour: only
+//      the main caret line has an annotation.
+//    - All Lines mode paints every cached committed blame line.
+//      This is intentionally opt-in because it is denser and costs
+//      O(blamed-lines) per repaint.
+//    - Off mode clears the EOL annotations and hides the global
+//      annotation surface.
 //    - Lines without blame data (untracked / not in repo /
 //      engine hasn't fetched yet / commit is the all-zeros
 //      uncommitted sentinel) get no annotation. Inline blame
 //      stays silent until git has something interesting to say.
-//    - Multi-cursor: only the *main* caret's line carries the
-//      chip; additional carets stay quiet. The main caret is
-//      what `SCI_GETCURRENTPOS` returns, so this falls out for
-//      free.
+//    - Multi-cursor in Current Line mode: only the *main* caret's
+//      line carries the chip; additional carets stay quiet. The
+//      main caret is what `SCI_GETCURRENTPOS` returns, so this
+//      falls out for free.
 //
 //  Refresh triggers:
 //    1. SCN_UPDATEUI — fires whenever the caret moves, the
@@ -83,6 +87,8 @@ extension ScintillaCodeEditor.Coordinator {
         view.message(SCI.STYLESETITALIC,
                      wParam: UInt(SC.STYLE_INLINE_BLAME),
                      lParam: 1)
+        view.message(SCI.CALLTIPUSESTYLE, wParam: 0)
+        view.message(SCI.SETMOUSEDWELLTIME, wParam: 650)
     }
 
     /// Subscribe to the workspace's blame engine so a cache
@@ -110,10 +116,10 @@ extension ScintillaCodeEditor.Coordinator {
 
     // MARK: - Render
 
-    /// Repaint the inline-blame chip on the active line. Cheap:
-    /// clear all annotations, then set one line if we have a
-    /// blame to show. Called on every SCN_UPDATEUI tick + every
-    /// engine cache mutation, so it has to stay O(1).
+    /// Repaint inline-blame annotations for the selected mode.
+    /// Current Line stays cheap (clear + maybe set one line);
+    /// All Lines intentionally walks the cached blame map because
+    /// the user explicitly asked for the denser view.
     ///
     /// Painting is "clear-all then maybe-set-one" rather than
     /// "track-previous-line then clear-just-it" because:
@@ -128,8 +134,37 @@ extension ScintillaCodeEditor.Coordinator {
     ///      both more code than just clearing.
     func applyInlineBlame(in view: ScintillaView) {
         view.message(SCI.EOLANNOTATIONCLEARALL)
+        guard prefs.inlineBlameMode != .off else {
+            view.message(SCI.EOLANNOTATIONSETVISIBLE,
+                         wParam: UInt(SC.EOLANNOTATION_HIDDEN))
+            return
+        }
+        view.message(SCI.EOLANNOTATIONSETVISIBLE,
+                     wParam: UInt(SC.EOLANNOTATION_STADIUM))
         guard let url = doc.url else { return }
         guard let engine = workspace?.gitBlameEngine else { return }
+        let currentAuthor = engine.currentAuthorName(for: url)
+
+        switch prefs.inlineBlameMode {
+        case .off:
+            return
+        case .currentLine:
+            applyCurrentLineInlineBlame(in: view,
+                                        url: url,
+                                        engine: engine,
+                                        currentAuthorName: currentAuthor)
+        case .allLines:
+            applyAllInlineBlames(in: view,
+                                 url: url,
+                                 engine: engine,
+                                 currentAuthorName: currentAuthor)
+        }
+    }
+
+    private func applyCurrentLineInlineBlame(in view: ScintillaView,
+                                             url: URL,
+                                             engine: GitBlameEngine,
+                                             currentAuthorName: String?) {
         let pos = view.message(SCI.GETCURRENTPOS)
         let line0 = view.message(SCI.LINEFROMPOSITION,
                                  wParam: UInt(pos))
@@ -144,39 +179,116 @@ extension ScintillaCodeEditor.Coordinator {
         // visual noise when every fresh edit triggers it; we
         // stay quiet until there's an actual commit to credit.
         if blame.isUncommitted { return }
-        let label = formatBlameLabel(for: blame)
-        // SCI_*SETTEXT messages take a const char * via lParam.
-        // Scintilla cocoa exposes setStringProperty:parameter:value:
-        // as the Swift-friendly wrapper that handles the NSString
-        // → C string conversion + null termination.
+        setInlineBlame(blame,
+                       line0: Int(line0),
+                       currentAuthorName: currentAuthorName,
+                       in: view)
+    }
+
+    private func applyAllInlineBlames(in view: ScintillaView,
+                                      url: URL,
+                                      engine: GitBlameEngine,
+                                      currentAuthorName: String?) {
+        guard let lines = engine.blameLines(for: url) else { return }
+        let lineCount = Int(view.message(SCI.GETLINECOUNT))
+        for (lineNo, blame) in lines where !blame.isUncommitted {
+            let line0 = lineNo - 1
+            guard line0 >= 0, line0 < lineCount else { continue }
+            setInlineBlame(blame,
+                           line0: line0,
+                           currentAuthorName: currentAuthorName,
+                           in: view)
+        }
+    }
+
+    private func setInlineBlame(_ blame: GitClient.BlameLine,
+                                line0: Int,
+                                currentAuthorName: String?,
+                                in view: ScintillaView) {
+        let label = InlineBlameFormatter.label(for: blame,
+                                               currentAuthorName: currentAuthorName)
         view.setStringProperty(Int32(SCI.EOLANNOTATIONSETTEXT),
-                               parameter: Int(line0),
+                               parameter: line0,
                                value: label)
         view.message(SCI.EOLANNOTATIONSETSTYLE,
                      wParam: UInt(line0),
                      lParam: SC.STYLE_INLINE_BLAME)
     }
 
-    // MARK: - Format
+    // MARK: - Tooltip
 
-    /// Build the chip text "  {Author}, {relTime} • {sha7}".
-    ///
-    /// - Two-space prefix: visual gap between source line and chip.
-    /// - Author: the human's display name from `git blame`'s
-    ///   `author` line.
-    /// - Comma + relTime: "3 minutes ago" / "刚刚" via
-    ///   `RelativeTime.describe`.
-    /// - Bullet + 7-char SHA: enough to point at a commit
-    ///   without consuming half the screen.
-    ///
-    /// Format matches zed's default layout. We deliberately do
-    /// *not* include the commit summary here — a typical
-    /// summary is 30–60 chars and would push the chip past
-    /// the line wrap on narrow editors. 35c-ii's hover tooltip
-    /// (TODO) is where the summary belongs.
-    private func formatBlameLabel(for blame: GitClient.BlameLine) -> String {
-        let sha7 = String(blame.sha.prefix(7))
-        let time = RelativeTime.describe(epoch: blame.authorTime)
-        return "  \(blame.author), \(time) • \(sha7)"
+    func showInlineBlameTooltipIfNeeded(in view: ScintillaView,
+                                        position rawPosition: Int) {
+        hideInlineBlameTooltip(in: view)
+        guard NSApp.isActive, view.window?.isKeyWindow == true else { return }
+        guard workspace?.isTextToolsPresented != true else { return }
+        guard prefs.inlineBlameMode != .off else { return }
+        guard let url = doc.url else { return }
+        guard let engine = workspace?.gitBlameEngine else { return }
+
+        let position = max(0, rawPosition)
+        let line0 = view.message(SCI.LINEFROMPOSITION,
+                                 wParam: UInt(position))
+        if prefs.inlineBlameMode == .currentLine {
+            let caret = view.message(SCI.GETCURRENTPOS)
+            let caretLine0 = view.message(SCI.LINEFROMPOSITION,
+                                          wParam: UInt(caret))
+            guard line0 == caretLine0 else { return }
+        }
+        let lineNo = Int(line0) + 1
+        guard let blame = engine.blameLine(for: url, line: lineNo),
+              !blame.isUncommitted else { return }
+
+        let tooltip = InlineBlameFormatter.tooltip(
+            for: blame,
+            currentAuthorName: engine.currentAuthorName(for: url)
+        )
+        inlineBlameTooltipView = InlineBlameTooltipPresenter.show(
+            text: tooltip,
+            position: position,
+            line0: Int(line0),
+            in: view,
+            replacing: inlineBlameTooltipView
+        )
+    }
+
+    func hideInlineBlameTooltip(in view: ScintillaView) {
+        InlineBlameTooltipPresenter.hide(inlineBlameTooltipView, in: view)
+        inlineBlameTooltipView = nil
+    }
+
+    // MARK: - Verification Hook
+
+    func testInlineBlame(mode: InlineBlameMode,
+                         caretLine: Int?,
+                         tooltipLine: Int?,
+                         in view: ScintillaView) {
+        prefs.inlineBlameMode = mode
+        if let caretLine {
+            moveCaretToLine(caretLine, in: view)
+        }
+        applyInlineBlame(in: view)
+        if let tooltipLine {
+            let line0 = clampedLine0(tooltipLine, in: view)
+            let position = Int(view.message(SCI.GETLINEENDPOSITION,
+                                            wParam: UInt(line0)))
+            showInlineBlameTooltipIfNeeded(in: view, position: position)
+        }
+    }
+
+    private func moveCaretToLine(_ line1: Int, in view: ScintillaView) {
+        let line0 = clampedLine0(line1, in: view)
+        view.message(SCI.GOTOLINE, wParam: UInt(line0))
+        let position = view.message(SCI.POSITIONFROMLINE,
+                                    wParam: UInt(line0))
+        view.message(SCI.SETSEL,
+                     wParam: UInt(bitPattern: Int(position)),
+                     lParam: Int(position))
+        view.message(SCI.SCROLLCARET)
+    }
+
+    private func clampedLine0(_ line1: Int, in view: ScintillaView) -> Int {
+        let lineCount = max(1, Int(view.message(SCI.GETLINECOUNT)))
+        return min(max(0, line1 - 1), lineCount - 1)
     }
 }

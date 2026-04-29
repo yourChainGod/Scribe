@@ -53,6 +53,10 @@ final class GitBlameEngine: ObservableObject {
     /// `request(for:)` or stay quiet.
     @Published private(set) var blameByURL: [URL: [Int: GitClient.BlameLine]] = [:]
 
+    /// Per-URL current git author name (`git config user.name`).
+    /// Used only for presentation ("You" instead of the raw author).
+    private var currentAuthorByURL: [URL: String] = [:]
+
     /// URLs currently being blamed. A second request for the
     /// same URL while one is already in flight collapses to a
     /// no-op, so a tab-switch storm doesn't fan out into
@@ -83,8 +87,12 @@ final class GitBlameEngine: ObservableObject {
         if inFlight.contains(key)  { return }      // already running
         inFlight.insert(key)
         Task.detached(priority: .userInitiated) { [weak self] in
+            let repo = GitClient.findRepoRoot(for: key)
+            let currentAuthor = repo.flatMap { GitClient.currentUserName(repo: $0) }
             let result = GitClient.blame(file: key)
-            await self?.handleResult(url: key, result: result)
+            await self?.handleResult(url: key,
+                                     result: result,
+                                     currentAuthorName: currentAuthor)
         }
     }
 
@@ -105,6 +113,7 @@ final class GitBlameEngine: ObservableObject {
         guard let url else { return }
         let key = url.standardizedFileURL
         blameByURL[key] = nil
+        currentAuthorByURL[key] = nil
     }
 
     /// Drop every cache entry. Used when the workspace switches
@@ -119,6 +128,7 @@ final class GitBlameEngine: ObservableObject {
     /// shell-out's CPU instead of using the result.
     func invalidateAll() {
         blameByURL = [:]
+        currentAuthorByURL = [:]
     }
 
     /// Read cached blame for one line. Returns nil if either no
@@ -128,6 +138,16 @@ final class GitBlameEngine: ObservableObject {
     func blameLine(for url: URL?, line lineNo: Int) -> GitClient.BlameLine? {
         guard let url else { return nil }
         return blameByURL[url.standardizedFileURL]?[lineNo]
+    }
+
+    func blameLines(for url: URL?) -> [Int: GitClient.BlameLine]? {
+        guard let url else { return nil }
+        return blameByURL[url.standardizedFileURL]
+    }
+
+    func currentAuthorName(for url: URL?) -> String? {
+        guard let url else { return nil }
+        return currentAuthorByURL[url.standardizedFileURL]
     }
 
     // MARK: - Private
@@ -142,8 +162,10 @@ final class GitBlameEngine: ObservableObject {
     /// in the cache; this mirrors GitStatusEngine's policy of not
     /// blanking the sidebar on a flaky git call.
     private func handleResult(url: URL,
-                              result: GitClient.BlameResult) {
+                              result: GitClient.BlameResult,
+                              currentAuthorName: String?) {
         inFlight.remove(url)
+        currentAuthorByURL[url] = currentAuthorName
         switch result {
         case .ok(let lines):
             var map: [Int: GitClient.BlameLine] = [:]

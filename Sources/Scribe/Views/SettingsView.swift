@@ -78,7 +78,7 @@ private struct EditorSettingsPane: View {
                     Stepper(value: $prefs.fontSize,
                             in: EditorPreferences.fontSizeMin...EditorPreferences.fontSizeMax,
                             step: 1) {
-                        Text("\(Int(prefs.fontSize)) pt")
+                        Text(SettingsPresentation.fontSizeSummary(points: Int(prefs.fontSize)))
                             .monospacedDigit()
                             .frame(minWidth: 48, alignment: .trailing)
                     }
@@ -93,7 +93,7 @@ private struct EditorSettingsPane: View {
                     Spacer()
                     Stepper(value: $prefs.tabWidth,
                             in: EditorPreferences.tabWidthMin...EditorPreferences.tabWidthMax) {
-                        Text("\(prefs.tabWidth) spaces")
+                        Text(SettingsPresentation.tabWidthSummary(spaces: prefs.tabWidth))
                             .monospacedDigit()
                             .frame(minWidth: 80, alignment: .trailing)
                     }
@@ -106,8 +106,29 @@ private struct EditorSettingsPane: View {
             }
 
             Section {
+                Picker(selection: $prefs.inlineBlameMode) {
+                    ForEach(InlineBlameMode.allCases) { mode in
+                        Text(LocalizedStringKey(mode.titleKey), bundle: .module)
+                            .tag(mode)
+                    }
+                } label: {
+                    Text("settings.inlineBlame.mode", bundle: .module)
+                }
+                .pickerStyle(.segmented)
+            } header: {
+                Text("settings.inlineBlame.section", bundle: .module)
+            } footer: {
+                Text("settings.inlineBlame.footer", bundle: .module)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
                 HStack {
-                    Text("\(prefs.recentFiles.count) remembered (max \(EditorPreferences.recentFilesMax))")
+                    Text(SettingsPresentation.recentFilesSummary(
+                        count: prefs.recentFiles.count,
+                        maxCount: EditorPreferences.recentFilesMax
+                    ))
                         .foregroundStyle(.secondary)
                     Spacer()
                     Button {
@@ -144,18 +165,36 @@ private struct AppearanceSettingsPane: View {
     var body: some View {
         Form {
             Section {
-                // Picker presents every ThemeID. The .system entry
-                // resolves at render-time against the current
-                // NSAppearance so flipping macOS dark mode doesn't
-                // require re-picking.
-                Picker(selection: $prefs.themeID) {
+                // Phase 36 — global UI theme. Drives sidebar /
+                // status bar / panel chrome via `\.appTheme`.
+                Picker(selection: $prefs.uiThemeID) {
                     ForEach(ThemeID.allCases) { id in
                         Text(id.displayName).tag(id)
                     }
                 } label: {
-                    Text("settings.appearance.theme", bundle: .module)
+                    Text("settings.appearance.ui.title", bundle: .module)
                 }
                 .pickerStyle(.menu)
+
+                // Toggle decouples the editor from the UI theme.
+                // Default: on (one theme drives everything).
+                Toggle(isOn: $prefs.editorFollowsUITheme) {
+                    Text("settings.appearance.editor.follow", bundle: .module)
+                }
+
+                // Editor-specific picker. Writes only to
+                // `editorThemeID`; when "follow" is on the picker is
+                // disabled and shows the UI theme instead, so users
+                // see what's actually painting the editor.
+                Picker(selection: editorThemeBinding) {
+                    ForEach(ThemeID.allCases) { id in
+                        Text(id.displayName).tag(id)
+                    }
+                } label: {
+                    Text("settings.appearance.editor.title", bundle: .module)
+                }
+                .pickerStyle(.menu)
+                .disabled(prefs.editorFollowsUITheme)
             } header: {
                 Text("settings.appearance.section.theme", bundle: .module)
             } footer: {
@@ -164,13 +203,22 @@ private struct AppearanceSettingsPane: View {
                     .foregroundStyle(.secondary)
             }
 
-            // Live preview swatch. Confirms the picked theme's
-            // colours without forcing the user to flip back to
-            // the editor.
+            // Live preview: sidebar mock (left) + editor mock (right).
+            // Both update on any of: uiThemeID change, editorThemeID
+            // change, follow toggle, or system Light/Dark flip.
+            // Phase 39b — overrides are applied here too so the
+            // preview matches what ThemeHost / Coordinator+Theme
+            // will paint once the user closes Settings.
             Section {
-                ThemePreviewSwatch(theme: prefs.themeID
-                                    .resolve(appearance: NSApp.effectiveAppearance))
-                    .frame(height: 110)
+                ThemePreviewSwatch(
+                    uiTheme: prefs.uiThemeID
+                        .resolve(appearance: NSApp.effectiveAppearance)
+                        .applying(prefs.overrides(for: prefs.uiThemeID)),
+                    editorTheme: prefs.effectiveEditorThemeID
+                        .resolve(appearance: NSApp.effectiveAppearance)
+                        .applying(prefs.overrides(for: prefs.effectiveEditorThemeID))
+                )
+                    .frame(height: 140)
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -180,28 +228,277 @@ private struct AppearanceSettingsPane: View {
             } header: {
                 Text("settings.appearance.preview", bundle: .module)
             }
+
+            // Phase 39b — per-slot customization. Two collapsed
+            // disclosures: editor (13 syntax/document slots) on
+            // top of UI chrome (11 surface slots). Each slot has
+            // its own ColorPicker + per-slot Reset; section footer
+            // carries the "Reset all colors for this theme" action.
+            ThemeCustomizationSection(prefs: prefs)
         }
         .formStyle(.grouped)
         .padding(.horizontal)
     }
+
+    /// Show `uiThemeID` in the disabled-state picker (so users see
+    /// what's painting), but only ever write to `editorThemeID`.
+    private var editorThemeBinding: Binding<ThemeID> {
+        Binding(
+            get: { prefs.editorFollowsUITheme ? prefs.uiThemeID : prefs.editorThemeID },
+            set: { prefs.editorThemeID = $0 }
+        )
+    }
 }
 
-/// Tiny mock-up of a code editor at the picked theme. Renders four
-/// stylised "lines" using the same colour values the Scintilla
-/// pane would receive. The Theme stores colours as 0xRRGGBB Ints;
-/// we unpack them into SwiftUI Colors here so we don't need to
-/// instantiate a full ScintillaView for the preview.
-private struct ThemePreviewSwatch: View {
-    let theme: Theme
+/// Phase 39b — per-slot color customization for the active theme(s).
+///
+/// Layout: two collapsed `DisclosureGroup`s, one per `SlotCategory`,
+/// each emitting one row per slot (label + ColorPicker + per-slot
+/// reset). A footer row carries the "reset all colors for this
+/// theme" actions.
+///
+/// Routing: when `editorFollowsUITheme = true`, both the editor
+/// AND ui slot rows write into the *same* override map (the UI
+/// theme's), because the editor is just mirroring it. When
+/// decoupled, editor slots target `editorThemeID`'s map and UI
+/// slots target `uiThemeID`'s — the headers spell out which theme
+/// each disclosure is currently editing so the user isn't guessing.
+private struct ThemeCustomizationSection: View {
+    @ObservedObject var prefs: EditorPreferences
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            Color(rgb: theme.background)
+        Section {
+            // Targeted-theme headers — show what each disclosure
+            // is editing into, so the user knows their pink Accent
+            // pick is going into Inkwell vs Daylight (etc.).
             VStack(alignment: .leading, spacing: 4) {
-                row(text: "func greet(name) {", tint: theme.keyword)
-                row(text: "    return \"Hello\"", tint: theme.string)
-                row(text: "    // welcome", tint: theme.comment)
-                row(text: "}", tint: theme.foreground)
+                Text(L10n.t("settings.appearance.customize.editingUI",
+                            prefs.uiThemeID.displayName))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if prefs.editorFollowsUITheme {
+                    Text(L10n.t("settings.appearance.customize.editingEditor",
+                                prefs.uiThemeID.displayName)
+                         + " "
+                         + L10n.t("settings.appearance.customize.followsUI"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text(L10n.t("settings.appearance.customize.editingEditor",
+                                prefs.editorThemeID.displayName))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            DisclosureGroup {
+                ForEach(ThemeSlot.slots(in: .editor), id: \.self) { slot in
+                    SlotRow(prefs: prefs, slot: slot,
+                            themeID: editorTargetID)
+                }
+            } label: {
+                Text("settings.appearance.customize.editor", bundle: .module)
+                    .font(.callout)
+            }
+
+            DisclosureGroup {
+                ForEach(ThemeSlot.slots(in: .ui), id: \.self) { slot in
+                    SlotRow(prefs: prefs, slot: slot,
+                            themeID: uiTargetID)
+                }
+            } label: {
+                Text("settings.appearance.customize.ui", bundle: .module)
+                    .font(.callout)
+            }
+        } header: {
+            Text("settings.appearance.section.customize", bundle: .module)
+        } footer: {
+            HStack {
+                Button {
+                    prefs.clearAllOverrides(uiTargetID)
+                } label: {
+                    Text("settings.appearance.customize.resetAllUI",
+                         bundle: .module)
+                }
+                .disabled(prefs.overrides(for: uiTargetID).isEmpty)
+
+                Spacer()
+
+                Button {
+                    prefs.clearAllOverrides(editorTargetID)
+                } label: {
+                    Text("settings.appearance.customize.resetAllEditor",
+                         bundle: .module)
+                }
+                .disabled(prefs.overrides(for: editorTargetID).isEmpty
+                          || (prefs.editorFollowsUITheme
+                              && editorTargetID == uiTargetID))
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    /// The theme ID whose override map UI-chrome slots should
+    /// write into. Always `uiThemeID`.
+    private var uiTargetID: ThemeID { prefs.uiThemeID }
+
+    /// The theme ID whose override map editor slots should write
+    /// into. Mirrors `effectiveEditorThemeID` so the row matches
+    /// what's actually painted.
+    private var editorTargetID: ThemeID { prefs.effectiveEditorThemeID }
+}
+
+/// One slot row inside a `DisclosureGroup`. Shows the localized
+/// slot name + a SwiftUI `ColorPicker` bound to the *resolved*
+/// colour (override-or-base) + a Reset button visible only when
+/// this slot currently carries an override.
+///
+/// SwiftUI `ColorPicker` is preferred over `NSColorWell` because
+/// (1) it's Swift 6 / Sendable clean, (2) it sidesteps the
+/// `NSColorPanel.shared` cross-well coordination bug, and (3) it
+/// requires zero `NSViewRepresentable` boilerplate.
+private struct SlotRow: View {
+    @ObservedObject var prefs: EditorPreferences
+    let slot: ThemeSlot
+    let themeID: ThemeID
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(LocalizedStringKey(slot.displayKey), bundle: .module)
+                .font(.system(size: 12))
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            ColorPicker("", selection: colorBinding, supportsOpacity: false)
+                .labelsHidden()
+                .frame(width: 44)
+
+            Button {
+                prefs.clearOverride(themeID, slot: slot)
+            } label: {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(.system(size: 11))
+                    .frame(width: 18, height: 18)
+            }
+            .buttonStyle(.borderless)
+            .help(L10n.t("settings.appearance.customize.reset"))
+            .disabled(!hasOverride)
+            .opacity(hasOverride ? 1 : 0.35)
+        }
+        .padding(.vertical, 1)
+    }
+
+    /// True when this slot currently has an override on the active
+    /// target theme. Drives Reset-button visibility/enablement.
+    private var hasOverride: Bool {
+        prefs.overrides(for: themeID).slots[slot] != nil
+    }
+
+    /// Two-way binding between the resolved colour and the
+    /// override map. Reads return overridden value if set, else
+    /// the base theme's value. Writes go through `setOverride`
+    /// which performs copy-mutate-assign so `@Published` fires.
+    private var colorBinding: Binding<Color> {
+        Binding(
+            get: {
+                let appearance = NSApp.effectiveAppearance
+                let base = themeID.resolve(appearance: appearance)
+                let resolved = base.applying(prefs.overrides(for: themeID))
+                return Color(rgb: resolved.value(for: slot))
+            },
+            set: { newColor in
+                guard let rgb = newColor.toRGBInt() else { return }
+                prefs.setOverride(themeID, slot: slot, color: rgb)
+            }
+        )
+    }
+}
+
+/// Phase 39b — `Color` → 0xRRGGBB Int. Returns nil only when the
+/// underlying NSColor refuses to project into sRGB (extremely rare
+/// — most system / P3 colours convert cleanly via `usingColorSpace`).
+/// Caller pattern: `guard let rgb = color.toRGBInt() else { return }`
+/// — silently keep current value rather than write garbage.
+private extension Color {
+    func toRGBInt() -> Int? {
+        let nsColor = NSColor(self)
+        guard let srgb = nsColor.usingColorSpace(.sRGB) else { return nil }
+        let r = Int((srgb.redComponent   * 255).rounded()) & 0xFF
+        let g = Int((srgb.greenComponent * 255).rounded()) & 0xFF
+        let b = Int((srgb.blueComponent  * 255).rounded()) & 0xFF
+        return (r << 16) | (g << 8) | b
+    }
+}
+
+/// Phase 36 — split mock-up: a stylised sidebar (using the UI
+/// theme's `ui*` chrome colours) and a stylised code block (using
+/// the editor theme's syntax colours). Renders both halves at the
+/// same time so the user sees how their two picks combine before
+/// committing. Theme values are 0xRRGGBB Ints; `Color(rgb:)`
+/// (Models/AppTheme.swift) unpacks them.
+private struct ThemePreviewSwatch: View {
+    let uiTheme: Theme
+    let editorTheme: Theme
+
+    var body: some View {
+        HStack(spacing: 0) {
+            sidebarMock
+                .frame(width: 110)
+            editorMock
+        }
+    }
+
+    @ViewBuilder
+    private var sidebarMock: some View {
+        ZStack(alignment: .topLeading) {
+            Color(rgb: uiTheme.uiSidebarBackground)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("settings.appearance.preview.sidebar", bundle: .module)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(Color(rgb: uiTheme.uiSecondaryText))
+                    .padding(.bottom, 2)
+                sidebarRow("Files", selected: false)
+                sidebarRow("greet.swift", selected: true)
+                sidebarRow("README.md", selected: false)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 10)
+        }
+    }
+
+    private func sidebarRow(_ text: String, selected: Bool) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "doc.text")
+                .font(.system(size: 8))
+            Text(text)
+                .font(.system(size: 10))
+            Spacer()
+        }
+        .foregroundStyle(
+            selected
+                ? Color(rgb: uiTheme.uiAccentText)
+                : Color(rgb: uiTheme.uiPrimaryText)
+        )
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(selected ? Color(rgb: uiTheme.uiAccent) : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var editorMock: some View {
+        ZStack(alignment: .topLeading) {
+            Color(rgb: editorTheme.background)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("settings.appearance.preview.editor", bundle: .module)
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(Color(rgb: editorTheme.marginForeground))
+                    .padding(.bottom, 2)
+                row(text: "func greet(name) {", tint: editorTheme.keyword)
+                row(text: "    return \"Hello\"", tint: editorTheme.string)
+                row(text: "    // welcome", tint: editorTheme.comment)
+                row(text: "}", tint: editorTheme.foreground)
+                Spacer(minLength: 0)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
@@ -217,15 +514,8 @@ private struct ThemePreviewSwatch: View {
     }
 }
 
-/// 0xRRGGBB → SwiftUI `Color`. Same byte order Theme uses.
-private extension Color {
-    init(rgb: Int) {
-        let r = Double((rgb >> 16) & 0xFF) / 255
-        let g = Double((rgb >> 8)  & 0xFF) / 255
-        let b = Double( rgb        & 0xFF) / 255
-        self.init(red: r, green: g, blue: b)
-    }
-}
+// `Color(rgb:)` lives in Models/AppTheme.swift now (Phase 36) — every
+// chrome surface needs it, so the helper is internal-scoped.
 
 /// Phase 33 — Snippets settings tab. Two-pane layout: a list of
 /// snippet names on the left, an editor form on the right that

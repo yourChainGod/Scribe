@@ -56,17 +56,20 @@ struct ScribeApp: App {
                 .environmentObject(fileIndex)
                 .environmentObject(outline)
                 .environmentObject(snippets)
+                .themed(prefs: prefs)
                 .frame(minWidth: 900, minHeight: 600)
                 .onAppear(perform: bootstrap)
                 .onChange(of: workspace.documents.map(\.id)) { _, _ in
                     CommandRegistration.refresh(registry: commands,
                                                 workspace: workspace,
-                                                prefs: prefs)
+                                                prefs: prefs,
+                                                findState: findState)
                 }
                 .onChange(of: workspace.selectedID) { _, _ in
                     CommandRegistration.refresh(registry: commands,
                                                 workspace: workspace,
-                                                prefs: prefs)
+                                                prefs: prefs,
+                                                findState: findState)
                     outline.update(for: workspace.current)
                 }
                 .onChange(of: workspace.current?.text) { _, _ in
@@ -75,7 +78,8 @@ struct ScribeApp: App {
                 .onChange(of: prefs.softTabs) { _, _ in
                     CommandRegistration.refresh(registry: commands,
                                                 workspace: workspace,
-                                                prefs: prefs)
+                                                prefs: prefs,
+                                                findState: findState)
                 }
                 .onChange(of: workspace.folderRoot?.url) { _, newRoot in
                     if let newRoot {
@@ -88,8 +92,15 @@ struct ScribeApp: App {
                     workspace.openFile(at: url)
                 }
         }
+        // Phase 38g — file/edit/zoom ops live in the SwiftUI
+        // `.toolbar` (rendered by macOS on the same physical row
+        // as the traffic lights). Sidebar mode tabs + collapse
+        // button stay inside the sidebar's own top row — they're
+        // sidebar controls, not app-level commands. The vertical
+        // splitter between sidebar and detail starts from below
+        // the toolbar and runs uninterrupted to the status bar.
         .windowStyle(.hiddenTitleBar)
-        .windowToolbarStyle(.unified(showsTitle: true))
+        .windowToolbarStyle(.unifiedCompact(showsTitle: false))
         .commands {
             ScribeCommands(workspace: workspace,
                            prefs: prefs,
@@ -106,6 +117,7 @@ struct ScribeApp: App {
             SettingsView()
                 .environmentObject(prefs)
                 .environmentObject(snippets)
+                .themed(prefs: prefs)
         }
     }
 
@@ -116,7 +128,8 @@ struct ScribeApp: App {
     private func bootstrap() {
         CommandRegistration.refresh(registry: commands,
                                     workspace: workspace,
-                                    prefs: prefs)
+                                    prefs: prefs,
+                                    findState: findState)
         // Wire ⌘P's `>` route through to the same registry ⌘⇧P
         // uses, so users can run any palette command without
         // dismissing Quick Open first.

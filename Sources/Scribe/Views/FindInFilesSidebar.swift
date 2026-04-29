@@ -13,6 +13,7 @@ struct FindInFilesSidebar: View {
     let engine: FindInFilesEngine
 
     @FocusState private var queryFocused: Bool
+    @Environment(\.appTheme) private var appTheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -22,7 +23,7 @@ struct FindInFilesSidebar: View {
             Divider()
             results
         }
-        .background(Color(nsColor: .controlBackgroundColor))
+        .background(appTheme.sidebarBackground)
         .onAppear { queryFocused = true }
     }
 
@@ -64,7 +65,7 @@ struct FindInFilesSidebar: View {
                         .font(.system(size: 14))
                         .foregroundStyle(replaceDisabled
                                          ? Color.secondary.opacity(0.5)
-                                         : Color.accentColor)
+                                         : appTheme.accent)
                 }
                 .help(L10n.t("finfiles.button.replaceAll"))
                 .accessibilityLabel(L10n.t("findbar.action.replaceAll"))
@@ -92,7 +93,7 @@ struct FindInFilesSidebar: View {
                         .font(.system(size: 14))
                         .foregroundStyle(searchDisabled
                                          ? Color.secondary.opacity(0.5)
-                                         : Color.accentColor)
+                                         : appTheme.accent)
                 }
                 .buttonStyle(.plain)
                 .help(L10n.t("finfiles.button.runSearch"))
@@ -164,7 +165,7 @@ struct FindInFilesSidebar: View {
             // the user runs another search.
             Text(replaceMsg)
                 .font(.caption)
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(appTheme.accent)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
         } else if find.totalMatches > 0 {
@@ -311,19 +312,7 @@ struct FindInFilesSidebar: View {
                 }
             }
 
-            // Build a human-readable summary string. Errors append a
-            // truncated "+ N more" tail when the list grows.
-            var msg = "Replaced \(summary.totalReplacements) in \(summary.filesChanged)/\(summary.filesScanned) files."
-            if !summary.errors.isEmpty {
-                let head = summary.errors.prefix(2)
-                    .map { "\($0.0.lastPathComponent): \($0.1)" }
-                    .joined(separator: "; ")
-                let tail = summary.errors.count > 2
-                    ? " + \(summary.errors.count - 2) more"
-                    : ""
-                msg += " Errors: \(head)\(tail)."
-            }
-            find.lastReplaceSummary = msg
+            find.lastReplaceSummary = FindInFilesPresentation.replaceSummaryText(summary)
             // Stale results no longer reflect what's on disk; clear them
             // and let the user re-run search to verify.
             find.update(results: [],
@@ -377,12 +366,11 @@ private struct FileGroup: View {
                     set: { _ in toggleSelection() }
                 )) { EmptyView() }
                 .toggleStyle(.checkbox)
-                .help(isSelected
-                      ? "Include in Replace All"
-                      : "Skip during Replace All")
-                .accessibilityLabel(isSelected
-                                    ? "Selected for replace: \(file.url.lastPathComponent)"
-                                    : "Excluded from replace: \(file.url.lastPathComponent)")
+                .help(FindInFilesPresentation.fileToggleHelp(isSelected: isSelected))
+                .accessibilityLabel(FindInFilesPresentation.fileToggleAccessibility(
+                    isSelected: isSelected,
+                    fileName: file.url.lastPathComponent
+                ))
 
                 // Disclosure chevron + filename make up the rest of
                 // the row; tapping anywhere here toggles expansion.
@@ -463,10 +451,11 @@ private struct MatchRow: View {
             )) { EmptyView() }
             .toggleStyle(.checkbox)
             .controlSize(.small)
-            .help(isSelected
-                  ? "Include this match in Replace All"
-                  : "Skip this match during Replace All")
-            .accessibilityLabel("Line \(match.lineNumber) match selected: \(isSelected ? "yes" : "no")")
+            .help(FindInFilesPresentation.matchToggleHelp(isSelected: isSelected))
+            .accessibilityLabel(FindInFilesPresentation.matchToggleAccessibility(
+                lineNumber: match.lineNumber,
+                isSelected: isSelected
+            ))
             .frame(width: 18)
             Text("\(match.lineNumber)")
                 .font(.system(size: 10, design: .monospaced))

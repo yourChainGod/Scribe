@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Scribe app icon v3 — paper-and-pen with small-size legibility.
+  Scribe app icon v4 — paper-and-pen with small-size legibility and
+  a calmer Dock footprint.
   
   v2 worked at 128pt+ but lost the pen entirely at 16pt because
   the pen body sat inside a low-contrast zone (slate-gray on a
@@ -100,12 +101,14 @@
     </filter>
   </defs>
 
-  <!-- Background squircle -->
-  <rect x="48" y="48" width="928" height="928" rx="208" ry="208" fill="url(#bg)"/>
-  <rect x="48" y="48" width="928" height="464" rx="208" ry="208" fill="url(#highlight)"/>
+  <!-- Background squircle. Inset from the full canvas so the Dock
+       silhouette sits at the same perceived scale as Apple's own
+       document-style apps. -->
+  <rect x="86" y="86" width="852" height="852" rx="190" ry="190" fill="url(#bg)"/>
+  <rect x="86" y="86" width="852" height="426" rx="190" ry="190" fill="url(#highlight)"/>
 
   <!-- Paper card, tilted -3 degrees and slightly off-center -->
-  <g transform="translate(490 512) rotate(-3)" filter="url(#paperShadow)">
+  <g transform="translate(500 512) rotate(-3) scale(0.90)" filter="url(#paperShadow)">
     <rect x="-300" y="-360" width="600" height="720" rx="36" ry="36" fill="url(#paper)"/>
 
     <!-- Heading -->
@@ -132,7 +135,7 @@
   <!-- Pen, rotated 22 degrees, tail extending past the paper edge.
        Position chosen so the pen crosses the bottom-right corner of
        the paper so it reads as "writing on the page". -->
-  <g transform="translate(640 720) rotate(22)" filter="url(#penShadow)">
+  <g transform="translate(636 704) rotate(22) scale(0.90)" filter="url(#penShadow)">
     <!-- Body -->
     <rect x="-340" y="-26" width="380" height="52" rx="12" ry="12" fill="url(#penBody)"/>
     <!-- Body highlight strip (top half) -->

@@ -58,15 +58,18 @@ struct ScribeCommands: Commands {
             // Phase 15 — theme picker. Sub-menu so the View root
             // doesn't grow long; checkmark on the active item works
             // because the prefs object is observed by the host scene.
+            // Phase 36 — drives the global UI theme. The editor
+            // follows by default (toggle in Settings > Appearance to
+            // decouple).
             Menu {
                 ForEach(ThemeID.allCases) { id in
                     Button {
-                        prefs.themeID = id
+                        prefs.uiThemeID = id
                     } label: {
                         // Leading checkmark by way of label —
                         // SwiftUI's Menu doesn't natively expose a
                         // "checked" state on plain Buttons.
-                        if prefs.themeID == id {
+                        if prefs.uiThemeID == id {
                             Label(id.displayName, systemImage: "checkmark")
                         } else {
                             Text(id.displayName)
@@ -83,7 +86,7 @@ struct ScribeCommands: Commands {
             // the active document isn't markdown so the user gets a
             // clear cue that it does nothing for, say, a .swift file.
             Button {
-                workspace.current?.isMarkdownPreviewVisible.toggle()
+                workspace.toggleMarkdownPreview()
             } label: {
                 if workspace.current?.isMarkdownPreviewVisible == true {
                     Label(L10n.t("menu.view.markdownPreview"),
@@ -93,7 +96,7 @@ struct ScribeCommands: Commands {
                 }
             }
             .keyboardShortcut("v", modifiers: [.command, .shift])
-            .disabled(workspace.current?.isMarkdown != true)
+            .disabled(!workspace.canToggleMarkdownPreview)
         }
 
         // — Go menu —
@@ -121,6 +124,22 @@ struct ScribeCommands: Commands {
 
         // — Tools menu —
         CommandMenu(Text("menu.tools", bundle: .module)) {
+            Button {
+                workspace.isTextToolsPresented = true
+            } label: {
+                Text("menu.tools.textTools", bundle: .module)
+            }
+            .disabled(workspace.current == nil)
+
+            Menu {
+                TextTransformCommandButtons(findState: findState)
+            } label: {
+                Text("menu.tools.transformSelection", bundle: .module)
+            }
+            .disabled(workspace.current == nil)
+
+            Divider()
+
             Button {
                 let session = DiffSession()
                 session.chooseAndCompare()

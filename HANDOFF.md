@@ -1,8 +1,8 @@
 # Scribe 交接文档
 
-> **Last session**: 2026-04-28（接力第二夜，Phase 1.7a 落地）
-> **Phase reached**: 1.7a (ScintillaView 在 GUI 真实渲染，单向数据流通)
-> **Status**: ✅ 可双击运行 · ✅ 编码/行尾全支持 · ✅ Scintilla 真上屏（SCRIBE_USE_SCINTILLA=1 + SCRIBE_AUTO_OPEN）· 🔜 下次反向同步 + 主题/光标/软 Tab
+> **Last session**: 2026-04-30（Phase 39 主题重铸 + 24 槽自定义覆写落地）
+> **Phase reached**: 39b (macOS-native palette + per-theme color overrides)
+> **Status**: ✅ 6 套 macOS-原生主题（Daylight / Graphite Light / Sand / Inkwell / Graphite Dark / Midnight）· ✅ 24 槽 per-theme 覆写 · ✅ Settings → Appearance live ColorPicker + Reset · ✅ 旧 Dracula/Monokai/Solarized/GitHub raw 值通过 `legacyThemeAlias` 迁移 · ✅ 411/411 测试 · 🔜 下次：未提交 Phase 36/37/39 工作树批量审 + 视觉烟测
 
 ## 0. 这一夜的接力记录（2026-04-28）
 
@@ -583,14 +583,25 @@ Task { @MainActor [weak self] in
    开关 (off / cur-line / all-lines) + author "You" 替换 +
    hover tooltip 出 commit summary + per-theme grey + Merge
    Conflict Accept/Reject 按钮。
-7. **LargeFile v3 (Phase 34d+)**：中途 cancel save UX、external-
+7. **UI polish v2 (Phase 36d+)**：36a 收掉侧栏 mode switcher、
+   Source Control 行层级、commit panel 与 status capsule；36b
+   补齐 Markdown Preview toolbar / context menu / Command Palette
+   入口；36c 去掉重复 sidebar toolbar button；36d 开始统一
+   Command Palette / Quick Open row presentation（icon slot +
+   title/detail + right badge，Quick Open 已打开文件改用 localized
+   `palette.badge.open` badge，不再在标题前加 `●`），补齐 palette
+   commands / badges / prefix-route placeholders / symbol kind 的
+   en + zh-Hans 本地化（324 → 389 keys），并修复 palette panel 的
+   `.nonactivatingPanel` 生命周期问题，让菜单 / 测试钩子打开后能
+   保持 key-window focus。
+8. **LargeFile v3 (Phase 34d+)**：中途 cancel save UX、external-
    change 大文件 mtime+size diff、SymbolOutline / Markdown
    preview 读大文件 buffer。Phase 34a/34b/34c 交付了加载 +
    chunked save + OOM 护栏。
-8. **CLI shim v2 (Phase 35d+)**：IPC fifo 让 `--wait` 不再冷启
+9. **CLI shim v2 (Phase 35d+)**：IPC fifo 让 `--wait` 不再冷启
    动、bash/zsh completion script、brew formula。Phase 35a 交付
    了 v1 wrapper。
-9. **Phase 35+ 路线**：见 ROADMAP "Phase 35+ 路线展望"（Document
+10. **Phase 36+ 路线**：见 ROADMAP "Phase 36+ 路线展望"（Document
    Map / Snippets v2 / Markdown v3 / HEX View / Sparkle）。
 
 ---
@@ -602,11 +613,11 @@ Scribe 已从 0 长到 v1.0-rc ——
 SwiftUI Scene + Scintilla 5.6.1 + 8 主题 + 多光标 + 列选 + 全 i18n（en/zh-Hans）·
 Markdown 实时预览（手写转换器 + GFM 表格·task list·footnote + WKWebView）+ Git Gutter（unified-diff parser + Scintilla margin + ⌥⇧↑/↓ hunk 跳转） + Source Control 侧栏（`git status` 读面 · 分段显示 · hover 出 stage/unstage/discard · 行前 chevron 展开 hunk 列表 hover [+]/[-] · 行右键「在 Project Diff 中打开」跳 multibuffer 定位 · 底部 commit 面板 ⌘⏎ + Amend toggle · branch 名 Menu picker（Local/Remote + ✓ + auto-track）· 顶部 ahead/behind capsule + Project Diff multibuffer 入口 + fetch/pull/push 3 按钮 · push 右键出 force-with-lease · pull `--ff-only` 默认) + Project Diff 全工作区视图（read-only excerpts + per-hunk Stage/Unstage/Revert · 文件级 Stage All/Unstage All · Open File 跳转 · ScrollViewReader 自动定位 · ⌘F 跨文件 substring search + 黄色匹配高亮 · ⌘G/⇧⌘G 行级 next/prev 跳转 + 当前匹配橙色 + "k of N" 计数 · Done/ESC 关闭） + 代码片段（⌘⇧T 选择器 + Settings 管理 tab） + 大文件 IO（≥ 64 MiB 走 SCI_CREATELOADER/GETTEXTRANGEFULL 分块 + atomic rename + OOM 护栏） + scribe CLI shim（对齐 zed/code/subl），零依赖·
 开 20 MB 文件主线程不卡 · 50 MB typing 不卡（50 ms debounce）·
-Swift 6 strict 0/0 · 323 tests + 4 perf budget · ScintillaCodeEditor.swift
+Swift 6 strict 0/0 · 346 tests + 4 perf budget · ScintillaCodeEditor.swift
 1083 → 385 行 · .app 双击即用 · CI workflow（账单暂停中、`gh workflow disable CI` ）· 4 道闸本地 discipline ·
 README/ROADMAP/HANDOFF 同步到位。
 
-下一拍：Phase 35c-iii (Inline Blame Settings 开关 + author "You" + hover tooltip + Merge Conflict Accept/Reject) 或 35b-4-g (in-place / submodule / 流式 load) 或换主线 (LargeFile v3 / CLI v2 / Document Map / v1.0-rc DMG …)。
+下一拍：Phase 36e / 35b-4-g (Project Diff in-place / submodule / 流式 load)，或继续 Phase 36f UI polish (Settings / Project Diff chrome)，或换主线 (LargeFile v3 / CLI v2 / Document Map / v1.0-rc DMG …)。
 ```
 
 ---

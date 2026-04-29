@@ -29,6 +29,12 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertEqual(ws.activeSelection, "foo bar")
     }
 
+    func test_activeTextSelection_storesFullMultiLineSelection() {
+        let ws = makeWorkspace()
+        ws.activeTextSelection = "first\nsecond\nthird"
+        XCTAssertEqual(ws.activeTextSelection, "first\nsecond\nthird")
+    }
+
     func test_activeSelection_isNotPublishedSoNoChurn() {
         // We assert this by reading via direct access without
         // observing — if the field were @Published and SwiftUI
@@ -58,5 +64,51 @@ final class WorkspaceSelectionTests: XCTestCase {
         ws.activeSelection = ""
         XCTAssertTrue(ws.activeSelection.isEmpty,
                       "deselecting in the editor should clear the cached query")
+    }
+
+    func test_externalChangePromptReloadAppliesDecodedDiskContent() {
+        let ws = makeWorkspace()
+        let doc = Document(title: "README.md", text: "local", url: URL(fileURLWithPath: "/tmp/README.md"))
+        doc.isDirty = true
+        ws.documents = [doc]
+        ws.selectedID = doc.id
+
+        let prompt = ExternalChangePrompt(
+            documentID: doc.id,
+            title: doc.title,
+            decoded: DetectedTextFormat(encoding: .utf8,
+                                        lineEnding: .lf,
+                                        text: "disk")
+        )
+        ws.externalChangePrompt = prompt
+
+        ws.resolveExternalChange(prompt, reloadFromDisk: true)
+
+        XCTAssertNil(ws.externalChangePrompt)
+        XCTAssertEqual(doc.text, "disk")
+        XCTAssertFalse(doc.isDirty)
+    }
+
+    func test_externalChangePromptKeepLeavesDirtyBufferUntouched() {
+        let ws = makeWorkspace()
+        let doc = Document(title: "README.md", text: "local", url: URL(fileURLWithPath: "/tmp/README.md"))
+        doc.isDirty = true
+        ws.documents = [doc]
+        ws.selectedID = doc.id
+
+        let prompt = ExternalChangePrompt(
+            documentID: doc.id,
+            title: doc.title,
+            decoded: DetectedTextFormat(encoding: .utf8,
+                                        lineEnding: .lf,
+                                        text: "disk")
+        )
+        ws.externalChangePrompt = prompt
+
+        ws.resolveExternalChange(prompt, reloadFromDisk: false)
+
+        XCTAssertNil(ws.externalChangePrompt)
+        XCTAssertEqual(doc.text, "local")
+        XCTAssertTrue(doc.isDirty)
     }
 }
