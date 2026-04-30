@@ -177,6 +177,34 @@ struct MainWindow: View {
             }
             .environment(\.appTheme, appTheme)
         }
+        // Phase 41b — Password generator sheet. `onInsert` funnels
+        // through the editor's snippet channel so the inserted
+        // password lands at every active caret (multi-cursor aware).
+        .sheet(item: $workspace.passwordSheet) { request in
+            PasswordGeneratorSheet(
+                request: request,
+                onInsert: { generated in
+                    findState.commands.send(.insertSnippet(generated))
+                    workspace.passwordSheet = nil
+                },
+                onClose: { workspace.passwordSheet = nil }
+            )
+            .environment(\.appTheme, appTheme)
+        }
+        // Phase 41b — QR ASCII sheet. Same insertion path as the
+        // password sheet so multi-cursor receivers all get the same
+        // QR block.
+        .sheet(item: $workspace.qrSheet) { request in
+            QRCodeGeneratorSheet(
+                request: request,
+                onInsert: { ascii in
+                    findState.commands.send(.insertSnippet(ascii))
+                    workspace.qrSheet = nil
+                },
+                onClose: { workspace.qrSheet = nil }
+            )
+            .environment(\.appTheme, appTheme)
+        }
     }
 
     /// Sidebar column's header row — 4 mode tabs on the leading

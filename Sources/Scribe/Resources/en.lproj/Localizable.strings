@@ -771,3 +771,49 @@
 "menu.view.colorSwatch.hide" = "Hide Inline Color Swatches";
 "palette.command.colorSwatch.show" = "Show Inline Color Swatches";
 "palette.command.colorSwatch.hide" = "Hide Inline Color Swatches";
+
+// Phase 41b — Generator Pack (UUID / Lorem / Password / Timestamp / QR)
+"generator.menu"        = "Generate";
+"generator.uuid"        = "UUID v4";
+"generator.lorem.menu"  = "Lorem ipsum";
+"generator.lorem.short"     = "Short (10 words)";
+"generator.lorem.paragraph" = "Paragraph (50 words)";
+"generator.lorem.long"      = "Long (100 words)";
+"generator.password.menu"   = "Password…";
+"generator.password.title"  = "Generate Password";
+"generator.password.length" = "Length";
+"generator.password.lowercase" = "Lowercase letters";
+"generator.password.uppercase" = "Uppercase letters";
+"generator.password.digits"    = "Digits";
+"generator.password.symbols"   = "Symbols";
+"generator.password.preview"   = "Preview";
+"generator.password.regenerate" = "Regenerate";
+"generator.password.insert"    = "Insert";
+"generator.timestamp.menu"     = "Timestamp";
+"generator.timestamp.iso8601"  = "ISO 8601 (with millis)";
+"generator.timestamp.iso8601Compact" = "ISO 8601 (compact)";
+"generator.timestamp.unixSeconds"    = "Unix seconds";
+"generator.timestamp.unixMillis"     = "Unix milliseconds";
+"generator.timestamp.rfc2822"  = "RFC 2822";
+"generator.timestamp.date"     = "yyyy-MM-dd";
+"generator.timestamp.dateTime" = "yyyy-MM-dd HH:mm:ss";
+"generator.qr.menu"  = "QR Code…";
+"generator.qr.title" = "Generate QR Code";
+"generator.qr.payload" = "Payload";
+"generator.qr.regenerate" = "Regenerate";
+"generator.qr.insert"  = "Insert";
+
+// Palette — generators
+"palette.command.generator.uuid"            = "Generate UUID v4";
+"palette.command.generator.lorem.short"     = "Generate Lorem (10 words)";
+"palette.command.generator.lorem.paragraph" = "Generate Lorem (paragraph)";
+"palette.command.generator.lorem.long"      = "Generate Lorem (100 words)";
+"palette.command.generator.timestamp.iso"        = "Insert Timestamp (ISO 8601)";
+"palette.command.generator.timestamp.isoCompact" = "Insert Timestamp (ISO compact)";
+"palette.command.generator.timestamp.unixS"      = "Insert Timestamp (Unix s)";
+"palette.command.generator.timestamp.unixMs"     = "Insert Timestamp (Unix ms)";
+"palette.command.generator.timestamp.rfc"        = "Insert Timestamp (RFC 2822)";
+"palette.command.generator.timestamp.date"       = "Insert Date (yyyy-MM-dd)";
+"palette.command.generator.timestamp.dateTime"   = "Insert Date+Time";
+"palette.command.generator.password" = "Generate Password…";
+"palette.command.generator.qr"       = "Generate QR Code…";

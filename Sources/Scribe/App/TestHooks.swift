@@ -62,6 +62,61 @@ enum TestHooks {
         runJWTSheet(env: env, ctx: ctx)
         runLineOp(env: env, ctx: ctx)
         runFormat(env: env, ctx: ctx)
+        runGenerate(env: env, ctx: ctx)
+    }
+
+    // MARK: Phase 41b — Generator pack smoke
+
+    /// SCRIBE_TEST_GENERATE = "<id>" inserts the named generator's
+    /// output at the active caret a moment after launch. Used by
+    /// the screenshot script to confirm the snippet channel is
+    /// wired and the inserted text lands in Scintilla without
+    /// going through SwiftUI's menu — menu bar click via System
+    /// Events is fragile across system locales.
+    /// Supported ids: uuid, lorem, lorem.long, ts.iso, ts.unixS,
+    /// ts.date, ts.dateTime.
+    /// `qr.<payload>` triggers the QR ASCII generator with the
+    /// suffix string as the payload, e.g.
+    /// `qr.https://scribe.example/`.
+    /// `pwd.<length>` generates a password of the given length
+    /// with all four character classes.
+    private static func runGenerate(env: [String: String],
+                                    ctx: TestHookContext) {
+        guard let raw = env["SCRIBE_TEST_GENERATE"], !raw.isEmpty else { return }
+        let text: String
+        switch raw {
+        case "uuid":
+            text = Generators.uuidV4()
+        case "lorem":
+            text = Generators.lorem(wordCount: 50)
+        case "lorem.long":
+            text = Generators.lorem(wordCount: 100)
+        case "ts.iso":
+            text = Generators.timestamp(format: .iso8601)
+        case "ts.unixS":
+            text = Generators.timestamp(format: .unixSeconds)
+        case "ts.date":
+            text = Generators.timestamp(format: .yyyymmdd)
+        case "ts.dateTime":
+            text = Generators.timestamp(format: .yyyymmddHHMMSS)
+        default:
+            if raw.hasPrefix("qr.") {
+                let payload = String(raw.dropFirst(3))
+                guard let ascii = try? Generators.qrASCII(payload: payload) else { return }
+                text = ascii
+            } else if raw.hasPrefix("pwd.") {
+                var opts = Generators.PasswordOptions()
+                opts.length = Int(raw.dropFirst(4)) ?? 16
+                opts.includeSymbols = true
+                guard let pwd = try? Generators.password(options: opts) else { return }
+                text = pwd
+            } else {
+                return
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            ctx.findState.commands.send(.insertSnippet(text))
+        }
     }
 
     // MARK: Phase 41c — Format / Minify smoke

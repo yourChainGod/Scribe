@@ -311,6 +311,80 @@ enum CommandRegistration {
             ("text.format.sql.minify", "palette.command.format.sql.minify", .minifySQL,
              ["format", "minify", "sql", "query"]),
         ]
+
+        // Phase 41b — Generator pack. UUID / Lorem / Timestamp
+        // insert immediately; Password / QR live as separate
+        // palette entries that pop their respective sheets via
+        // the workspace state. Done as plain commands (not via
+        // textCommands' TextTransformAction list) because the
+        // dispatch shape is "insert literal" rather than
+        // "transform selection".
+        let now = Date()
+        let snippetSpecs: [(id: String, titleKey: String,
+                            generate: () -> String,
+                            keywords: [String])] = [
+            ("text.gen.uuid", "palette.command.generator.uuid",
+             { Generators.uuidV4() },
+             ["uuid", "guid", "generate", "id"]),
+            ("text.gen.lorem.short", "palette.command.generator.lorem.short",
+             { Generators.lorem(wordCount: 10) },
+             ["lorem", "ipsum", "placeholder", "fill", "短", "占位"]),
+            ("text.gen.lorem.paragraph", "palette.command.generator.lorem.paragraph",
+             { Generators.lorem(wordCount: 50) },
+             ["lorem", "ipsum", "placeholder", "paragraph"]),
+            ("text.gen.lorem.long", "palette.command.generator.lorem.long",
+             { Generators.lorem(wordCount: 100) },
+             ["lorem", "ipsum", "placeholder", "long"]),
+            ("text.gen.ts.iso", "palette.command.generator.timestamp.iso",
+             { Generators.timestamp(format: .iso8601, now: now) },
+             ["timestamp", "iso8601", "now", "时间戳"]),
+            ("text.gen.ts.isoCompact", "palette.command.generator.timestamp.isoCompact",
+             { Generators.timestamp(format: .iso8601Compact, now: now) },
+             ["timestamp", "iso", "compact"]),
+            ("text.gen.ts.unixS", "palette.command.generator.timestamp.unixS",
+             { Generators.timestamp(format: .unixSeconds, now: now) },
+             ["timestamp", "unix", "epoch", "seconds"]),
+            ("text.gen.ts.unixMs", "palette.command.generator.timestamp.unixMs",
+             { Generators.timestamp(format: .unixMillis, now: now) },
+             ["timestamp", "unix", "epoch", "millis"]),
+            ("text.gen.ts.rfc", "palette.command.generator.timestamp.rfc",
+             { Generators.timestamp(format: .rfc2822, now: now) },
+             ["timestamp", "rfc2822", "email"]),
+            ("text.gen.ts.date", "palette.command.generator.timestamp.date",
+             { Generators.timestamp(format: .yyyymmdd, now: now) },
+             ["timestamp", "date", "yyyy"]),
+            ("text.gen.ts.dateTime", "palette.command.generator.timestamp.dateTime",
+             { Generators.timestamp(format: .yyyymmddHHMMSS, now: now) },
+             ["timestamp", "datetime"]),
+        ]
+        commands.append(contentsOf: snippetSpecs.map { spec in
+            ScribeCommand(id: spec.id,
+                          title: localize(spec.titleKey),
+                          subtitle: localize("palette.badge.text"),
+                          keywords: spec.keywords) {
+                findState.commands.send(.insertSnippet(spec.generate()))
+            }
+        })
+
+        // Sheet-bound generators — split out so the cap-on-now()
+        // logic above stays clean. Capture `workspace` directly
+        // (already in scope as a function arg).
+        commands.append(ScribeCommand(
+            id: "text.gen.password",
+            title: localize("palette.command.generator.password"),
+            subtitle: localize("palette.badge.text"),
+            keywords: ["password", "generate", "random", "密码"]) {
+            workspace.passwordSheet = PasswordSheetRequest()
+        })
+        commands.append(ScribeCommand(
+            id: "text.gen.qr",
+            title: localize("palette.command.generator.qr"),
+            subtitle: localize("palette.badge.text"),
+            keywords: ["qr", "qrcode", "二维码"]) {
+            let prefill = workspace.activeTextSelection
+            workspace.qrSheet = QRSheetRequest(prefill: prefill)
+        })
+
         commands.append(contentsOf: lineOpSpecs.map { spec in
             ScribeCommand(id: spec.id,
                           title: localize(spec.titleKey),

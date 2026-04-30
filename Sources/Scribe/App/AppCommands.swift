@@ -207,6 +207,17 @@ struct ScribeCommands: Commands {
             }
             .disabled(workspace.current == nil)
 
+            // Phase 41b — Generator pack (UUID / Lorem / Password /
+            // Timestamp / QR). Inserts at every active caret via the
+            // snippet channel; Password / QR raise sheets first
+            // because they take parameters.
+            Menu {
+                GenerateCommandButtons(findState: findState, workspace: workspace)
+            } label: {
+                Text("generator.menu", bundle: .module)
+            }
+            .disabled(workspace.current == nil)
+
             Divider()
 
             Button {

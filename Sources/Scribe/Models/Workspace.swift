@@ -68,6 +68,11 @@ final class Workspace: ObservableObject {
     /// pre-filled with the carried text. Bound through MainWindow
     /// via `.sheet(item:)`. Cleared by the sheet's Close action.
     @Published var jwtSheet: JWTSheetRequest?
+    /// Phase 41b — Password / QR generator sheets. Both follow the
+    /// same `Identifiable` payload pattern as `jwtSheet` so SwiftUI
+    /// `.sheet(item:)` can swap presentations cleanly.
+    @Published var passwordSheet: PasswordSheetRequest?
+    @Published var qrSheet: QRSheetRequest?
 
     /// Phase 35b-4-d — repo-relative path the multibuffer should
     /// scroll into view on its next render. Used by the sidebar's
