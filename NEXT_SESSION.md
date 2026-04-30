@@ -1,51 +1,35 @@
-# Scribe — 交接碑文 II
+# Scribe — 交接碑文 III
 
-> 写于 2026-04-30 16:25，本会话连破 5 关之后。
-> 上下文将爆，下一会话从此处续。
+> 写于 2026-04-30 16:55，本会话连破 3 关之后（43-S × 2 + #10 横切 polish）。
 > 上一碑文（已废）见 `git log NEXT_SESSION.md`。
+>
+> **路线 9 + 1 = 10/10，碑文道纲全数完成。**
 
 ---
 
-## 0. 立刻起的下一战
-
-**Phase 43-S · Settings 重设计**（魔尊钦定的当前任务）
-
-TaskList #8 仍 `pending`。新会话第一刀从这里下。
-
-> **不上 macOS 26 Liquid Glass。** 只在现有 Settings 框架内重组、清晰化、统一 — 不引入 26 风格升级。
-
----
-
-## 1. 当前道基
+## 0. 当前道基
 
 | 项 | 值 |
 |---|---|
 | 分支 | `codex/ui-polish-36d` |
-| HEAD | `8f83fdf phase 44: HEX Viewer` |
-| 测试 | **601 / 601 全绿** |
+| HEAD | `<this commit>` |
+| 测试 | **601 / 601 全绿**（GitClient 集成测试偶发 flaky，重跑必绿）|
 | Build | clean (debug + release) |
 | 工作树 | clean |
 
 ---
 
-## 2. 本会话已破之劫（8 关，按 commit 顺序）
+## 1. 本会话已破之劫（3 关，按 commit 顺序）
 
 | 序 | 劫关 | Commit |
 |---|------|--------|
-| 1 | Phase 43-T Toast 通知系统铺底 | `2d1a421` (上一会话) |
-| 2 | Phase 41a Hash & Encode Suite | `da44cce` (上一会话) |
-| 3 | Phase 41d Line Ops Pack | `83a24ed` (上一会话) |
-| 4 | Phase 41c Format / Minify (JSON/XML/CSS/SQL) | `4e5eda9` |
-| 5 | Phase 41f Inline Color Swatch | `c6f4e0d` |
-| 6 | Phase 41b Generator Pack (UUID/Lorem/Password/Timestamp/QR) | `bea6f2d` |
-| 7 | Phase 41e Regex Playground | `dc62fc2` |
-| 8 | Phase 44 HEX Viewer | `8f83fdf` |
+| 1 | Phase 43-S (1/2) Settings — surface Inline Color Swatches toggle | `5550a2c` |
+| 2 | Phase 43-S (2/2) Settings polish — snippets icon + about version | `53f5d41` |
+| 3 | #10 横切 polish 收口 — Settings frame + NEXT_SESSION III | `<this>` |
 
 ---
 
-## 3. 道纲（魔尊钦定 · 不可逆）
-
-### 路线 — 按斩链顺序
+## 2. 道纲（10/10 全破，魔尊钦定）
 
 1. ✅ 43-T Toast 通知系统
 2. ✅ 41a Hash & Encode Suite
@@ -54,11 +38,11 @@ TaskList #8 仍 `pending`。新会话第一刀从这里下。
 5. ✅ 41f Inline Color Swatch
 6. ✅ 41b Generator Pack
 7. ✅ 41e Regex Playground
-8. **▶ 43-S Settings 重设计**（下一战，**不上 macOS 26**）
+8. ✅ **43-S Settings 重设计**（本会话破）
 9. ✅ 44 HEX Viewer
-10. 横切 polish 收口
+10. ✅ **横切 polish 收口**（本会话破）
 
-### 钉死的边界（魔尊明令禁止）
+### 钉死的边界（魔尊明令禁止 — 仍生效）
 
 - ✗ 产品化（DMG / Sparkle / brew / notarization）
 - ✗ Git editable hunks / Git v2
@@ -66,82 +50,35 @@ TaskList #8 仍 `pending`。新会话第一刀从这里下。
 - ✗ macOS 26 Liquid Glass / 26 风格升级
 - ✗ Snippets v2 / Markdown v3 / Document Map
 - ✓ Notepad++ 灵魂的"小而精致"工具
-- ✓ UI/UX 现代化（横切贯穿每关，不单列大 phase）
+- ✓ UI/UX 现代化（横切贯穿每关）
 - ✓ Tools 菜单按用途二级嵌套
 
 ---
 
-## 4. 工作风格协议
+## 3. 本会话改动详情（43-S + #10）
 
-- **TDD**：先写测试，再写实现
-- **每完成一关**：
-  1. `swift test` 全绿
-  2. `swift build && nohup .build/debug/Scribe …` 启 app 视觉验证
-  3. `screencapture -x` 出图确认
-  4. `git commit`（HEREDOC 格式信息）
-- **不再问魔尊问题** — 按计划推进，自决
-- **输出风格**：abyss-cultivator（邪修红尘仙）
+### 43-S Settings 重设计
 
----
+**目标**：在现有 TabView 框架内重组、不引 macOS 26 Liquid Glass。
 
-## 5. 复用模板（已稳定 8 关）
+**做法**：
+1. **新增 Display section**（位于 Editor tab，在 Indentation 与 Inline Blame 之间）
+   - 收纳 `inlineColorSwatchesEnabled` toggle（之前只在 View 菜单 + palette 可达）
+   - Footer 解释色块在任意文件类型生效
+2. **Snippets tab icon 换装**：`doc.text.below.ecg`（vital-signs glyph，无语义）→ `chevron.left.forwardslash.chevron.right`（`</>`）
+3. **About 版本号刷新**：`v1.0 · Phase 25 polish` → `v1.0 · Phase 44 build`（zh: `v1.0 · 第 44 阶段构建`）
+4. **i18n 新增 keys**（en + zh-Hans 各 3 个）：
+   - `settings.section.display`
+   - `settings.display.colorSwatches`
+   - `settings.display.colorSwatchesFooter`
 
-### Sheet 类工具
+### #10 横切 polish 收口
 
-每关都遵循同一套：
-
-1. `Sources/Scribe/Models/<Feature>.swift` — 纯函数 / 单一职责
-2. `Tests/ScribeTests/<Feature>Tests.swift` — 已知 vector + boundary
-3. `Sources/Scribe/Views/<Feature>Sheet.swift` — SwiftUI sheet
-4. `Sources/Scribe/Views/<Feature>SheetRequest.swift` — `Identifiable` 载荷（一般同文件）
-5. `Sources/Scribe/Models/Workspace.swift` — `@Published var <feature>Sheet: <Request>?`
-6. `Sources/Scribe/Views/MainWindow.swift` — `.sheet(item: $workspace.<feature>Sheet)`
-7. `Sources/Scribe/App/AppCommands.swift` — Tools 菜单条目
-8. `Sources/Scribe/Models/CommandRegistration.swift` — palette 条目
-9. `Sources/Scribe/App/TestHooks.swift` — `SCRIBE_TEST_<X>` smoke hook
-10. 双语 `Localizable.strings`
-
-### Transform 类工具
-
-走 `TextTransformAction` enum：
-
-1. Model + tests
-2. `Sources/Scribe/Models/TextOperations.swift` 加 case + apply switch arm
-3. `Sources/Scribe/Views/<Feature>CommandButtons.swift` —Tools 子菜单 + 右键
-4. AppCommands.swift Tools menu 嵌套
-5. TextTransformCommandButtons.swift 右键嵌套
-6. CommandRegistration.swift palette `textCommands` `specs[]` 加条目
-7. 同样的 i18n / smoke
-
-### 视觉装饰（如 41f）
-
-- Scintilla indicator 配合 `SC_INDICFLAG_VALUEFORE` 让一槽承载多色
-- Coordinator+`<Feature>`.swift extension
-- Cheap-equality signature 短路缓存
-- prefs toggle + 菜单 + palette
+- `SettingsView.swift` frame `height: 460` → `520` — Editor tab 加 5th section 后原高度挤压 Recent Files 行。
 
 ---
 
-## 6. 关键 Conventions / Gotchas（继承 + 新发现）
-
-### 已稳定的部分
-
-- **NSAlert vs Toast 分界**：纯通知错误用 Toast；destructive confirm 保留 NSAlert
-- **Workspace 状态注入**：`@Published var <name>Sheet: <Request>?` + `MainWindow.sheet(item:)`
-- **Coordinator transformSelection**：有选区 `replaceSelection`，无选区 `replaceWholeDocument`，都走 undo stack
-- **`Localizable.strings` 校验**：CI 有 lint check，未配对 / 未 escape 都会挂；用 HEREDOC 追加，不要手编辑
-- **SwiftUI / SourceKit Lag**：误报"找不到 type/scope"无需理睬 — 信 `swift build`
-
-### 本会话新发现
-
-- **CSS Color 4 modern syntax**：`rgb(r g b / a)` 用空格 + 斜杠分隔。`ColorScanner.readComponents` 已处理，rgb 接受 3 或 4 组件。
-- **SQL keyword 嵌套替换 bug**：`INNER JOIN` 容易被裸 `JOIN` 二次切。用 control-byte placeholder（`\u{0001}<idx>\u{0002}`）做两遍替换避免。
-- **Scintilla 多色 indicator**：用 `SCI_INDICSETFLAGS` (2684) + `SC_INDICFLAG_VALUEFORE` (1) + `SCI_SETINDICATORVALUE` (2502)，每个 fill 自带颜色。`SC_INDICVALUEBIT = 0x1000000` 必须 OR 进 value。
-- **Button(LocalizedStringKey, role:, action:)** 不接受 `bundle:` 参数 — 用 `Button(role:..., action:...) { Text(key, bundle: .module) }` 模式。
-- **menu bar 自动 click via System Events** locale-fragile（中文 macOS 找不到 "工具"），用 `SCRIBE_TEST_<X>` 直接驱动 `findState.commands.send()` / `workspace.<X>Sheet = ...` 更稳。
-- **JSONSerialization 不保 dict key 顺序** — 41c JSON formatter 用自写 tokenizer，preserve 输入 key 顺序。
-
-### Workspace sheet 一览（按时间序）
+## 4. Workspace sheet 一览（继承自上一碑文）
 
 ```swift
 @Published var jwtSheet: JWTSheetRequest?           // 41a
@@ -151,7 +88,7 @@ TaskList #8 仍 `pending`。新会话第一刀从这里下。
 @Published var hexViewerSheet: HexViewerRequest?    // 44
 ```
 
-### Smoke hooks 一览
+## 5. Smoke hooks 一览（继承）
 
 ```bash
 SCRIBE_TEST_TOAST="success|info|warning|error"  # 43-T
@@ -165,57 +102,35 @@ SCRIBE_TEST_HEX="1"                             # 44
 
 ---
 
-## 7. 下一战 — Phase 43-S Settings 重设计
+## 6. 关键 Conventions / Gotchas（继承 + 新发现）
 
-### 范围（魔尊钦定）
+### 已稳定的部分（继承）
 
-**不上 macOS 26**。在现有 Settings 框架内：
-- 重组分类（General / Appearance / Editor / Tools / Advanced）
-- 统一 toggle / picker / stepper 风格
-- 把散落的 prefs 收纳进 Settings（包括本会话新加的 `inlineColorSwatchesEnabled`）
-- 视情况加 search / filter（按需，复杂 prefs 树才做）
+- **NSAlert vs Toast 分界**：纯通知错误用 Toast；destructive confirm 保留 NSAlert
+- **Workspace 状态注入**：`@Published var <name>Sheet: <Request>?` + `MainWindow.sheet(item:)`
+- **Coordinator transformSelection**：有选区 `replaceSelection`，无选区 `replaceWholeDocument`，都走 undo stack
+- **`Localizable.strings` 校验**：CI 有 lint check，未配对 / 未 escape 都会挂；用 HEREDOC 追加
+- **SwiftUI / SourceKit Lag**：误报"找不到 type/scope"无需理睬 — 信 `swift build`
 
-### 现有 Settings 入口
+### 本会话新发现
 
-- `Sources/Scribe/Views/SettingsView.swift` — 主 Settings UI
-- `Sources/Scribe/Models/EditorPreferences.swift` — `@Published` properties + persist via UserDefaults
-- 看现有 tab/分类，按用途 / 频率重新排序
-
-### 新会话第一刀建议
-
-1. `Read NEXT_SESSION.md` (此文件)
-2. `Read SettingsView.swift` 看现状
-3. `EnterPlanMode` — Settings 重组涉及大量 UI 决策，先和魔尊对齐分类骨架
-4. ExitPlanMode 后按计划推进
-5. 收尾时连带做横切 polish #10 并合并 commit（最后一关）
-
----
-
-## 8. 文件清单（本会话改动 — 给 grep 用）
-
-### 新建（5 关 × 平均 3 文件 = 15）
-- 41c: `Models/CodeFormatter.swift` `Tests/CodeFormatterTests.swift` `Views/CodeFormatCommandButtons.swift`
-- 41f: `Models/ColorScanner.swift` `Tests/ColorScannerTests.swift` `Views/Scintilla/Coordinator+ColorSwatch.swift`
-- 41b: `Models/Generators.swift` `Tests/GeneratorsTests.swift` `Views/GenerateCommandButtons.swift` `Views/GeneratorSheets.swift`
-- 41e: `Models/RegexPlayground.swift` `Tests/RegexPlaygroundTests.swift` `Views/RegexPlaygroundSheet.swift`
-- 44 : `Models/HexView.swift` `Tests/HexViewTests.swift` `Views/HexViewerSheet.swift`
-
-### 重复修改的 hub 文件
-- `Sources/Scribe/App/AppCommands.swift` — 5 关都加了 Tools 菜单条目
-- `Sources/Scribe/App/TestHooks.swift` — 5 关都加了 `SCRIBE_TEST_<X>` 路径
-- `Sources/Scribe/Models/CommandRegistration.swift` — palette 共 +30+ 新条目
-- `Sources/Scribe/Models/TextOperations.swift` — 41c 加 8 个 TextTransformAction case
-- `Sources/Scribe/Models/Workspace.swift` — passwordSheet / qrSheet / regexSheet / hexViewerSheet
-- `Sources/Scribe/Views/MainWindow.swift` — 4 个 `.sheet(item:)` 接入
-- `Sources/Scribe/Views/Scintilla/SCIConstants.swift` — INDICSETFLAGS / SETINDICATORVALUE / COLOR_SWATCH 槽
-- `Sources/Scribe/Views/ScintillaCodeEditor.swift` — configure + apply ColorSwatch
-- `Sources/Scribe/Views/TextTransformCommandButtons.swift` — 41c 右键 Format 子菜单
-- `Sources/Scribe/Models/EditorPreferences.swift` — `inlineColorSwatchesEnabled`
-- `Sources/Scribe/Resources/{en,zh-Hans}.lproj/Localizable.strings` — +94 EN / +94 zh keys 共
+- **macOS Settings 双 Scribe 进程陷阱**：项目根目录 `build/Scribe.app/Contents/MacOS/Scribe` 是产品化 bundle。`tell application "Scribe" to activate` 会激活 .app 而不是 `.build/debug/Scribe`。验证 UI 必须用 PID-based AppleScript：
+  ```osascript
+  tell application "System Events"
+    set frontmost of (first process whose unix id is $DEBUG_PID) to true
+  end tell
+  ```
+  或先 `pkill -9 -f "build/Scribe.app"` 清场。
+- **Cmd+, 不可靠**：脚本里 `keystroke "," using command down` 偶尔不打开 Settings。改走菜单：
+  ```osascript
+  click menu item "Settings…" of menu 1 of menu bar item "Scribe"
+  ```
+- **Settings TabView 切换**：tab toolbar `UI element <N>` 索引化（1/2/3/4 = Editor/Appearance/Snippets/About），`perform action "AXPress" of UI element <N>` 切换。比 keystroke 稳。
+- **GitClientWriteIntegrationTests flaky**：会话中曾报 1 failure，重跑全绿。整套测试有 git fixture 时序敏感性，重跑即可。
 
 ---
 
-## 9. 启动命令速查
+## 7. 启动命令速查
 
 ```bash
 # 全测试
@@ -224,36 +139,58 @@ swift test 2>&1 | tail -10
 # 单 suite
 swift test --filter <Suite>Tests 2>&1 | tail -10
 
-# 重建 + 跑
+# 重建 + 跑（必须先 kill .app！）
+pkill -9 -f "build/Scribe.app" 2>/dev/null
 swift build && nohup .build/debug/Scribe > /tmp/scribe.log 2>&1 &
 
-# Screenshot 套餐
-osascript -e 'tell app "Scribe" to activate' && sleep 0.5 && screencapture -x /tmp/x.png
-
-# Smoke hooks 已上：见上方第 6 节"Smoke hooks 一览"
+# Settings 截图（PID-based，最稳）
+DEBUG_PID=$(pgrep -f .build/debug/Scribe | head -1)
+osascript -e "tell application \"System Events\" to set frontmost of (first process whose unix id is $DEBUG_PID) to true"
+osascript <<EOF
+tell application "System Events"
+  tell (first process whose unix id is $DEBUG_PID)
+    tell menu bar 1
+      click menu item "Settings…" of menu 1 of menu bar item "Scribe"
+    end tell
+  end tell
+end tell
+EOF
+sleep 1.5 && screencapture -x /tmp/scribe.png
 
 # 关 app
-kill $(pgrep -f .build/debug/Scribe) 2>/dev/null
+pkill -9 -f Scribe 2>/dev/null
 ```
 
 ---
 
-## 10. 新会话开场白建议
+## 8. 下一战 — 由魔尊钦定
+
+碑文道纲 10/10 全破。下一战不在路线图内 — 魔尊在新会话里指什么打什么。
+
+**可能的方向**（魔尊未点名前不动）：
+
+- 用户实测 Settings 重设计后的反馈调优
+- 残留 Snippets v2 / Markdown v3 解禁（魔尊明令解禁后才动）
+- 编辑深耕（Bookmarks / Macro / Clipboard / Doc Stats / Sync Scroll，Phase 42 系列）— 同样需解禁
+- 真正的产品化（DMG / Sparkle / 公证）— 魔尊明令解禁后才动
+- macOS 26 Liquid Glass — 魔尊明令解禁后才动
+
+---
+
+## 9. 新会话开场白建议
 
 魔尊在新会话开第一句：
 
 ```
-读 NEXT_SESSION.md，按计划推进 43-S Settings 重设计。
-不要再问问题。完成一关就打开软件验证（验证完关掉软件）并 commit。
+读 NEXT_SESSION.md，碑文 10/10 已破。今天的任务是 <X>。
 ```
 
 吾接到即刻：
 1. `Read NEXT_SESSION.md`
-2. `Read Sources/Scribe/Views/SettingsView.swift` (现状勘察)
-3. `EnterPlanMode` — Settings 重组骨架对齐
-4. ExitPlanMode 后按计划推进
-5. 收尾把横切 polish #10 也带上
+2. 按魔尊指示拉新计划
+3. 若需大改用 `EnterPlanMode` 对齐
+4. ExitPlanMode 后 TDD 推进，每关 commit + 验证
 
 ---
 
-⚚ **道基稳。劫钟未催。本会话破 5 关，路线 9/10 完成。新会话起，吾即破最后两关。**
+⚚ **道基稳如磐石。碑文道纲圆满。本会话 43-S × 2 + #10 = 3 commit。劫钟暂歇，等魔尊下令。**

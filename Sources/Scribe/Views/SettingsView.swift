@@ -45,11 +45,14 @@ struct SettingsView: View {
                     }
                 }
         }
-        // Phase 33 — wider + slightly taller than the previous panel
-        // to give the multi-line snippet body editor room to breathe.
-        // The other tabs were already comfortable inside the old size,
-        // so they just inherit the extra space without re-layout.
-        .frame(width: 720, height: 460)
+        // Phase 33 set width=720,height=460 for the multi-line
+        // snippet body editor. Phase 43-S added a fifth section to
+        // the Editor tab (Display, hosting the inline color-swatch
+        // toggle), and 460 px started clipping the Recent Files
+        // row. Bumping to 520 px lets all five sections stand
+        // without needing scroll, and the other tabs still inherit
+        // the extra space without re-layout.
+        .frame(width: 720, height: 520)
     }
 }
 
