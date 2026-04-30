@@ -636,7 +636,7 @@
 "inlineBlame.author.you"              = "You";
 
 "about.tagline"  = "Native macOS text editor";
-"about.version"  = "v1.0 · Phase 25 polish";
+"about.version"  = "v1.0 · Phase 44 build";
 "about.license"  = "GPL-3.0 · aligned with notepad--";
 
 // MARK: - Diff view

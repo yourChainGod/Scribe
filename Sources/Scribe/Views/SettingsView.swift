@@ -33,7 +33,7 @@ struct SettingsView: View {
                     Label {
                         Text("settings.tab.snippets", bundle: .module)
                     } icon: {
-                        Image(systemName: "doc.text.below.ecg")
+                        Image(systemName: "chevron.left.forwardslash.chevron.right")
                     }
                 }
             AboutPane()

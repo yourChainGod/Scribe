@@ -633,7 +633,7 @@
 "inlineBlame.author.you"              = "你";
 
 "about.tagline"  = "原生 macOS 文本编辑器";
-"about.version"  = "v1.0 · 打磨阶段 (Phase 25)";
+"about.version"  = "v1.0 · 第 44 阶段构建";
 "about.license"  = "GPL-3.0 · 与 notepad-- 对齐";
 
 // MARK: - Diff view
