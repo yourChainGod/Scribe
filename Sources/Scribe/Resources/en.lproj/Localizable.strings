@@ -817,3 +817,24 @@
 "palette.command.generator.timestamp.dateTime"   = "Insert Date+Time";
 "palette.command.generator.password" = "Generate Password…";
 "palette.command.generator.qr"       = "Generate QR Code…";
+
+// Phase 41e — Regex Playground
+"regex.menu"            = "Regex Playground…";
+"regex.sheet.title"     = "Regex Playground";
+"regex.pattern"         = "Pattern";
+"regex.pattern.placeholder" = "e.g.  (\\d+) | [a-z]+@[a-z.]+";
+"regex.flag.caseInsensitive" = "Case insensitive";
+"regex.flag.multiline"  = "Multiline (^/$)";
+"regex.flag.dotAll"     = ". matches newline";
+"regex.flag.allowComments" = "Allow comments";
+"regex.subject"         = "Subject";
+"regex.matches"         = "Matches";
+"regex.matches.none"    = "No matches.";
+"regex.replace.template"  = "Replacement template";
+"regex.replace.placeholder" = "Use $1, $2, $0 for captures";
+"regex.replace.preview" = "Preview";
+"regex.status.matchCount" = "%lld match(es)";
+"button.close"          = "Close";
+
+// Palette — Regex
+"palette.command.regex.playground" = "Open Regex Playground…";

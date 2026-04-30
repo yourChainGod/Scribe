@@ -63,6 +63,21 @@ enum TestHooks {
         runLineOp(env: env, ctx: ctx)
         runFormat(env: env, ctx: ctx)
         runGenerate(env: env, ctx: ctx)
+        runRegexPlayground(env: env, ctx: ctx)
+    }
+
+    // MARK: Phase 41e — Regex Playground smoke
+
+    /// SCRIBE_TEST_REGEX = "<subject>" pops the regex playground
+    /// pre-filled with the supplied subject text. Used by the
+    /// screenshot script to capture the sheet deterministically
+    /// without driving NSAlert / menu-click via System Events.
+    private static func runRegexPlayground(env: [String: String],
+                                           ctx: TestHookContext) {
+        guard let subject = env["SCRIBE_TEST_REGEX"], !subject.isEmpty else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            ctx.workspace.regexSheet = RegexSheetRequest(prefillSubject: subject)
+        }
     }
 
     // MARK: Phase 41b — Generator pack smoke

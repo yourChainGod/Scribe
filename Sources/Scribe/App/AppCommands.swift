@@ -218,6 +218,16 @@ struct ScribeCommands: Commands {
             }
             .disabled(workspace.current == nil)
 
+            // Phase 41e — Regex Playground. Pre-fills with the
+            // current selection if any so iterating on a regex
+            // against real data is one click away.
+            Button {
+                let prefill = workspace.activeTextSelection
+                workspace.regexSheet = RegexSheetRequest(prefillSubject: prefill)
+            } label: {
+                Text("regex.menu", bundle: .module)
+            }
+
             Divider()
 
             Button {

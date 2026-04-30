@@ -205,6 +205,15 @@ struct MainWindow: View {
             )
             .environment(\.appTheme, appTheme)
         }
+        // Phase 41e — Regex Playground. Read-only-ish — closing
+        // the sheet doesn't mutate the editor; users copy results
+        // out via the system selection.
+        .sheet(item: $workspace.regexSheet) { request in
+            RegexPlaygroundSheet(request: request) {
+                workspace.regexSheet = nil
+            }
+            .environment(\.appTheme, appTheme)
+        }
     }
 
     /// Sidebar column's header row — 4 mode tabs on the leading

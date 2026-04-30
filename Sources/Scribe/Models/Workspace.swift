@@ -73,6 +73,10 @@ final class Workspace: ObservableObject {
     /// `.sheet(item:)` can swap presentations cleanly.
     @Published var passwordSheet: PasswordSheetRequest?
     @Published var qrSheet: QRSheetRequest?
+    /// Phase 41e — Regex Playground sheet. Carries the active
+    /// selection as the prefill subject so the user can poke at
+    /// whatever they had highlighted without an extra paste.
+    @Published var regexSheet: RegexSheetRequest?
 
     /// Phase 35b-4-d — repo-relative path the multibuffer should
     /// scroll into view on its next render. Used by the sidebar's

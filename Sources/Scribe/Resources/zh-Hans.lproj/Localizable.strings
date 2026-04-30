@@ -814,3 +814,24 @@
 "palette.command.generator.timestamp.dateTime"   = "插入日期 + 时间";
 "palette.command.generator.password" = "生成密码…";
 "palette.command.generator.qr"       = "生成二维码…";
+
+// Phase 41e — Regex Playground
+"regex.menu"            = "正则演练场…";
+"regex.sheet.title"     = "正则演练场";
+"regex.pattern"         = "正则";
+"regex.pattern.placeholder" = "例如  (\\d+) 或 [a-z]+@[a-z.]+";
+"regex.flag.caseInsensitive" = "忽略大小写";
+"regex.flag.multiline"  = "多行（^/$）";
+"regex.flag.dotAll"     = ". 匹配换行";
+"regex.flag.allowComments" = "允许注释";
+"regex.subject"         = "测试文本";
+"regex.matches"         = "匹配结果";
+"regex.matches.none"    = "无匹配。";
+"regex.replace.template"  = "替换模板";
+"regex.replace.placeholder" = "使用 $1, $2, $0 引用捕获组";
+"regex.replace.preview" = "替换预览";
+"regex.status.matchCount" = "%lld 处匹配";
+"button.close"          = "关闭";
+
+// Palette — Regex
+"palette.command.regex.playground" = "打开正则演练场…";

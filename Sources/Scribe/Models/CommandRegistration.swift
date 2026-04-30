@@ -384,6 +384,16 @@ enum CommandRegistration {
             let prefill = workspace.activeTextSelection
             workspace.qrSheet = QRSheetRequest(prefill: prefill)
         })
+        // Phase 41e — Regex Playground.
+        commands.append(ScribeCommand(
+            id: "text.regex.playground",
+            title: localize("palette.command.regex.playground"),
+            subtitle: localize("palette.badge.text"),
+            keywords: ["regex", "regexp", "regular", "expression",
+                       "match", "test", "正则"]) {
+            let prefill = workspace.activeTextSelection
+            workspace.regexSheet = RegexSheetRequest(prefillSubject: prefill)
+        })
 
         commands.append(contentsOf: lineOpSpecs.map { spec in
             ScribeCommand(id: spec.id,
