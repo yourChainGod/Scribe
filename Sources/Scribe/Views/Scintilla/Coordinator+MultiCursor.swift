@@ -547,19 +547,36 @@ extension ScintillaCodeEditor.Coordinator {
         if let str = String(data: Data(slice), encoding: .utf8) {
             findState.query = str
             findState.show(replaceMode: findState.isReplaceMode)
-            }
         }
     }
 
+    // Phase 43-T — pulled this back inside the extension. It was
+    // originally written as a top-level free function (one stray
+    // `}` closed the extension above), which compiled fine while
+    // the body never touched `self.*`. Now that it reaches into
+    // `workspace?.toastCenter` it must be a real Coordinator
+    // method.
     @MainActor
     private func presentTextTransformFailure(_ messageKey: String,
                                              in view: ScintillaView) {
         NSSound.beep()
-        guard let window = view.window else { return }
-        let alert = NSAlert()
-        alert.messageText = L10n.t("transform.error.title")
-        alert.informativeText = L10n.t(messageKey)
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: L10n.t("common.ok"))
-        alert.beginSheetModal(for: window)
+        // Phase 43-T — replace the modal sheet with a non-blocking
+        // toast. Transform failures (no selection, decode failed,
+        // crypto rejected) carry no user-decision; surfacing them
+        // as a banner keeps the editor interactive.
+        if let center = workspace?.toastCenter {
+            center.warning(L10n.t("transform.error.title"),
+                           message: L10n.t(messageKey))
+        } else {
+            // Fallback: keep sheet behaviour for tests / detached
+            // editors with no live workspace binding.
+            guard let window = view.window else { return }
+            let alert = NSAlert()
+            alert.messageText = L10n.t("transform.error.title")
+            alert.informativeText = L10n.t(messageKey)
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: L10n.t("common.ok"))
+            alert.beginSheetModal(for: window)
+        }
     }
+}

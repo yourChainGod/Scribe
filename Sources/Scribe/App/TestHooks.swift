@@ -58,6 +58,34 @@ enum TestHooks {
         runFindInFiles(env: env, ctx: ctx)
         runInlineBlame(env: env, ctx: ctx)
         runTextTools(env: env, ctx: ctx)
+        runToast(env: env, ctx: ctx)
+    }
+
+    // MARK: Phase 43-T — toast notification smoke
+
+    /// SCRIBE_TEST_TOAST = "success|info|warning|error" — pipe-separated
+    /// list of toast severities to spawn on launch. Lets the
+    /// screenshot script capture the banner stack without having to
+    /// manufacture a real failure (which would otherwise need a
+    /// missing file or a poisoned encoding). Each severity gets a
+    /// generic "Phase 43-T · <severity>" title and a fixed message
+    /// so the layout matches what error paths actually produce.
+    private static func runToast(env: [String: String],
+                                 ctx: TestHookContext) {
+        guard let raw = env["SCRIBE_TEST_TOAST"], !raw.isEmpty else { return }
+        let parts = raw.split(separator: "|").map(String.init)
+        let center = ctx.workspace.toastCenter
+        for part in parts {
+            guard let sev = ToastSeverity(rawValue: part) else { continue }
+            let title = "Phase 43-T · \(sev.rawValue)"
+            let msg = "Toast smoke hook"
+            switch sev {
+            case .success: center.success(title, message: msg)
+            case .info:    center.info(title, message: msg)
+            case .warning: center.warning(title, message: msg)
+            case .error:   center.error(title, message: msg)
+            }
+        }
     }
 
     // MARK: Phase 23 — rectangular selection

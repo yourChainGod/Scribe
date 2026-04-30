@@ -411,24 +411,38 @@ final class GitStatusEngine: ObservableObject {
         }
     }
 
-    /// Show an `NSAlert` for the failure case, then refresh
+    /// Show a notification for the failure case, then refresh
     /// regardless of outcome — even a failed git command may have
     /// partially mutated state, and the next refresh is the
     /// authoritative source of truth.
+    ///
+    /// Phase 43-T — Workspace wires up `onWriteFailure` to push the
+    /// error onto its `ToastCenter`. We keep an `NSAlert` fallback
+    /// so the engine still works standalone in unit tests, but the
+    /// production path stays non-blocking.
     private func handleWriteResult(_ result: GitClient.WriteResult,
                                    action: WriteAction) {
         if case .error(let message) = result {
-            let alert = NSAlert()
-            alert.alertStyle = .warning
-            alert.messageText = L10n.t(action.failureKey)
-            // git errors can be multi-line; show them verbatim so
-            // a power user can copy-paste into a terminal.
-            alert.informativeText = message
-            alert.addButton(withTitle: L10n.t("alert.button.ok"))
-            alert.runModal()
+            if let handler = onWriteFailure {
+                handler(action.failureKey, message)
+            } else {
+                let alert = NSAlert()
+                alert.alertStyle = .warning
+                alert.messageText = L10n.t(action.failureKey)
+                // git errors can be multi-line; show them verbatim so
+                // a power user can copy-paste into a terminal.
+                alert.informativeText = message
+                alert.addButton(withTitle: L10n.t("alert.button.ok"))
+                alert.runModal()
+            }
         }
         refresh()
     }
+
+    /// Phase 43-T — set by Workspace so write-action errors surface
+    /// as non-blocking toast banners. `(failureKey, gitMessage) ->
+    /// Void`. Nil ⇒ fall back to legacy NSAlert (tests).
+    var onWriteFailure: ((_ titleKey: String, _ message: String) -> Void)?
 
     /// Kick a new `git status` cycle. Safe to call repeatedly.
     /// Cancels the previous in-flight task and replaces it.

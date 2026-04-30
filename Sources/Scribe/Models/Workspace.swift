@@ -127,6 +127,15 @@ final class Workspace: ObservableObject {
     /// change so a moving caret on an unchanged file is free.
     let gitBlameEngine = GitBlameEngine()
 
+    /// Phase 43-T — non-blocking notification queue. Replaces every
+    /// `NSAlert(error:).runModal()` callsite that surfaced a pure
+    /// notice (file load failed, save failed, regex compile failed,
+    /// git engine failed). True user-choice prompts (close-with-
+    /// unsaved, reopen-with-encoding, revert-hunk, discard-changes)
+    /// stay on NSAlert/NSSheet — those need a button click, not a
+    /// banner that auto-dismisses.
+    let toastCenter = ToastCenter()
+
     /// Sink for `selectedID` changes — re-binds the gutter engine to
     /// the newly-selected doc whenever the user switches tabs. Held
     /// internally so the engine + sink share Workspace's lifetime.
@@ -150,6 +159,13 @@ final class Workspace: ObservableObject {
                 guard let self else { return }
                 self.gitGutterEngine.bind(to: self.current)
             }
+        // Phase 43-T — route GitStatusEngine write-action errors
+        // (stage/unstage/commit/pull/push/…) through the toast
+        // queue instead of an NSAlert so the rest of the UI stays
+        // interactive while the user reads the message.
+        gitStatusEngine.onWriteFailure = { [weak self] titleKey, message in
+            self?.toastCenter.error(L10n.t(titleKey), message: message)
+        }
     }
 
     func openFolder() {
@@ -367,7 +383,11 @@ final class Workspace: ObservableObject {
             if selectedID == doc.id {
                 selectedID = documents.last?.id
             }
-            NSAlert(error: error).runModal()
+            // Phase 43-T — non-blocking toast replaces NSAlert.
+            // The user has nothing to *decide* here, so the modal
+            // bouncing the dock icon was over-emphasized.
+            toastCenter.error(L10n.t("toast.fileLoad.failed"),
+                              message: (error as NSError).localizedDescription)
         }
     }
 
@@ -497,11 +517,9 @@ final class Workspace: ObservableObject {
             let data = try Data(contentsOf: url)
             let payload = TextFormatDetector.stripBOM(data, for: encoding)
             guard let raw = String(data: payload, encoding: encoding.stringEncoding) else {
-                let err = NSError(domain: NSCocoaErrorDomain,
-                                  code: NSFileReadInapplicableStringEncodingError,
-                                  userInfo: [NSLocalizedDescriptionKey:
-                                                L10n.t("error.cannotDecode", encoding.displayName as NSString)])
-                NSAlert(error: err).runModal()
+                // Phase 43-T — toast replaces NSAlert.
+                toastCenter.error(L10n.t("toast.encoding.cannotDecode"),
+                                  message: L10n.t("error.cannotDecode", encoding.displayName as NSString))
                 return
             }
             doc.text = TextFormatDetector.normalize(raw)
@@ -509,7 +527,8 @@ final class Workspace: ObservableObject {
             doc.lineEnding = TextFormatDetector.detectLineEnding(in: raw)
             doc.isDirty = false
         } catch {
-            NSAlert(error: error).runModal()
+            // Phase 43-T — toast replaces NSAlert.
+            toastCenter.error(error)
         }
     }
 
@@ -568,13 +587,11 @@ final class Workspace: ObservableObject {
             guard doc.saveProgress < 0 else { return }
             guard let hook = doc.largeFileSaveHook else {
                 // No editor attached — should be impossible for a
-                // doc the user can ⌘S, but bail with an alert
+                // doc the user can ⌘S, but bail with a toast
                 // instead of crashing on the implicit unwrap.
-                let err = NSError(domain: NSCocoaErrorDomain,
-                                  code: NSFileWriteUnknownError,
-                                  userInfo: [NSLocalizedDescriptionKey:
-                                                L10n.t("error.largeFileSaveNoEditor")])
-                NSAlert(error: err).runModal()
+                // Phase 43-T — toast replaces NSAlert.
+                toastCenter.error(L10n.t("toast.fileSave.failed"),
+                                  message: L10n.t("error.largeFileSaveNoEditor"))
                 return
             }
             doc.saveProgress = 0
@@ -607,7 +624,9 @@ final class Workspace: ObservableObject {
                     self?.gitBlameEngine.refresh(for: docRef.url)
                 } catch {
                     docRef.saveProgress = -1
-                    NSAlert(error: error).runModal()
+                    // Phase 43-T — toast replaces NSAlert.
+                    self?.toastCenter.error(L10n.t("toast.fileSave.failed"),
+                                            message: (error as NSError).localizedDescription)
                 }
                 _ = docID
             }
@@ -625,11 +644,9 @@ final class Workspace: ObservableObject {
                 encoding: doc.encoding,
                 lineEnding: doc.lineEnding
             ) else {
-                let err = NSError(domain: NSCocoaErrorDomain,
-                                  code: NSFileWriteInapplicableStringEncodingError,
-                                  userInfo: [NSLocalizedDescriptionKey:
-                                                L10n.t("error.cannotEncode", doc.encoding.displayName as NSString)])
-                NSAlert(error: err).runModal()
+                // Phase 43-T — toast replaces NSAlert.
+                toastCenter.error(L10n.t("toast.encoding.cannotEncode"),
+                                  message: L10n.t("error.cannotEncode", doc.encoding.displayName as NSString))
                 return
             }
             try payload.write(to: url, options: .atomic)
@@ -648,7 +665,9 @@ final class Workspace: ObservableObject {
             // up the all-zeros sentinel SHA on the next caret tick.
             gitBlameEngine.refresh(for: doc.url)
         } catch {
-            NSAlert(error: error).runModal()
+            // Phase 43-T — toast replaces NSAlert.
+            toastCenter.error(L10n.t("toast.fileSave.failed"),
+                              message: (error as NSError).localizedDescription)
         }
     }
 

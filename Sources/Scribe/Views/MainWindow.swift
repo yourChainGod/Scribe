@@ -27,12 +27,22 @@ struct MainWindow: View {
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
-        if let session = workspace.compareSession {
-            DiffView(session: session, onClose: {
-                workspace.compareSession = nil
-            })
-        } else {
-            editorLayout
+        // Phase 43-T — wrap both editor and compare-files screens
+        // in a single overlay host so toasts render above every
+        // workspace state. The overlay only intercepts hits while a
+        // banner is visible (`allowsHitTesting` lives inside
+        // `ToastOverlay`).
+        Group {
+            if let session = workspace.compareSession {
+                DiffView(session: session, onClose: {
+                    workspace.compareSession = nil
+                })
+            } else {
+                editorLayout
+            }
+        }
+        .overlay {
+            ToastOverlay(center: workspace.toastCenter)
         }
     }
 

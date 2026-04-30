@@ -651,3 +651,16 @@
 "common.replace"  = "替换";
 "common.yes"      = "是";
 "common.no"       = "否";
+
+// MARK: - Toast (Phase 43-T)
+
+"toast.region.label"     = "通知";
+"toast.close.help"       = "关闭通知";
+"toast.fileLoad.failed"  = "无法打开文件";
+"toast.fileSave.failed"  = "无法保存文件";
+"toast.encoding.cannotDecode"  = "所选编码无法解码";
+"toast.encoding.cannotEncode"  = "所选编码无法保存";
+"toast.git.failed"       = "Git 命令失败";
+"toast.regex.invalid"    = "正则表达式无效";
+"toast.action.retry"     = "重试";
+"toast.action.openFinder" = "在 Finder 中显示";

@@ -654,3 +654,16 @@
 "common.replace"  = "Replace";
 "common.yes"      = "yes";
 "common.no"       = "no";
+
+// MARK: - Toast (Phase 43-T)
+
+"toast.region.label"     = "Notifications";
+"toast.close.help"       = "Close notification";
+"toast.fileLoad.failed"  = "Couldn't open file";
+"toast.fileSave.failed"  = "Couldn't save file";
+"toast.encoding.cannotDecode"  = "Cannot decode with chosen encoding";
+"toast.encoding.cannotEncode"  = "Cannot save with chosen encoding";
+"toast.git.failed"       = "Git command failed";
+"toast.regex.invalid"    = "Invalid regular expression";
+"toast.action.retry"     = "Retry";
+"toast.action.openFinder" = "Show in Finder";
