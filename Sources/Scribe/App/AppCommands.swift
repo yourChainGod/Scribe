@@ -132,7 +132,7 @@ struct ScribeCommands: Commands {
             .disabled(workspace.current == nil)
 
             Menu {
-                TextTransformCommandButtons(findState: findState, workspace: workspace)
+                TextTransformCommandButtons(findState: findState, workspace: workspace, prefs: prefs)
             } label: {
                 Text("menu.tools.transformSelection", bundle: .module)
             }
@@ -172,6 +172,14 @@ struct ScribeCommands: Commands {
             } label: {
                 Text("transform.jwt.decode", bundle: .module)
             }
+
+            // Phase 41d — Line operations grouped by purpose.
+            Menu {
+                LineOpsCommandButtons(findState: findState, prefs: prefs)
+            } label: {
+                Text("lineops.menu", bundle: .module)
+            }
+            .disabled(workspace.current == nil)
 
             Divider()
 

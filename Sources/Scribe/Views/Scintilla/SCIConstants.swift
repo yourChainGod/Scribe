@@ -81,6 +81,10 @@ enum SCI {
     static let REPLACETARGET:    UInt32 = 2194
     static let REPLACETARGETRE:  UInt32 = 2195
     static let REPLACESEL:       UInt32 = 2170
+    /// `SCI_SETTEXT(unused, text)` — replace the entire document.
+    /// Used by Phase 41d transforms that fall back to whole-doc
+    /// when no selection is active.
+    static let SETTEXT:          UInt32 = 2181
     static let INSERTTEXT:       UInt32 = 2003
     static let SEARCHINTARGET:   UInt32 = 2197
     static let SETSEARCHFLAGS:   UInt32 = 2198

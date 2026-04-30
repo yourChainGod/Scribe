@@ -60,6 +60,46 @@ enum TestHooks {
         runTextTools(env: env, ctx: ctx)
         runToast(env: env, ctx: ctx)
         runJWTSheet(env: env, ctx: ctx)
+        runLineOp(env: env, ctx: ctx)
+    }
+
+    // MARK: Phase 41d — Line Ops smoke
+
+    /// SCRIBE_TEST_LINEOP = "<id>" fires the named line operation
+    /// against the active document a moment after launch. Used by
+    /// the screenshot script to capture before/after pairs.
+    /// Supported ids: dedupe, dropBlank, reverse, trim, sortLex,
+    /// sortNatural, sortNumeric, sortLength, lower, upper, title,
+    /// camel, snake, kebab.
+    private static func runLineOp(env: [String: String],
+                                  ctx: TestHookContext) {
+        guard let raw = env["SCRIBE_TEST_LINEOP"], !raw.isEmpty else { return }
+        let action: TextTransformAction?
+        switch raw {
+        case "dedupe":      action = .dedupeLines
+        case "dropBlank":   action = .dropBlankLines
+        case "reverse":     action = .reverseLines
+        case "trim":        action = .trimTrailing
+        case "tabsToSpaces": action = .tabsToSpaces(width: ctx.prefs.tabWidth)
+        case "spacesToTabs": action = .spacesToTabs(width: ctx.prefs.tabWidth)
+        case "sortLex":     action = .sortLines(mode: .lexicographic, descending: false)
+        case "sortNatural": action = .sortLines(mode: .natural, descending: false)
+        case "sortNumeric": action = .sortLines(mode: .numeric, descending: false)
+        case "sortLength":  action = .sortLines(mode: .length, descending: false)
+        case "lower":       action = .caseTransform(mode: .lower)
+        case "upper":       action = .caseTransform(mode: .upper)
+        case "title":       action = .caseTransform(mode: .title)
+        case "camel":       action = .caseTransform(mode: .camel)
+        case "snake":       action = .caseTransform(mode: .snake)
+        case "kebab":       action = .caseTransform(mode: .kebab)
+        default: return
+        }
+        guard let action else { return }
+        // Defer slightly so the editor has installed its
+        // FindCommand sink before we send.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            ctx.findState.commands.send(.transformSelection(action))
+        }
     }
 
     // MARK: Phase 41a — JWT sheet smoke

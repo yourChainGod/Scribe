@@ -695,3 +695,51 @@
 "palette.command.text.hash.sha512"  = "SHA-512 哈希";
 "palette.command.text.hash.crc32"   = "CRC32 哈希";
 "palette.command.text.decodeJWT"    = "解码 JWT…";
+
+// MARK: - Phase 41d · 行操作
+
+"lineops.menu"          = "行操作";
+"lineops.dedupe"        = "去重";
+"lineops.dropBlank"     = "去空行";
+"lineops.reverse"       = "反转";
+"lineops.trimTrailing"  = "去除行尾空白";
+"lineops.tabsToSpaces"  = "Tab → 空格";
+"lineops.spacesToTabs"  = "空格 → Tab";
+
+"lineops.sort.menu"     = "排序";
+"lineops.sort.lex"      = "字典序（升序）";
+"lineops.sort.lex.desc" = "字典序（降序）";
+"lineops.sort.icase"    = "忽略大小写";
+"lineops.sort.natural"  = "自然顺序（item2 < item10）";
+"lineops.sort.numeric"  = "数值";
+"lineops.sort.length"   = "按长度";
+
+"lineops.case.menu"     = "大小写";
+"lineops.case.lower"    = "全部小写";
+"lineops.case.upper"    = "全部大写";
+"lineops.case.title"    = "首字母大写";
+"lineops.case.sentence" = "句首大写";
+"lineops.case.camel"    = "驼峰 camelCase";
+"lineops.case.snake"    = "蛇形 snake_case";
+"lineops.case.kebab"    = "短横 kebab-case";
+
+// 命令面板 — 行操作
+"palette.command.lines.dedupe"          = "去重行";
+"palette.command.lines.dropBlank"       = "去除空行";
+"palette.command.lines.reverse"         = "反转行";
+"palette.command.lines.trim"            = "去除行尾空白";
+"palette.command.lines.tabsToSpaces"    = "Tab 转空格";
+"palette.command.lines.spacesToTabs"    = "空格转 Tab";
+"palette.command.lines.sort.lex"        = "排序行（升序）";
+"palette.command.lines.sort.lex.desc"   = "排序行（降序）";
+"palette.command.lines.sort.icase"      = "排序行（忽略大小写）";
+"palette.command.lines.sort.natural"    = "排序行（自然顺序）";
+"palette.command.lines.sort.numeric"    = "排序行（数值）";
+"palette.command.lines.sort.length"     = "排序行（按长度）";
+"palette.command.case.lower"            = "转为小写";
+"palette.command.case.upper"            = "转为大写";
+"palette.command.case.title"            = "转为首字母大写";
+"palette.command.case.sentence"         = "转为句首大写";
+"palette.command.case.camel"            = "转为 camelCase";
+"palette.command.case.snake"            = "转为 snake_case";
+"palette.command.case.kebab"            = "转为 kebab-case";

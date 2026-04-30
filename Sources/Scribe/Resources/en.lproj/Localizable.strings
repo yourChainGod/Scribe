@@ -698,3 +698,51 @@
 "palette.command.text.hash.sha512"  = "Hash with SHA-512";
 "palette.command.text.hash.crc32"   = "Hash with CRC32";
 "palette.command.text.decodeJWT"    = "Decode JWT…";
+
+// MARK: - Phase 41d · Line Ops menu
+
+"lineops.menu"          = "Line Ops";
+"lineops.dedupe"        = "Deduplicate Lines";
+"lineops.dropBlank"     = "Drop Blank Lines";
+"lineops.reverse"       = "Reverse Lines";
+"lineops.trimTrailing"  = "Trim Trailing Whitespace";
+"lineops.tabsToSpaces"  = "Tabs → Spaces";
+"lineops.spacesToTabs"  = "Spaces → Tabs";
+
+"lineops.sort.menu"     = "Sort";
+"lineops.sort.lex"      = "Lexicographic (A→Z)";
+"lineops.sort.lex.desc" = "Lexicographic (Z→A)";
+"lineops.sort.icase"    = "Case-Insensitive";
+"lineops.sort.natural"  = "Natural (item2 < item10)";
+"lineops.sort.numeric"  = "Numeric";
+"lineops.sort.length"   = "By Length";
+
+"lineops.case.menu"     = "Case";
+"lineops.case.lower"    = "lowercase";
+"lineops.case.upper"    = "UPPERCASE";
+"lineops.case.title"    = "Title Case";
+"lineops.case.sentence" = "Sentence case";
+"lineops.case.camel"    = "camelCase";
+"lineops.case.snake"    = "snake_case";
+"lineops.case.kebab"    = "kebab-case";
+
+// Palette — Line Ops
+"palette.command.lines.dedupe"          = "Deduplicate Lines";
+"palette.command.lines.dropBlank"       = "Drop Blank Lines";
+"palette.command.lines.reverse"         = "Reverse Lines";
+"palette.command.lines.trim"            = "Trim Trailing Whitespace";
+"palette.command.lines.tabsToSpaces"    = "Convert Tabs to Spaces";
+"palette.command.lines.spacesToTabs"    = "Convert Spaces to Tabs";
+"palette.command.lines.sort.lex"        = "Sort Lines (A→Z)";
+"palette.command.lines.sort.lex.desc"   = "Sort Lines (Z→A)";
+"palette.command.lines.sort.icase"      = "Sort Lines (Case-Insensitive)";
+"palette.command.lines.sort.natural"    = "Sort Lines (Natural)";
+"palette.command.lines.sort.numeric"    = "Sort Lines (Numeric)";
+"palette.command.lines.sort.length"     = "Sort Lines (By Length)";
+"palette.command.case.lower"            = "Convert to lowercase";
+"palette.command.case.upper"            = "Convert to UPPERCASE";
+"palette.command.case.title"            = "Convert to Title Case";
+"palette.command.case.sentence"         = "Convert to Sentence case";
+"palette.command.case.camel"            = "Convert to camelCase";
+"palette.command.case.snake"            = "Convert to snake_case";
+"palette.command.case.kebab"            = "Convert to kebab-case";

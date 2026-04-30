@@ -25,7 +25,7 @@ enum CommandRegistration {
         var batch: [ScribeCommand] = []
         batch.append(contentsOf: fileCommands(workspace: workspace, prefs: prefs, localize: localize))
         batch.append(contentsOf: viewCommands(workspace: workspace, prefs: prefs, localize: localize))
-        batch.append(contentsOf: textCommands(workspace: workspace, findState: findState, localize: localize))
+        batch.append(contentsOf: textCommands(workspace: workspace, findState: findState, prefs: prefs, localize: localize))
         batch.append(contentsOf: tabCommands(workspace: workspace, localize: localize))
         batch.append(contentsOf: encodingCommands(workspace: workspace, localize: localize))
         batch.append(contentsOf: lineEndingCommands(workspace: workspace, localize: localize))
@@ -142,6 +142,7 @@ enum CommandRegistration {
 
     private static func textCommands(workspace: Workspace,
                                      findState: FindState?,
+                                     prefs: EditorPreferences,
                                      localize: (String) -> String) -> [ScribeCommand] {
         guard workspace.current != nil, let findState else { return [] }
         var commands: [ScribeCommand] = [
@@ -223,6 +224,69 @@ enum CommandRegistration {
                 workspace.jwtSheet = JWTSheetRequest(prefill: workspace.activeTextSelection)
             }
         )
+        // Phase 41d — Line Ops palette entries. The IDs and
+        // keywords mirror the Tools ▶ Line Ops menu so the
+        // palette finds them via either English or Chinese
+        // mnemonic on `Cmd+Shift+P`.
+        let lineOpSpecs: [(id: String,
+                           titleKey: String,
+                           action: TextTransformAction,
+                           keywords: [String])] = [
+            ("text.lines.dedupe", "palette.command.lines.dedupe", .dedupeLines,
+             ["lines", "dedupe", "deduplicate", "unique", "去重"]),
+            ("text.lines.dropBlank", "palette.command.lines.dropBlank", .dropBlankLines,
+             ["lines", "blank", "empty", "drop", "去空行"]),
+            ("text.lines.reverse", "palette.command.lines.reverse", .reverseLines,
+             ["lines", "reverse", "flip", "反转"]),
+            ("text.lines.trim", "palette.command.lines.trim", .trimTrailing,
+             ["lines", "trim", "trailing", "whitespace", "去尾空格"]),
+            ("text.lines.tabsToSpaces", "palette.command.lines.tabsToSpaces",
+             .tabsToSpaces(width: prefs.tabWidth),
+             ["lines", "tabs", "spaces", "indent"]),
+            ("text.lines.spacesToTabs", "palette.command.lines.spacesToTabs",
+             .spacesToTabs(width: prefs.tabWidth),
+             ["lines", "spaces", "tabs", "indent"]),
+            ("text.lines.sortLex", "palette.command.lines.sort.lex",
+             .sortLines(mode: .lexicographic, descending: false),
+             ["lines", "sort", "lexicographic", "asc", "排序"]),
+            ("text.lines.sortLexDesc", "palette.command.lines.sort.lex.desc",
+             .sortLines(mode: .lexicographic, descending: true),
+             ["lines", "sort", "lexicographic", "desc", "倒序"]),
+            ("text.lines.sortIcase", "palette.command.lines.sort.icase",
+             .sortLines(mode: .caseInsensitive, descending: false),
+             ["lines", "sort", "case", "insensitive"]),
+            ("text.lines.sortNatural", "palette.command.lines.sort.natural",
+             .sortLines(mode: .natural, descending: false),
+             ["lines", "sort", "natural", "version"]),
+            ("text.lines.sortNumeric", "palette.command.lines.sort.numeric",
+             .sortLines(mode: .numeric, descending: false),
+             ["lines", "sort", "numeric"]),
+            ("text.lines.sortLength", "palette.command.lines.sort.length",
+             .sortLines(mode: .length, descending: false),
+             ["lines", "sort", "length"]),
+            ("text.case.lower", "palette.command.case.lower", .caseTransform(mode: .lower),
+             ["case", "lower", "lowercase", "小写"]),
+            ("text.case.upper", "palette.command.case.upper", .caseTransform(mode: .upper),
+             ["case", "upper", "uppercase", "大写"]),
+            ("text.case.title", "palette.command.case.title", .caseTransform(mode: .title),
+             ["case", "title"]),
+            ("text.case.sentence", "palette.command.case.sentence", .caseTransform(mode: .sentence),
+             ["case", "sentence"]),
+            ("text.case.camel", "palette.command.case.camel", .caseTransform(mode: .camel),
+             ["case", "camel", "camelCase"]),
+            ("text.case.snake", "palette.command.case.snake", .caseTransform(mode: .snake),
+             ["case", "snake", "snake_case"]),
+            ("text.case.kebab", "palette.command.case.kebab", .caseTransform(mode: .kebab),
+             ["case", "kebab", "kebab-case"]),
+        ]
+        commands.append(contentsOf: lineOpSpecs.map { spec in
+            ScribeCommand(id: spec.id,
+                          title: localize(spec.titleKey),
+                          subtitle: localize("palette.badge.text"),
+                          keywords: spec.keywords) {
+                findState.commands.send(.transformSelection(spec.action))
+            }
+        })
         return commands
     }
 

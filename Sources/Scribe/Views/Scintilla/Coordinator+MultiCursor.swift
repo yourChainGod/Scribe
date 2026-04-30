@@ -357,12 +357,20 @@ extension ScintillaCodeEditor.Coordinator {
     func transformSelection(_ action: TextTransformAction, in view: ScintillaView) {
         let start = Int(view.message(SCI.GETSELECTIONSTART))
         let end = Int(view.message(SCI.GETSELECTIONEND))
-        guard end > start else {
-            presentTextTransformFailure("transform.error.noSelection", in: view)
-            return
-        }
+        let hasSelection = end > start
 
-        let original = textInRange(in: view, range: start..<end)
+        // Phase 41d — when nothing is selected, fall back to the
+        // whole document. Line ops in particular are useless on a
+        // pure caret (sort one line?), and even the byte-oriented
+        // transforms (URL encode / hash) tend to want the file
+        // body when there's no explicit selection. Empty document
+        // still emits the no-selection error.
+        let original: String
+        if hasSelection {
+            original = textInRange(in: view, range: start..<end)
+        } else {
+            original = view.string() ?? ""
+        }
         guard !original.isEmpty else {
             presentTextTransformFailure("transform.error.noSelection", in: view)
             return
@@ -370,12 +378,30 @@ extension ScintillaCodeEditor.Coordinator {
 
         do {
             let transformed = try action.apply(to: original)
-            replaceSelection(with: transformed, in: view)
+            if hasSelection {
+                replaceSelection(with: transformed, in: view)
+            } else {
+                replaceWholeDocument(with: transformed, in: view)
+            }
             view.message(SCI.SCROLLCARET)
         } catch {
             let key = (error as? TextTransformError)?.messageKey
                 ?? "transform.error.generic"
             presentTextTransformFailure(key, in: view)
+        }
+    }
+
+    /// Phase 41d — replace the entire Scintilla document via
+    /// `SCI_SETTEXT`. Used by `transformSelection` when no
+    /// selection exists; goes through the same change-history
+    /// machinery so undo (⌘Z) reverts it as one step.
+    private func replaceWholeDocument(with text: String, in view: ScintillaView) {
+        let bytes = Array(text.utf8) + [0]
+        bytes.withUnsafeBufferPointer { buf in
+            guard let base = buf.baseAddress else { return }
+            view.message(SCI.SETTEXT,
+                         wParam: 0,
+                         lParam: Int(bitPattern: base))
         }
     }
 

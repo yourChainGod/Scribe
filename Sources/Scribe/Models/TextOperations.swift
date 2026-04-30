@@ -490,6 +490,18 @@ enum TextTransformAction: Equatable {
     case sha512
     case crc32
 
+    // Phase 41d — line operations. All read the input as a series
+    // of newline-separated rows (LF / CRLF / CR auto-detected) and
+    // re-emit the same line ending so a Windows file stays Windows.
+    case dedupeLines
+    case dropBlankLines
+    case reverseLines
+    case trimTrailing
+    case tabsToSpaces(width: Int)
+    case spacesToTabs(width: Int)
+    case sortLines(mode: LineOps.SortMode, descending: Bool)
+    case caseTransform(mode: LineOps.CaseMode)
+
     func apply(to text: String) throws -> String {
         switch self {
         case .urlEncode:
@@ -526,6 +538,16 @@ enum TextTransformAction: Equatable {
         case .sha256: return HashSuite.sha256(text)
         case .sha512: return HashSuite.sha512(text)
         case .crc32:  return HashSuite.crc32(text)
+        case .dedupeLines:      return LineOps.deduplicate(text)
+        case .dropBlankLines:   return LineOps.dropBlankLines(text)
+        case .reverseLines:     return LineOps.reverse(text)
+        case .trimTrailing:     return LineOps.trimTrailingWhitespace(text)
+        case .tabsToSpaces(let w): return LineOps.tabsToSpaces(text, tabWidth: w)
+        case .spacesToTabs(let w): return LineOps.spacesToTabs(text, tabWidth: w)
+        case let .sortLines(mode, descending):
+            return LineOps.sort(text, mode: mode, descending: descending)
+        case .caseTransform(let mode):
+            return LineOps.transformCase(text, mode: mode)
         }
     }
 }

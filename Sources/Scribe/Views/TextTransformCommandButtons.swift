@@ -14,6 +14,10 @@ struct TextTransformCommandButtons: View {
     /// menu item silently no-ops if it's nil (which can only happen
     /// in tests / detached previews).
     var workspace: Workspace?
+    /// Phase 41d — Line Ops submenu reads `prefs.tabWidth` for the
+    /// tabs/spaces converters. Optional for the same reason as
+    /// `workspace`.
+    var prefs: EditorPreferences?
 
     var body: some View {
         Button {
@@ -158,6 +162,18 @@ struct TextTransformCommandButtons: View {
                 presentJWTDecoder()
             } label: {
                 Text("transform.jwt.decode", bundle: .module)
+            }
+        }
+        // Phase 41d — Line Ops submenu. Surfaces the same actions
+        // the Tools ▶ Line Ops menu owns; mirrors the right-click
+        // muscle memory editors like BBEdit / Sublime have for
+        // sort-line / dedupe / case toggles.
+        if let prefs {
+            Divider()
+            Menu {
+                LineOpsCommandButtons(findState: findState, prefs: prefs)
+            } label: {
+                Text("lineops.menu", bundle: .module)
             }
         }
     }
