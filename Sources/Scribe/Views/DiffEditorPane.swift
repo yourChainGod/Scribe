@@ -126,7 +126,7 @@ struct DiffEditorPane: NSViewRepresentable {
     }
 
     private func configureMarkers(in view: ScintillaView) {
-        let theme = prefs.themeID.resolve(appearance: NSApp.effectiveAppearance)
+        let theme = prefs.effectiveEditorThemeID.resolve(appearance: NSApp.effectiveAppearance)
         // Marker number → glyph + colour. Empty side uses opaque dimmed
         // background so the placeholder lines are visible but muted.
         defineMarker(view, num: SC_DIFF.MARK_ADDED,    fore: 0x2ECC71, back: 0xD5F5E3)
@@ -147,7 +147,7 @@ struct DiffEditorPane: NSViewRepresentable {
     }
 
     private func configureTheme(in view: ScintillaView) {
-        let theme = prefs.themeID.resolve(appearance: NSApp.effectiveAppearance)
+        let theme = prefs.effectiveEditorThemeID.resolve(appearance: NSApp.effectiveAppearance)
         view.message(SCI_DIFF.STYLESETBACK, wParam: UInt(SC_DIFF.STYLE_DEFAULT), lParam: bgrColor(theme.background))
         view.message(SCI_DIFF.STYLESETFORE, wParam: UInt(SC_DIFF.STYLE_DEFAULT), lParam: bgrColor(theme.foreground))
         view.message(SCI_DIFF.STYLECLEARALL)

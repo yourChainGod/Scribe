@@ -22,6 +22,13 @@ enum SidebarMode: String {
     case sourceControl
 }
 
+struct ExternalChangePrompt: Identifiable {
+    var id: UUID { documentID }
+    let documentID: UUID
+    let title: String
+    let decoded: DetectedTextFormat
+}
+
 @MainActor
 final class Workspace: ObservableObject {
     @Published var documents: [Document] = []
@@ -29,6 +36,7 @@ final class Workspace: ObservableObject {
     @Published var sidebarVisible: Bool = true
     @Published var sidebarMode: SidebarMode = .files
     @Published var folderRoot: FileNode?
+    @Published var externalChangePrompt: ExternalChangePrompt?
 
     /// Non-nil ⇒ MainWindow renders the Compare-Files screen instead of
     /// the editor. ScribeApp keeps a single DiffSession for the app
@@ -47,6 +55,14 @@ final class Workspace: ObservableObject {
     /// see status updates as they stage/unstage from inside the
     /// multibuffer.
     @Published var projectDiffVisible: Bool = false
+
+    /// Phase 37 → Phase 40 — visible while the column-merger
+    /// workbench sheet is attached to the main editor window. The
+    /// Phase 38 multi-mode picker (columns / shuffle / transform)
+    /// was retired in Phase 40; line shuffle and base/encoding
+    /// transforms now live exclusively in the editor's right-click
+    /// ▸ Transform submenu (see TextTransformCommandButtons).
+    @Published var isTextToolsPresented: Bool = false
 
     /// Phase 35b-4-d — repo-relative path the multibuffer should
     /// scroll into view on its next render. Used by the sidebar's
@@ -75,6 +91,12 @@ final class Workspace: ObservableObject {
     /// "Find in Files" reads this on demand at command-invoke time.
     /// Empty string ⇒ caret only (no actual text selection).
     var activeSelection: String = ""
+
+    /// Phase 37 — full active selection text for Text Tools. Unlike
+    /// `activeSelection`, this intentionally preserves newlines so a
+    /// selected block can be split, merged, shuffled, and replaced as a
+    /// real text payload instead of a single-line find query.
+    var activeTextSelection: String = ""
 
     let prefs: EditorPreferences
 
@@ -176,6 +198,16 @@ final class Workspace: ObservableObject {
 
     var current: Document? {
         documents.first { $0.id == selectedID }
+    }
+
+    var canToggleMarkdownPreview: Bool {
+        current?.isMarkdown == true
+    }
+
+    func toggleMarkdownPreview() {
+        guard let doc = current, doc.isMarkdown else { return }
+        objectWillChange.send()
+        doc.isMarkdownPreviewVisible.toggle()
     }
 
     func newDocument() {
@@ -385,15 +417,27 @@ final class Workspace: ObservableObject {
         if decoded.text == doc.text { return }
 
         if doc.isDirty {
-            let alert = NSAlert()
-            alert.messageText = L10n.t("alert.diskChanged.title", doc.title as NSString)
-            alert.informativeText = L10n.t("alert.diskChanged.body")
-            alert.alertStyle = .warning
-            alert.addButton(withTitle: L10n.t("alert.button.reload"))
-            alert.addButton(withTitle: L10n.t("alert.button.keepChanges"))
-            if alert.runModal() != .alertFirstButtonReturn { return }
+            externalChangePrompt = ExternalChangePrompt(documentID: doc.id,
+                                                        title: doc.title,
+                                                        decoded: decoded)
+            return
         }
         // Silent refresh for clean documents (and confirmed-reload dirty ones).
+        applyDecodedExternalChange(decoded, to: doc)
+    }
+
+    func resolveExternalChange(_ prompt: ExternalChangePrompt, reloadFromDisk: Bool) {
+        if externalChangePrompt?.documentID == prompt.documentID {
+            externalChangePrompt = nil
+        }
+        guard reloadFromDisk,
+              let doc = documents.first(where: { $0.id == prompt.documentID }) else {
+            return
+        }
+        applyDecodedExternalChange(prompt.decoded, to: doc)
+    }
+
+    private func applyDecodedExternalChange(_ decoded: DetectedTextFormat, to doc: Document) {
         doc.text = decoded.text
         doc.encoding = decoded.encoding
         doc.lineEnding = decoded.lineEnding

@@ -9,6 +9,7 @@ import SwiftUI
 
 struct FindBar: View {
     @ObservedObject var state: FindState
+    @Environment(\.appTheme) private var appTheme
     @FocusState private var queryFocused: Bool
     @FocusState private var replaceFocused: Bool
 
@@ -21,7 +22,7 @@ struct FindBar: View {
             }
             Divider()
         }
-        .background(.bar)
+        .background(appTheme.barBackground)
         .fixedSize(horizontal: false, vertical: true)
         .onAppear { queryFocused = true }
         .onChange(of: state.isVisible) { _, visible in
@@ -40,7 +41,7 @@ struct FindBar: View {
         HStack(spacing: 8) {
             Toggle(isOn: $state.isReplaceMode) {
                 Image(systemName: state.isReplaceMode ? "chevron.down" : "chevron.right")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                     .font(.system(size: 11, weight: .semibold))
             }
             .toggleStyle(.button)
@@ -180,7 +181,7 @@ struct FindBar: View {
                              onClear: @escaping () -> Void) -> some View {
         Menu {
             if history.isEmpty {
-                Text(empty).foregroundStyle(.secondary)
+                Text(empty).foregroundStyle(appTheme.secondaryText)
             } else {
                 ForEach(history, id: \.self) { item in
                     Button(item) { onPick(item) }
@@ -192,7 +193,7 @@ struct FindBar: View {
             }
         } label: {
             Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
                 .font(.system(size: 11))
         }
         .menuStyle(.borderlessButton)
@@ -242,19 +243,13 @@ struct FindBar: View {
     private var statusLabel: some View {
         // Always render a Text so SwiftUI doesn't tear the row down when
         // the bar transitions between "no query / no matches / counted".
-        let text: String
-        if !state.status.isEmpty {
-            text = state.status
-        } else if state.matchCount > 0 {
-            text = "\(state.currentMatch) of \(state.matchCount)"
-        } else if !state.query.isEmpty {
-            text = "0 results"
-        } else {
-            text = ""
-        }
+        let text = FindBarPresentation.statusText(status: state.status,
+                                                  currentMatch: state.currentMatch,
+                                                  matchCount: state.matchCount,
+                                                  query: state.query)
         return Text(text)
             .font(.system(size: 11))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(appTheme.secondaryText)
             .monospacedDigit()
     }
 }

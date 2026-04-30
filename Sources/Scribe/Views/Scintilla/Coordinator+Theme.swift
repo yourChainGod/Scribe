@@ -53,10 +53,20 @@ extension ScintillaCodeEditor.Coordinator {
     /// Idempotent — Scintilla's STYLECLEARALL gives us a clean slate
     /// before per-token colours are layered on top.
     func applyTheme(to view: ScintillaView) {
-        // Phase 15: prefer the user-chosen theme. `.system` falls
-        // back to the original "follow NSAppearance" behaviour, so
-        // existing default-theme users see no change.
-        let theme = prefs.themeID.resolve(appearance: NSApp.effectiveAppearance)
+        // Phase 36: read `effectiveEditorThemeID` so the editor
+        // honours the "follow UI theme" toggle. When the toggle is
+        // on (default), this returns `uiThemeID`; when off, it
+        // returns `editorThemeID`. `.system` still falls back to
+        // NSAppearance for either path.
+        //
+        // Phase 39b — layer per-theme user slot overrides on top.
+        // Doing the merge here (not just in ThemeHost) is what makes
+        // the KVO appearance observer in ScintillaCodeEditor — which
+        // calls into us outside the SwiftUI graph on Light/Dark flips
+        // — pick up the user's overrides too.
+        let editorID = prefs.effectiveEditorThemeID
+        let baseTheme = editorID.resolve(appearance: NSApp.effectiveAppearance)
+        let theme = baseTheme.applying(prefs.overrides(for: editorID))
 
         // STYLE_DEFAULT first — STYLECLEARALL copies it to every other style.
         view.message(SCI.STYLESETBACK, wParam: UInt(SC.STYLE_DEFAULT), lParam: sciColor(theme.background))

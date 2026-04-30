@@ -36,22 +36,24 @@ Scribe 是一款 **macOS 原生** 文本与代码编辑器。SwiftUI 主壳 + Sc
 - **FSEvents 监听**：磁盘变更自动提示重载或保留。
 - **异步打开**：20 MB 文件不卡 UI（Phase 28b——主线程同步部分恒定 < 5 ms）。
 - **节流编辑**：50 MB 文件 typing 不卡 — SCN_MODIFIED 50 ms debounce（Phase 28c）。
-- **Markdown 预览**：⌘⇧V 在右侧 split 预览 .md 文件，所见即所得，WKWebView 渲染（Phase 30）。支持 GFM 表格 / task list `[ ] [x]` / footnote `[^id]`（Phase 32）。
+- **Markdown 预览**：⌘⇧V、工具栏眼睛按钮、右键菜单或 Command Palette 在右侧 split 预览 .md 文件，所见即所得，WKWebView 渲染（Phase 30 / 36b）。支持 GFM 表格 / task list `[ ] [x]` / footnote `[^id]`（Phase 32）。
 - **Git Gutter**：左侧窄 margin 画【+】【·】【—】三色纹显示相对 HEAD 的加/改/删行，保存后自动刷新（Phase 31）。⌥⇧↓ / ⌥⇧↑ 跳下一/上一个变更块（Phase 31b）。
 - **代码片段（Snippets）**：⌘⇧T 弹出 fuzzy 选择器（复用 Command Palette），在当前光标（多光标下多点）插入 body。设置 → 代码片段 tab 增/删/改，输入即存 UserDefaults JSON（Phase 33）。
 - **大文件加载**：≥ 64 MiB 的文件走 Scintilla `SCI_CREATELOADER` 分块加载路径，不再 materialise 为 Swift String；状态栏会显示“正在加载大文件…” affordance（Phase 34a/34b）。
-- **大文件保存**：⌘S 大文件走 `SCI_GETTEXTRANGEFULL` 分块读·sibling temp·fsync·原子 rename 路径；状态栏进度条开仅，不丢数据，不 OOM（Phase 34c）。
-- **Source Control 侧栏**：侧栏第四 tab 列 `git status` 所有改动文件，分 Conflicts/Staged/Changes/Untracked 四段，点行打开（Phase 35b-1）。hover 出 stage/unstage/discard 三按钮，discard 带二次确认（Phase 35b-2a）。底部 commit 面板 + 顶部分支指示器 + Amend toggle，⌘⏎ 提交（Phase 35b-2b）。顶部 ahead/behind 胶囊 + fetch/pull/push 三图标按钮，pull 默认 `--ff-only`，push 在 ahead>0 时填充 glyph（Phase 35b-2c）。零依赖 `git CLI`。
+- **大文件保存**：⌘S 大文件走 `SCI_GETTEXTRANGEFULL` 分块读·sibling temp·fsync·原子 rename 路径；状态栏进度条开启，不丢数据，不 OOM（Phase 34c）。
+- **Source Control 侧栏**：侧栏第四 tab 列 `git status`，支持 stage/unstage/discard、commit/amend、fetch/pull/push、ahead/behind、分支 picker、`--force-with-lease`、per-hunk stage/unstage、Project Diff multibuffer、Stage All / Unstage All、Revert Hunk、跨文件 diff search 与 ⌘G/⇧⌘G 匹配跳转（Phase 35b-1…35b-4-f）。零依赖 `git CLI`。
+- **Inline Git Blame**：Git 数据层 + 相对时间 formatter + Workspace cache + Scintilla 行末 chip，支持 Off / Current Line / All Lines 设置、当前作者显示为“你 / You”、hover 展示 commit summary + author + SHA（Phase 35c-i…35c-iv）。
+- **Text Tools**：Tools / 右键菜单 / Command Palette 进入。支持 CSV/TSV/regex/fixed-width 分列、导入第二文本源按行合并、列选择与重排、行打乱、替换选区 / 新标签 / 剪贴板输出，以及 URL/Base64/HTML/JSON/进制/AES-GCM 选区转换（Phase 37a）。
 
 ### 完整本地化
-- **English / 简体中文** 双语包，203 个 key 全覆盖。
+- **English / 简体中文** 双语包，496 个 key 全覆盖。
 - 启动语言跟随系统 `AppleLanguages`，可通过 `defaults write` 强制指定。
 
 ### 工程化
 - **零外部 SwiftPM 依赖**。Vendor 中只有 Scintilla + Lexilla（GPL-2 兼容 GPL-3）。
 - **Swift 6 strict concurrency** 全绿，0 error / 0 warning（Vendor/scintilla 除外）。
 - **CI 四道闸**：`swift test` · `swift build -c release` · `swift build -swift-version 6` · Localizable strings 校验。
-- **258 个单元测试** 含 Theme / Lexer / TextFormat / Find-in-Files / Performance / DocumentFlush / MarkdownConverter / GitDiffParser / GitGutterHunks / SnippetCatalog / LargeFilePolicy / ChunkedFileReader / LargeFileLoader / ChunkedFileWriter / ScribeCLI / GitStatusParser / GitClientWrite (commit/amend/branch/push/pull/fetch round-trip) / GitAheadBehindParser。
+- **378 个测试** 含 Theme / Lexer / TextFormat / TextOperations / Find-in-Files / Performance / DocumentFlush / MarkdownConverter / GitDiffParser / GitGutterHunks / SnippetCatalog / LargeFile / ScribeCLI / GitStatus / GitClientWrite / Project Diff / Inline Blame / RelativeTime / CommandRegistration / CommandPresentation / LocalizationPresentation / PaletteWindowController。
 
 ---
 
@@ -86,6 +88,10 @@ SCRIBE_AUTO_FOLDER=/path/to/project swift run Scribe
 SCRIBE_AUTO_COMPARE=/path/a.txt:/path/b.txt swift run Scribe
 ```
 
+`open build/Scribe.app` 这类 LaunchServices 启动不会继承当前 shell
+前缀的 `SCRIBE_*` 环境变量；验收 `.app` bundle 时用 `launchctl setenv`
+写入用户 launchd 环境，启动后再 `launchctl unsetenv` 清理。
+
 ### `scribe` CLI（Phase 35a）
 
 `Scripts/scribe` 是一个 bash wrapper，对齐 `code` / `subl` / `zed`
@@ -107,7 +113,7 @@ git config --global core.editor "scribe --wait"
 ```
 
 `--wait` v1 通过 `open -W -n` 实现，每次 cold-start 一个新 Scribe
-实例；Phase 35b 计划加 IPC fifo 让已运行的实例也能 wait。
+实例；Phase 35d+ 计划加 IPC fifo 让已运行的实例也能 wait。
 
 ---
 
@@ -186,7 +192,7 @@ git config --global core.editor "scribe --wait"
 
 ## 🌍 Internationalization
 
-Scribe 自带 `en` 与 `zh-Hans` 资源包（203 个 key 全覆盖），由 SwiftPM `.process("Resources")` 注入到 Bundle.module。
+Scribe 自带 `en` 与 `zh-Hans` 资源包（496 个 key 全覆盖），由 SwiftPM `.process("Resources")` 注入到 Bundle.module。
 
 - **选择语言**：跟随 `~/Library/Preferences/.GlobalPreferences.plist` 的 `AppleLanguages`。
 - **强制中文**：
@@ -202,7 +208,7 @@ Scribe 自带 `en` 与 `zh-Hans` 资源包（203 个 key 全覆盖），由 Swif
 
 ### 测试
 ```bash
-swift test                              # 全部 110 个 case
+swift test                              # 全部 378 个 tests
 swift test --filter ThemeCatalogTests   # 单测目标
 swift test --filter PerformanceTests    # 1MB / 5MB / 20MB 性能预算
 ```
@@ -226,6 +232,24 @@ swift Scripts/check_localization.swift
 
 ### 自动化截图
 所有 `SCRIBE_TEST_*` 环境变量在 `Sources/Scribe/App/TestHooks.swift`，每个钩子文档化了它驱动的 UI 状态。
+Inline Blame 可用 `SCRIBE_TEST_INLINE_BLAME_MODE=allLines`、`SCRIBE_TEST_INLINE_BLAME_LINE=1`、`SCRIBE_TEST_INLINE_BLAME_TOOLTIP_LINE=1` 固定显示密度、caret 行和 commit tooltip。
+
+`.app` bundle 截图验收示例：
+```bash
+launchctl setenv SCRIBE_AUTO_FOLDER /path/to/repo
+launchctl setenv SCRIBE_AUTO_OPEN /path/to/repo/file.swift
+launchctl setenv SCRIBE_TEST_INLINE_BLAME_MODE allLines
+launchctl setenv SCRIBE_TEST_INLINE_BLAME_LINE 1
+launchctl setenv SCRIBE_TEST_INLINE_BLAME_TOOLTIP_LINE 1
+open -n build/Scribe.app
+
+# 截图完成后清理
+launchctl unsetenv SCRIBE_AUTO_FOLDER
+launchctl unsetenv SCRIBE_AUTO_OPEN
+launchctl unsetenv SCRIBE_TEST_INLINE_BLAME_MODE
+launchctl unsetenv SCRIBE_TEST_INLINE_BLAME_LINE
+launchctl unsetenv SCRIBE_TEST_INLINE_BLAME_TOOLTIP_LINE
+```
 
 ---
 
@@ -256,7 +280,16 @@ swift Scripts/check_localization.swift
 - ✅ Phase 35b-2a：row actions stage/unstage/discard（hover 出按钮·destructive 二次确认·5 integration tests）
 - ✅ Phase 35b-2b：commit panel + branch indicator（多行 TextEditor · Amend 预填 headSubject · ⌘⏎ · stdin 递送 避 argv 256 KiB 上限 · 5 新 tests）
 - ✅ Phase 35b-2c：remote sync（fetch/pull/push + ahead/behind capsule · pull `--ff-only` 默认 · 6 parser unit + 4 bare-remote integration）
-- 🔜 Phase 35+：Git v2 (per-hunk stage / Project Diff / remote branch picker) · Inline blame & merge UI · LargeFile v3 · Document Map · Snippets v2 · Markdown Preview v3 · HEX View · Sparkle
+- ✅ Phase 35b-3：per-hunk staging（hunk parser + git apply round-trip + sidebar hunk rows）
+- ✅ Phase 35b-4-a…f：branch picker / force-with-lease · Project Diff multibuffer · Stage All / Unstage All · Revert Hunk · sidebar jump · cross-file diff search · ⌘G/⇧⌘G line-level navigation
+- ✅ Phase 35c-i…iv：Inline Git Blame（porcelain parser · RelativeTime · GitBlameEngine cache · Scintilla EOL annotation chip · Settings mode · “You” author · hover tooltip · deterministic screenshot hook）
+- ✅ Phase 36a：UI polish pass（icon-only sidebar mode switcher · Source Control row hierarchy · commit panel chrome · status capsules）
+- ✅ Phase 36b：Markdown Preview discoverability（toolbar eye toggle · context menu · Command Palette command）
+- ✅ Phase 36c：Toolbar polish（remove duplicate sidebar toggle · keep Command Palette sidebar command）
+- ✅ Phase 36d：Palette polish v2（Command Palette / Quick Open row metadata · icons · localized badges/commands · clean open-file titles · key-window panel lifecycle）
+- ✅ Phase 39a：Theme overhaul — 6 macOS-native presets（Daylight · Graphite Light · Sand · Inkwell · Graphite Dark · Midnight）replace the old Solarized / Dracula / Monokai / GitHub set; Apple system colours + Xcode-default syntax; legacy raw values silently migrate via `EditorPreferences.legacyThemeAlias`.
+- ✅ Phase 39b：Custom color overrides — 24-slot per-theme override system; sparse `[ThemeID: ThemeOverrides]` JSON; SwiftUI `ColorPicker` rows in Settings → Appearance with live preview, per-slot Reset, and "Reset all colors for this theme"; Scintilla + ThemeHost + preview swatch all merge overrides on the same code path.
+- 🔜 Phase 36+：Git v2 polish (in-place hunk editing / submodule diff / streaming diff load) · Settings polish · Project Diff polish · Merge Conflict UI · LargeFile v3 · CLI shim v2 · Document Map · Snippets v2 · Markdown Preview v3 · HEX View · Sparkle
 
 ---
 

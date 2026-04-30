@@ -10,6 +10,7 @@ import SwiftUI
 struct OutlineSidebar: View {
     @EnvironmentObject var workspace: Workspace
     @ObservedObject var outline: SymbolOutline
+    @Environment(\.appTheme) private var appTheme
 
     /// Symbol whose line range contains the editor caret. Drives the
     /// "you are here" highlight in OutlineRow. Cheapest sufficient
@@ -33,7 +34,7 @@ struct OutlineSidebar: View {
             Divider()
             content
         }
-        .background(Color(nsColor: .controlBackgroundColor))
+        .background(appTheme.sidebarBackground)
     }
 
     // MARK: - Subviews
@@ -112,6 +113,7 @@ struct OutlineSidebar: View {
 private struct OutlineRow: View {
     let symbol: SymbolEntry
     let isActive: Bool
+    @Environment(\.appTheme) private var appTheme
     @State private var hover = false
 
     var body: some View {
@@ -155,7 +157,7 @@ private struct OutlineRow: View {
             // Caret-is-here highlight. Same accent 14% pill the
             // sidebar mode switcher uses, keeping the visual
             // language consistent across the sidebar.
-            return Color.accentColor.opacity(0.14)
+            return appTheme.accent.opacity(0.14)
         } else if hover {
             return Color.primary.opacity(0.06)
         } else {

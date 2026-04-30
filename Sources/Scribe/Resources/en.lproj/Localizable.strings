@@ -56,6 +56,7 @@
 "sourceControl.branch.detached"        = "(detached HEAD)";
 "sourceControl.commit.placeholder"     = "Message (⌘⏎ to commit)";
 "sourceControl.commit.placeholder.amend" = "Amend message (⌘⏎ to commit)";
+"sourceControl.commit.section"         = "Commit";
 "sourceControl.commit.amend"           = "Amend";
 "sourceControl.commit.action"          = "Commit";
 "sourceControl.commit.amend.action"    = "Amend Commit";
@@ -189,6 +190,10 @@
 "findbar.toggleReplace"           = "Toggle Replace";
 "findbar.matches.count"           = "%lld of %lld";
 "findbar.matches.none"            = "No results";
+"findbar.status.wrappedTop"       = "Wrapped to top";
+"findbar.status.wrappedBottom"    = "Wrapped to bottom";
+"findbar.status.replaced"         = "Replaced";
+"findbar.status.replacedCount"    = "Replaced %lld";
 
 // MARK: - Find-in-Files extras
 
@@ -199,6 +204,19 @@
 "finfiles.button.runSearch"       = "Run search (Enter)";
 "finfiles.button.replaceAll"      = "Replace All matches in selected files";
 "finfiles.error.noWorkspace"      = "Open a workspace folder first.";
+"finfiles.error.invalidRegex"     = "Invalid regex: %@";
+"finfiles.error.notUTF8"          = "Not valid UTF-8";
+"finfiles.error.reencodeUTF8"     = "Re-encoded text is not UTF-8";
+"finfiles.replaceSummary.completed" = "Replaced %lld in %lld/%lld files.";
+"finfiles.replaceSummary.errors"  = "Errors: %@.";
+"finfiles.replaceSummary.errors.more" = "+ %lld more";
+"finfiles.selection.file.includeHelp" = "Include in Replace All";
+"finfiles.selection.file.skipHelp" = "Skip during Replace All";
+"finfiles.selection.file.selected" = "Selected for replace: %@";
+"finfiles.selection.file.excluded" = "Excluded from replace: %@";
+"finfiles.selection.match.includeHelp" = "Include this match in Replace All";
+"finfiles.selection.match.skipHelp" = "Skip this match during Replace All";
+"finfiles.selection.match.accessibility" = "Line %lld match selected: %@";
 
 // MARK: - Diff hunks
 
@@ -222,6 +240,7 @@
 "editor.context.undo"           = "Undo";
 "editor.context.redo"           = "Redo";
 "editor.context.find"           = "Find…";
+"editor.context.transform"      = "Transform";
 "editor.context.revealInFinder" = "Reveal in Finder";
 "editor.context.copyPath"       = "Copy Path";
 
@@ -277,12 +296,49 @@
 
 "menu.tools.diff"         = "Compare Files…";
 "menu.tools.compareHEAD"  = "Compare with HEAD";
+"menu.tools.textTools"    = "Text Tools…";
+"menu.tools.transformSelection" = "Transform Selection";
 "menu.tools.nextHunk"     = "Next Git Change";
 "menu.tools.prevHunk"     = "Previous Git Change";
 "menu.tools.settings"     = "Settings…";
 
+"transform.url.encode"        = "URL Encode";
+"transform.url.decode"        = "URL Decode";
+"transform.base64.encode"     = "Base64 Encode";
+"transform.base64.decode"     = "Base64 Decode";
+"transform.html.escape"       = "HTML Escape";
+"transform.html.unescape"     = "HTML Unescape";
+"transform.json.escape"       = "JSON String Escape";
+"transform.json.unescape"     = "JSON String Unescape";
+"transform.base.menu"         = "Base Conversion";
+"transform.base.binaryToDecimal" = "Binary to Decimal";
+"transform.base.decimalToBinary" = "Decimal to Binary";
+"transform.base.octalToDecimal" = "Octal to Decimal";
+"transform.base.decimalToOctal" = "Decimal to Octal";
+"transform.base.hexToDecimal" = "Hex to Decimal";
+"transform.base.decimalToHex" = "Decimal to Hex";
+"transform.crypto.menu"       = "Symmetric Encryption";
+"transform.crypto.encryptAESGCM" = "Encrypt with AES-GCM…";
+"transform.crypto.decryptAESGCM" = "Decrypt with AES-GCM…";
+"transform.crypto.password.title.encrypt" = "Encrypt Selection";
+"transform.crypto.password.title.decrypt" = "Decrypt Selection";
+"transform.crypto.password.message" = "Enter a password for this operation. Scribe does not save it.";
+"transform.crypto.password.placeholder" = "Password";
+"transform.lines.shuffle"     = "Shuffle Lines";
+"transform.error.title"       = "Text Transform Failed";
+"transform.error.noSelection" = "Select text before running this operation.";
+"transform.error.invalidBase" = "That base is not supported.";
+"transform.error.invalidInteger" = "The selection is not a valid integer for the chosen base.";
+"transform.error.invalidURLPercentEncoding" = "The selection is not valid URL percent-encoded text.";
+"transform.error.invalidBase64" = "The selection is not valid Base64.";
+"transform.error.invalidUTF8" = "The decoded bytes are not valid UTF-8 text.";
+"transform.error.invalidJSONString" = "The selection is not a valid JSON string escape sequence.";
+"transform.error.invalidCiphertext" = "The ciphertext or password is not valid for AES-GCM decryption.";
+"transform.error.generic"     = "The operation could not be applied. The document was left unchanged.";
+
 "menu.view.editorTheme"   = "Editor Theme";
 "menu.view.markdownPreview" = "Markdown Preview";
+"menu.view.markdownPreviewUnavailable" = "Markdown Preview is available for .md and .markdown files.";
 "menu.edit.useSelection"  = "Use Selection for Find";
 "menu.edit.insertSnippet" = "Insert Snippet…";
 "menu.edit.hideFindBar"   = "Hide Find Bar";
@@ -373,8 +429,136 @@
 "palette.placeholder.files"     = "Search files in %@";
 "palette.placeholder.symbol"    = "Jump to symbol";
 "palette.placeholder.line"      = "Go to line";
+"palette.placeholder.modeHint"  = "@symbol  :line  >command";
+"palette.placeholder.indexing"  = "Indexing… type to search opened files · %@";
+"palette.placeholder.filesWithHint" = "Search files in %@ · %@";
+"palette.placeholder.openedFiles" = "Search opened files · %@";
 "palette.empty.noCommands"      = "No commands available";
 "palette.empty.noMatches"       = "No matches for “%@”";
+"palette.action.close"          = "Close Command Palette";
+"palette.badge.open"            = "Open";
+"palette.badge.symbol"          = "Symbol";
+"palette.badge.line"            = "Line";
+"palette.badge.snippet"         = "Snippet";
+"palette.badge.tab"             = "Tab";
+"palette.badge.text"            = "Text";
+"palette.badge.encoding"        = "Encoding";
+"palette.badge.lineEnding"      = "Line Ending";
+"palette.badge.syntax"          = "Syntax";
+"palette.command.newTab"        = "New Tab";
+"palette.command.openFile"      = "Open File…";
+"palette.command.closeWorkspaceFolder" = "Close Workspace Folder";
+"palette.command.clearRecentFiles"     = "Clear Recent Files";
+"palette.command.clearRecentFolders"   = "Clear Recent Folders";
+"palette.command.actualSize"    = "Actual Size";
+"palette.command.enableSoftTabs" = "Enable Soft Tabs";
+"palette.command.disableSoftTabs" = "Disable Soft Tabs";
+"palette.command.switchTo"      = "Switch to %@";
+"palette.command.reopenWith"    = "Reopen with %@";
+"palette.command.saveAsEncoding" = "Save as %@";
+"palette.command.useLineEndings" = "Use %@ Line Endings";
+"palette.command.setLanguage"   = "Set Language: %@";
+"palette.command.text.openTools" = "Column Merger…";
+"palette.command.text.urlEncode" = "URL Encode Selection";
+"palette.command.text.urlDecode" = "URL Decode Selection";
+"palette.command.text.base64Encode" = "Base64 Encode Selection";
+"palette.command.text.base64Decode" = "Base64 Decode Selection";
+"palette.command.text.htmlEscape" = "HTML Escape Selection";
+"palette.command.text.htmlUnescape" = "HTML Unescape Selection";
+"palette.command.text.jsonEscape" = "JSON String Escape Selection";
+"palette.command.text.jsonUnescape" = "JSON String Unescape Selection";
+"palette.command.text.binaryToDecimal" = "Convert Binary Selection to Decimal";
+"palette.command.text.decimalToBinary" = "Convert Decimal Selection to Binary";
+"palette.command.text.octalToDecimal" = "Convert Octal Selection to Decimal";
+"palette.command.text.decimalToOctal" = "Convert Decimal Selection to Octal";
+"palette.command.text.hexToDecimal" = "Convert Hex Selection to Decimal";
+"palette.command.text.decimalToHex" = "Convert Decimal Selection to Hex";
+"palette.command.text.shuffleLines" = "Shuffle Selected Lines";
+"palette.command.gotoLine"      = "Go to line %d";
+"palette.command.gotoLine.detail" = "in %@";
+"palette.symbol.detail"         = "%@ · line %d";
+"palette.symbol.empty"          = "No symbols in “%@”";
+"palette.symbol.placeholder"    = "Jump to symbol in %@ (%d)";
+"palette.gotoLine.placeholder"  = "Go to line in %@ (e.g. :42)";
+"palette.commandRoute.placeholder" = "Run a command (%d available)";
+"symbol.kind.function"          = "function";
+"symbol.kind.method"            = "method";
+"symbol.kind.class"             = "class";
+"symbol.kind.struct"            = "struct";
+"symbol.kind.enum"              = "enum";
+"symbol.kind.protocol"          = "protocol";
+"symbol.kind.extension"         = "extension";
+"symbol.kind.typealias"         = "typealias";
+"symbol.kind.property"          = "property";
+"symbol.kind.heading"           = "heading";
+"symbol.kind.test"              = "test";
+
+// MARK: - Text tools (Phase 40 — column merger only)
+
+"textTools.title"                    = "Column Merger";
+"textTools.subtitle"                 = "Split text into columns, compose a template, and merge.";
+"textTools.source.title"             = "Source";
+"textTools.source.summary"           = "%lld lines · %@";
+"textTools.source.useDocument"       = "Reload from current document";
+"textTools.source.useSelection"      = "Use current selection";
+"textTools.source.import"            = "Import Text…";
+"textTools.source.import.help"       = "Import one or more text files and merge them by row.";
+"textTools.source.includeImported"   = "Merge imported sources with source";
+"textTools.source.joinByRow"         = "By Row";
+"textTools.source.joinByKey"         = "By Key";
+"textTools.source.keyColumn"         = "Key Column";
+"textTools.source.rows"              = "%lld rows";
+"textTools.source.rowMismatch"       = "%lld vs %lld rows";
+"textTools.source.rowMismatch.help"  = "Imported text has a different row count. Missing cells are rendered as empty.";
+"textTools.split.kind"               = "Split";
+"textTools.split.csv"                = "CSV";
+"textTools.split.tsv"                = "TSV";
+"textTools.split.pipe"               = "Pipe";
+"textTools.split.delimiter"          = "Delimiter";
+"textTools.split.whitespace"         = "Whitespace";
+"textTools.split.regex"              = "Regex";
+"textTools.split.fixedWidth"         = "Fixed Width";
+"textTools.split.delimiterField"     = "Delimiter";
+"textTools.split.regexField"         = "Pattern";
+"textTools.split.widthsField"        = "Widths";
+"textTools.column.noSample"          = "(empty)";
+
+// — Column palette (top of merger)
+"textTools.palette.title"            = "Columns";
+"textTools.palette.hint"             = "Click to append, or drag onto the template below";
+"textTools.palette.addAll"           = "Add All";
+"textTools.palette.empty"            = "Paste or import text on the left to split into columns.";
+"textTools.palette.chip.help"        = "Click to append column %lld; drag for precise placement.";
+
+// — Token composer (middle of merger)
+"textTools.composer.title"           = "Template";
+"textTools.composer.empty"           = "Click the “+” above to pick a column or add a literal";
+"textTools.composer.addLiteral"      = "+ Text";
+"textTools.composer.addLiteral.help" = "Append a literal chunk (e.g. \", \", \" | \", newline).";
+"textTools.composer.addLiteral.menu" = "Literal text (e.g. “, ”, “ - ”)";
+"textTools.composer.addNewline.menu" = "Newline";
+"textTools.composer.addMenu.title"   = "Add to Template";
+"textTools.composer.addMenu.help"    = "Add a column or literal to the template";
+"textTools.composer.addMenu.columns" = "Columns (click to append / drag for placement)";
+"textTools.composer.addMenu.literals" = "Literals";
+"textTools.composer.clear"           = "Clear";
+"textTools.composer.literalPlaceholder" = "literal";
+"textTools.composer.remove"          = "Remove";
+"textTools.composer.tokenCount"      = "%lld cols · %lld chips";
+"textTools.composer.missing"         = "Missing-cell fill";
+"textTools.composer.missing.placeholder" = "(empty)";
+
+// — Live output (bottom of merger)
+"textTools.live.title"               = "Live Preview";
+"textTools.live.summary"             = "First %lld / %lld lines · ~%@";
+"textTools.live.truncated"           = "…%lld more lines (Copy / Replace use the full output)";
+
+// — Output buttons (shared)
+"textTools.output.copy"              = "Copy";
+"textTools.output.newTab"            = "New Tab";
+"textTools.output.replaceSelection"  = "Replace Selection";
+"textTools.output.replaceDocument"   = "Replace Document";
+"textTools.output.resultTabTitle"    = "Column Merger Result";
 
 // MARK: - Settings
 
@@ -387,13 +571,66 @@
 "settings.section.indent"    = "Indentation";
 "settings.field.tabWidth"    = "Tab width";
 "settings.field.softTabs"    = "Insert spaces when Tab is pressed";
+"settings.font.size.points"  = "%lld pt";
+"settings.indent.tabWidth.spaces" = "%lld spaces";
+"settings.inlineBlame.section"          = "Inline Blame";
+"settings.inlineBlame.mode"             = "Mode";
+"settings.inlineBlame.mode.off"         = "Off";
+"settings.inlineBlame.mode.currentLine" = "Current Line";
+"settings.inlineBlame.mode.allLines"    = "All Lines";
+"settings.inlineBlame.footer"           = "Shows Git blame at the end of editor lines. Hover a blame chip to see the commit summary, author, and short SHA.";
 "settings.section.recent"    = "Recent Files";
+"settings.recent.summary"    = "%lld remembered (max %lld)";
 "settings.action.clear"      = "Clear";
 "settings.appearance.theme"          = "Theme";
-"settings.appearance.section.theme"  = "Editor Theme";
-"settings.appearance.themeFooter"    = "System (auto) follows the macOS light/dark preference. Pinning a specific theme overrides that.";
+"settings.appearance.section.theme"  = "Theme";
+"settings.appearance.themeFooter"    = "The UI theme drives sidebar, status bar, and accent colours. The editor follows the UI theme by default; uncheck to pick a different palette just for code.";
 "settings.appearance.preview"        = "Preview";
+"settings.appearance.ui.title"       = "Global UI Theme";
+"settings.appearance.editor.title"   = "Editor Theme";
+"settings.appearance.editor.follow"  = "Editor follows UI theme";
+"settings.appearance.preview.sidebar" = "Sidebar";
+"settings.appearance.preview.editor" = "Editor";
+
+// Phase 39b — Customize Colors section.
+"settings.appearance.section.customize" = "Customize Colors";
+"settings.appearance.customize.editor"        = "Editor";
+"settings.appearance.customize.ui"            = "UI Chrome";
+"settings.appearance.customize.editingUI"     = "Editing UI: %@";
+"settings.appearance.customize.editingEditor" = "Editing Editor: %@";
+"settings.appearance.customize.followsUI"     = "(follows UI)";
+"settings.appearance.customize.reset"         = "Reset to default";
+"settings.appearance.customize.resetAllUI"     = "Reset all UI colors";
+"settings.appearance.customize.resetAllEditor" = "Reset all Editor colors";
+
+// Phase 39b — slot labels (24). Keep names tight; the row is
+// already cramped between the picker and the reset button.
+"settings.appearance.slot.background"           = "Background";
+"settings.appearance.slot.foreground"           = "Foreground";
+"settings.appearance.slot.caret"                = "Caret";
+"settings.appearance.slot.selectionBackground"  = "Selection";
+"settings.appearance.slot.marginBackground"     = "Line-Number Background";
+"settings.appearance.slot.marginForeground"     = "Line-Number Foreground";
+"settings.appearance.slot.keyword"              = "Keyword";
+"settings.appearance.slot.string"               = "String";
+"settings.appearance.slot.comment"              = "Comment";
+"settings.appearance.slot.number"               = "Number";
+"settings.appearance.slot.preprocessor"         = "Preprocessor";
+"settings.appearance.slot.type"                 = "Type";
+"settings.appearance.slot.identifier"           = "Identifier";
+"settings.appearance.slot.uiWindowBackground"   = "Window Background";
+"settings.appearance.slot.uiSidebarBackground"  = "Sidebar Background";
+"settings.appearance.slot.uiBarBackground"      = "Status Bar Background";
+"settings.appearance.slot.uiPanelBackground"    = "Panel Background";
+"settings.appearance.slot.uiAccent"             = "Accent";
+"settings.appearance.slot.uiAccentText"         = "Accent Text";
+"settings.appearance.slot.uiPrimaryText"        = "Primary Text";
+"settings.appearance.slot.uiSecondaryText"      = "Secondary Text";
+"settings.appearance.slot.uiTertiaryText"       = "Tertiary Text";
+"settings.appearance.slot.uiSeparator"          = "Separator";
+"settings.appearance.slot.uiSelection"          = "Row Highlight";
 "settings.font.systemMonospaced"     = "System Monospaced";
+"inlineBlame.author.you"              = "You";
 
 "about.tagline"  = "Native macOS text editor";
 "about.version"  = "v1.0 · Phase 25 polish";
@@ -412,5 +649,8 @@
 // MARK: - Common
 
 "common.cancel"   = "Cancel";
+"common.close"    = "Close";
 "common.ok"       = "OK";
 "common.replace"  = "Replace";
+"common.yes"      = "yes";
+"common.no"       = "no";

@@ -25,6 +25,7 @@ struct FileTreeView: View {
 private struct FileRow: View {
     @ObservedObject var node: FileNode
     @EnvironmentObject var workspace: Workspace
+    @Environment(\.appTheme) private var appTheme
     let depth: Int
     @State private var hover = false
 
@@ -128,7 +129,7 @@ private struct FileRow: View {
             // Same tint family as the sidebar mode switcher's
             // active pill so the "what's selected where" reading
             // is consistent across the sidebar.
-            return Color.accentColor.opacity(0.14)
+            return appTheme.accent.opacity(0.14)
         } else if hover {
             return Color.primary.opacity(0.06)
         } else {
@@ -138,9 +139,9 @@ private struct FileRow: View {
 
     private var iconTint: Color {
         if node.isDirectory {
-            return Color.accentColor
+            return appTheme.accent
         }
-        return Color.secondary
+        return appTheme.secondaryText
     }
 
     private var iconName: String {

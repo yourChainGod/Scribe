@@ -1,8 +1,8 @@
 //
 //  PaletteWindowController.swift
-//  Phase 3 — host the SwiftUI CommandPalette inside a borderless NSPanel
-//  that floats above the main window. Centres horizontally near the top
-//  of the active screen, dismisses on Esc / loss of key status / pick.
+//  Phase 3 — host the SwiftUI CommandPalette inside a borderless NSPanel.
+//  Centres horizontally near the top of the active screen, dismisses on
+//  Esc / loss of key status / pick.
 //
 
 import AppKit
@@ -11,6 +11,15 @@ import SwiftUI
 @MainActor
 final class PaletteWindowController: NSObject, NSWindowDelegate {
     static let shared = PaletteWindowController()
+    static let panelStyleMask: NSWindow.StyleMask = [
+        .borderless,
+        .fullSizeContentView
+    ]
+    static let panelSize = NSSize(width: CommandPaletteMetrics.width, height: 292)
+    static let isFloatingPanel = false
+    static let panelLevel: NSWindow.Level = .normal
+    static let topOffsetFromKeyWindow: CGFloat = 56
+    static let screenPadding: CGFloat = 18
 
     private var panel: NSPanel?
     private weak var registry: CommandRegistry?
@@ -22,7 +31,7 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
     /// leave it empty, automated tests use it to drive the panel
     /// without simulating keystrokes.
     func show(registry: CommandRegistry,
-              placeholder: String = "Type a command…",
+              placeholder: String = L10n.t("palette.placeholder.commands"),
               initialQuery: String = "") {
         if let panel = panel, panel.isVisible, registry === self.registry {
             panel.makeKeyAndOrderFront(nil)
@@ -37,13 +46,12 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
 
         if let screenFrame = (NSApp.keyWindow?.screen ?? NSScreen.main)?.visibleFrame {
             let panelSize = panel.frame.size
-            // Centred horizontally, ~25% from the top of the visible screen.
-            let x = screenFrame.midX - panelSize.width / 2
-            let y = screenFrame.maxY - panelSize.height - screenFrame.height * 0.25
-            panel.setFrameOrigin(NSPoint(x: x, y: y))
+            panel.setFrameOrigin(Self.panelOrigin(panelSize: panelSize,
+                                                  screenFrame: screenFrame,
+                                                  keyWindowFrame: NSApp.keyWindow?.frame))
         }
-        panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        panel.makeKeyAndOrderFront(nil)
     }
 
     func hide() {
@@ -57,7 +65,7 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
     /// registry, hide it; otherwise (closed, or showing a different
     /// registry) show with the requested registry.
     func toggle(registry: CommandRegistry,
-                placeholder: String = "Type a command…") {
+                placeholder: String = L10n.t("palette.placeholder.commands")) {
         if let panel = panel, panel.isVisible, registry === self.registry {
             hide()
         } else {
@@ -80,13 +88,13 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
                            placeholder: String,
                            initialQuery: String = "") -> NSPanel {
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 560, height: 420),
-            styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
+            contentRect: NSRect(origin: .zero, size: Self.panelSize),
+            styleMask: Self.panelStyleMask,
             backing: .buffered,
             defer: false
         )
-        panel.isFloatingPanel = true
-        panel.level = .floating
+        panel.isFloatingPanel = Self.isFloatingPanel
+        panel.level = Self.panelLevel
         panel.backgroundColor = .clear
         panel.hasShadow = false       // shadow is drawn by the SwiftUI view
         panel.isOpaque = false
@@ -117,5 +125,18 @@ final class PaletteWindowController: NSObject, NSWindowDelegate {
         ])
         panel.contentView = container
         return panel
+    }
+
+    static func panelOrigin(panelSize: NSSize,
+                            screenFrame: NSRect,
+                            keyWindowFrame: NSRect?) -> NSPoint {
+        let anchor = keyWindowFrame ?? screenFrame
+        let rawX = anchor.midX - panelSize.width / 2
+        let x = min(max(rawX, screenFrame.minX + screenPadding),
+                    screenFrame.maxX - panelSize.width - screenPadding)
+        let rawY = anchor.maxY - topOffsetFromKeyWindow - panelSize.height
+        let y = min(max(rawY, screenFrame.minY + screenPadding),
+                    screenFrame.maxY - panelSize.height - screenPadding)
+        return NSPoint(x: x, y: y)
     }
 }

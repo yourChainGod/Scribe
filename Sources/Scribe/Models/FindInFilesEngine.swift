@@ -83,7 +83,8 @@ final class FindInFilesEngine {
         do {
             regex = try buildRegex(options: options)
         } catch {
-            state.error = "Invalid regex: \(error.localizedDescription)"
+            state.error = L10n.t("finfiles.error.invalidRegex",
+                                 error.localizedDescription as NSString)
             state.setSearching(false)
             return
         }
@@ -123,7 +124,8 @@ final class FindInFilesEngine {
         do {
             regex = try buildRegex(options: options)
         } catch {
-            state.error = "Invalid regex: \(error.localizedDescription)"
+            state.error = L10n.t("finfiles.error.invalidRegex",
+                                 error.localizedDescription as NSString)
             state.setReplacing(false)
             completion(ReplaceSummary())
             return
@@ -168,7 +170,7 @@ final class FindInFilesEngine {
             do {
                 let original = try Data(contentsOf: url)
                 guard let text = String(data: original, encoding: .utf8) else {
-                    summary.errors.append((url, "Not valid UTF-8"))
+                    summary.errors.append((url, L10n.t("finfiles.error.notUTF8")))
                     continue
                 }
                 let excludedLines = excludedLinesByURL[url] ?? []
@@ -214,7 +216,7 @@ final class FindInFilesEngine {
                 if count == 0 { continue }
 
                 guard let bytes = newText.data(using: .utf8) else {
-                    summary.errors.append((url, "Re-encoded text is not UTF-8"))
+                    summary.errors.append((url, L10n.t("finfiles.error.reencodeUTF8")))
                     continue
                 }
                 // .atomic = write to sibling temp file + rename, so a

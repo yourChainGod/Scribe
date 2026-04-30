@@ -10,6 +10,7 @@ import SwiftUI
 struct DiffView: View {
     @ObservedObject var session: DiffSession
     let onClose: () -> Void
+    @Environment(\.appTheme) private var appTheme
 
     var body: some View {
         VStack(spacing: 0) {
@@ -21,7 +22,7 @@ struct DiffView: View {
                 placeholder
             }
         }
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(appTheme.windowBackground)
     }
 
     // MARK: - Toolbar
@@ -87,7 +88,7 @@ struct DiffView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
-        .background(.bar)
+        .background(appTheme.barBackground)
     }
 
     /// Hairline vertical separator inside the diff toolbar — same
@@ -95,9 +96,10 @@ struct DiffView: View {
     /// from looking like an undifferentiated row of icons by
     /// cleaving file-ops from navigation-ops.
     private struct DiffToolbarSeparator: View {
+        @Environment(\.appTheme) private var appTheme
         var body: some View {
             Rectangle()
-                .fill(Color(nsColor: .separatorColor).opacity(0.6))
+                .fill(appTheme.separator.opacity(0.6))
                 .frame(width: 1, height: 16)
                 .padding(.horizontal, 4)
         }
@@ -189,12 +191,12 @@ struct DiffView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        .background(Color(nsColor: .controlBackgroundColor))
+        .background(appTheme.sidebarBackground)
         .overlay(alignment: .bottom) {
             // Hairline so the pane header reads as a distinct
             // strip rather than melting into the editor body.
             Rectangle()
-                .fill(Color(nsColor: .separatorColor).opacity(0.5))
+                .fill(appTheme.separator.opacity(0.5))
                 .frame(height: 0.5)
         }
     }
@@ -226,7 +228,7 @@ struct DiffView: View {
                 .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(appTheme.windowBackground)
     }
 
     // MARK: - Actions

@@ -7,6 +7,7 @@ import SwiftUI
 
 struct TabBarView: View {
     @EnvironmentObject var workspace: Workspace
+    @Environment(\.appTheme) private var appTheme
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -23,7 +24,7 @@ struct TabBarView: View {
             .padding(.vertical, 2)
         }
         .frame(height: 34)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(appTheme.windowBackground)
     }
 }
 
@@ -31,6 +32,7 @@ private struct TabItem: View {
     @ObservedObject var doc: Document
     let isSelected: Bool
     @EnvironmentObject var workspace: Workspace
+    @Environment(\.appTheme) private var appTheme
     @State private var hover = false
     @State private var closeHover = false
 
@@ -54,7 +56,7 @@ private struct TabItem: View {
             ZStack {
                 if doc.isDirty && !hover {
                     Circle()
-                        .fill(Color.accentColor)
+                        .fill(appTheme.accent)
                         .frame(width: 6, height: 6)
                 } else {
                     Button {
@@ -89,7 +91,7 @@ private struct TabItem: View {
                 // than the heavier 2pt bar. Lives in the overlay so
                 // the rounded corners of the parent fill stay clean.
                 Rectangle()
-                    .fill(Color.accentColor)
+                    .fill(appTheme.accent)
                     .frame(height: 1.5)
                     .clipShape(.rect(topLeadingRadius: 6, topTrailingRadius: 6))
             }
@@ -153,7 +155,7 @@ private struct TabItem: View {
 
     private var backgroundFill: Color {
         if isSelected {
-            return Color(nsColor: .textBackgroundColor)
+            return Color(rgb: appTheme.editor.background)
         } else if hover {
             return Color.primary.opacity(0.05)
         } else {

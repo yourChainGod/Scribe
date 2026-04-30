@@ -74,16 +74,26 @@ final class QuickOpenController {
     }
 
     private func filePlaceholder(fileIndex: FileIndex) -> String {
+        Self.filePlaceholder(isIndexing: fileIndex.isIndexing,
+                             rootURL: fileIndex.rootURL)
+    }
+
+    static func filePlaceholder(isIndexing: Bool,
+                                rootURL: URL?,
+                                localize: (String) -> String = L10n.t) -> String {
         // Hint users about all three prefix modes from the very first
         // ⌘P press — discoverability for @symbol / :line / >command.
-        let hint = "@symbol  :line  >command"
-        if fileIndex.isIndexing {
-            return "Indexing… type to search opened files · \(hint)"
+        let hint = localize("palette.placeholder.modeHint")
+        if isIndexing {
+            return Self.format("palette.placeholder.indexing", localize, hint)
         }
-        if let root = fileIndex.rootURL {
-            return "Search files in \(root.lastPathComponent) · \(hint)"
+        if let root = rootURL {
+            return Self.format("palette.placeholder.filesWithHint",
+                               localize,
+                               root.lastPathComponent,
+                               hint)
         }
-        return "Search opened files · \(hint)"
+        return Self.format("palette.placeholder.openedFiles", localize, hint)
     }
 
     // MARK: - Command construction
@@ -99,7 +109,7 @@ final class QuickOpenController {
             commands.append(makeCommand(for: url,
                                         rootURL: fileIndex.rootURL,
                                         workspace: workspace,
-                                        prefix: "● "))
+                                        isOpenDocument: true))
         }
 
         // Then indexed files, minus the ones already in `openURLs`.
@@ -112,7 +122,7 @@ final class QuickOpenController {
                 commands.append(makeCommand(for: std,
                                             rootURL: root,
                                             workspace: workspace,
-                                            prefix: ""))
+                                            isOpenDocument: false))
             }
         }
         registry.commands = commands
@@ -137,8 +147,10 @@ final class QuickOpenController {
         // 1. "@symbol" — static sub-registry seeded above.
         if let doc = activeDoc {
             let symPlaceholder = symbolRegistry.commands.isEmpty
-                ? "No symbols in “\(doc.title)”"
-                : "Jump to symbol in \(doc.title) (\(symbolRegistry.commands.count))"
+                ? Self.format("palette.symbol.empty", doc.title)
+                : Self.format("palette.symbol.placeholder",
+                              doc.title,
+                              symbolRegistry.commands.count)
             routes.append(
                 PrefixRoute(id: "atSymbol",
                             prefix: "@",
@@ -159,7 +171,7 @@ final class QuickOpenController {
                                 Self.gotoLineCommands(stripped: stripped,
                                                       doc: doc)
                             },
-                            placeholder: "Go to line in \(doc.title) (e.g. :42)")
+                            placeholder: Self.format("palette.gotoLine.placeholder", doc.title))
             )
         }
 
@@ -172,7 +184,8 @@ final class QuickOpenController {
                 PrefixRoute(id: "commandPalette",
                             prefix: ">",
                             registry: palette,
-                            placeholder: "Run a command (\(palette.commands.count) available)")
+                            placeholder: Self.format("palette.commandRoute.placeholder",
+                                                     palette.commands.count))
             )
         }
 
@@ -185,7 +198,10 @@ final class QuickOpenController {
             return
         }
         symbolRegistry.commands = outline.symbols.map { sym in
-            let subtitle = "\(sym.kind.label) · line \(sym.lineNumber)"
+            let kindLabel = Self.localizedSymbolKindLabel(sym.kind)
+            let subtitle = Self.format("palette.symbol.detail",
+                                       kindLabel,
+                                       sym.lineNumber)
             return ScribeCommand(
                 id: "symbol:\(doc.id):\(sym.id)",
                 title: sym.name,
@@ -203,8 +219,9 @@ final class QuickOpenController {
     /// out-of-range — a hint Text in the result list would be nicer
     /// but the empty-state copy ("No matches for ':abc'") is good
     /// enough today.
-    private static func gotoLineCommands(stripped: String,
-                                         doc: Document?) -> [ScribeCommand] {
+    static func gotoLineCommands(stripped: String,
+                                 doc: Document?,
+                                 localize: (String) -> String = L10n.t) -> [ScribeCommand] {
         guard let doc else { return [] }
         // Digits before the optional ":column" suffix.
         let firstSegment = stripped.split(separator: ":").first.map(String.init) ?? stripped
@@ -217,8 +234,8 @@ final class QuickOpenController {
         return [
             ScribeCommand(
                 id: "gotoLine:\(doc.id):\(line)",
-                title: "Go to line \(line)",
-                subtitle: "in \(doc.title)",
+                title: Self.format("palette.command.gotoLine", localize, line),
+                subtitle: Self.format("palette.command.gotoLine.detail", localize, doc.title),
                 keywords: ["line", "goto"],
                 perform: { [weak doc] in
                     doc?.pendingScrollLine = line
@@ -227,10 +244,16 @@ final class QuickOpenController {
         ]
     }
 
-    private func makeCommand(for url: URL,
-                             rootURL: URL?,
-                             workspace: Workspace,
-                             prefix: String) -> ScribeCommand {
+    struct QuickOpenCommandMetadata: Equatable {
+        let id: String
+        let title: String
+        let subtitle: String
+        let keywords: [String]
+    }
+
+    static func commandMetadata(for url: URL,
+                                rootURL: URL?,
+                                isOpenDocument: Bool) -> QuickOpenCommandMetadata {
         // Subtitle = path relative to workspace root if possible;
         // otherwise the absolute parent path. Quick Open users mostly
         // disambiguate by directory, not basename.
@@ -242,17 +265,60 @@ final class QuickOpenController {
             parentPath = (url.path as NSString).deletingLastPathComponent
         }
 
-        let title = prefix + url.lastPathComponent
         let subtitle = parentPath.isEmpty ? "—" : parentPath
         // Keywords let fuzzy match find files by their parent path even
         // when the user typed only the directory name.
-        let keywords = parentPath.split(separator: "/").map(String.init)
+        var keywords = parentPath.split(separator: "/").map(String.init)
+        if isOpenDocument { keywords.append("open") }
+
+        let role = isOpenDocument ? "open" : "file"
+        return QuickOpenCommandMetadata(
+            id: "quickopen.\(role):\(url.path)",
+            title: url.lastPathComponent,
+            subtitle: subtitle,
+            keywords: keywords
+        )
+    }
+
+    private static func localizedSymbolKindLabel(_ kind: SymbolKind) -> String {
+        switch kind {
+        case .function: return L10n.t("symbol.kind.function")
+        case .method: return L10n.t("symbol.kind.method")
+        case .classDecl: return L10n.t("symbol.kind.class")
+        case .structDecl: return L10n.t("symbol.kind.struct")
+        case .enumDecl: return L10n.t("symbol.kind.enum")
+        case .protocolDecl: return L10n.t("symbol.kind.protocol")
+        case .extensionDecl: return L10n.t("symbol.kind.extension")
+        case .typealiasDecl: return L10n.t("symbol.kind.typealias")
+        case .property: return L10n.t("symbol.kind.property")
+        case .heading: return L10n.t("symbol.kind.heading")
+        case .test: return L10n.t("symbol.kind.test")
+        }
+    }
+
+    private static func format(_ key: String, _ args: CVarArg...) -> String {
+        String(format: L10n.t(key), arguments: args)
+    }
+
+    private static func format(_ key: String,
+                               _ localize: (String) -> String,
+                               _ args: CVarArg...) -> String {
+        String(format: localize(key), arguments: args)
+    }
+
+    private func makeCommand(for url: URL,
+                             rootURL: URL?,
+                             workspace: Workspace,
+                             isOpenDocument: Bool) -> ScribeCommand {
+        let metadata = Self.commandMetadata(for: url,
+                                            rootURL: rootURL,
+                                            isOpenDocument: isOpenDocument)
 
         return ScribeCommand(
-            id: "quickopen:\(url.path)",
-            title: title,
-            subtitle: subtitle,
-            keywords: keywords,
+            id: metadata.id,
+            title: metadata.title,
+            subtitle: metadata.subtitle,
+            keywords: metadata.keywords,
             perform: { [weak workspace] in
                 workspace?.openFile(at: url)
             }

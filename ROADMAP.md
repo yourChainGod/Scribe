@@ -1551,24 +1551,494 @@ Parser / RelativeTime 已被 26 测试 (12 + 9 + 5) 覆盖。
 Manual smoke：开 Scribe 自身 repo 任意 .swift 文件，caret
 行末出 chip。
 
-**未覆盖 (Phase 35c-iii)**：Settings 开关（off / cur-line /
-all-lines + author name → "You" 替换 + summary in tooltip
-+ per-theme grey + i18n labels）。
+**未覆盖 (Phase 35c-iii / 后续)**：Settings 开关（off /
+cur-line / all-lines）+ author name → "You" 替换 + summary in
+tooltip + i18n labels；per-theme grey 与 Merge Conflict UI 后续
+独立推进。
 
-## Phase 35+ · 路线展望
+## Phase 35c-iii · Inline Blame Settings + hover tooltip（2026-04-29）
+
+**背景**：35c-ii-γ 已让 caret 行末出现 blame chip，但用户还
+不能控制显示密度，也看不到 commit summary。此拍补齐 editor
+settings、显示 polish 与 hover 细节，同时保持默认行为不变：
+新用户仍只在当前行看到 chip。
+
+**交付**：
+
+- `Sources/Scribe/Models/EditorPreferences.swift`
+  - 新 `InlineBlameMode.off/currentLine/allLines`，`CaseIterable`
+    + `Identifiable` 供 Settings picker 使用。
+  - 新持久化 key `editor.inlineBlameMode`；默认 `.currentLine`，
+    未知 raw value fallback `.currentLine`，避免升级 / 降级后
+    prefs 破坏旧体验。
+- `Sources/Scribe/Views/SettingsView.swift`
+  - Editor tab 新 Inline Blame section，segmented picker 提供
+    Off / Current Line / All Lines。
+  - footer 明确 hover 可查看 commit summary、author、short SHA。
+- `Sources/Scribe/Models/InlineBlameFormatter.swift` (new)
+  - 统一 label / tooltip 格式化。
+  - 当前 repo `git config user.name` 与 blame author 匹配时显示
+    本地化的 `inlineBlame.author.you`（"You" / "你"）。
+  - tooltip 格式：summary 第一行，author + sha7 第二行；summary
+    为空时只显示 author + sha7。
+- `Sources/Scribe/Models/GitClient.swift`
+  - 新 `currentUserName(repo:)`，读取 repo-local `git config
+    user.name`，失败 / 空字符串时返回 nil。
+- `Sources/Scribe/Models/GitBlameEngine.swift`
+  - request 时同步缓存 current author；新增
+    `blameLines(for:)` 支持 all-lines 渲染，
+    `currentAuthorName(for:)` 支持 formatter。
+  - invalidate / refresh / invalidateAll 同步清 author cache。
+- `Sources/Scribe/Views/Scintilla/SCIConstants.swift`
+  - 新 calltip 与 dwell 常量：`CALLTIPSHOW/CANCEL/USESTYLE`、
+    `SETMOUSEDWELLTIME`、`SCN.DWELLSTART/DWELLEND`。
+- `Sources/Scribe/Views/Scintilla/Coordinator+InlineBlame.swift`
+  - `applyInlineBlame(in:)` 按 prefs 分流：off 隐藏 annotation，
+    currentLine 保持旧 O(1) 行为，allLines 对 cached blame map
+    批量上 chip。
+  - dwell start 计算 hovered line，currentLine 模式只允许 caret
+    line tooltip；allLines 模式允许任意有 blame 的行。
+  - dwell end 取消 calltip，避免 hover 残留。
+- `Sources/Scribe/Views/ScintillaCodeEditor.swift`
+  - `notification(_:)` 接上 `SCN.DWELLSTART/DWELLEND` 到 tooltip
+    show/hide。
+- `Sources/Scribe/Resources/{en,zh-Hans}.lproj/Localizable.strings`
+  - 新 Inline Blame settings + mode + footer + `author.you`
+    双语 key；key 总数 323。
+
+**测试**：+5 闸 (323 → 328)。
+`Tests/ScribeTests/InlineBlameSettingsTests.swift` 覆盖 prefs
+默认 / 持久化 / fallback、"You" 替换、tooltip summary+author+SHA、
+以及 `GitClient.currentUserName(repo:)` repo-local config 读取。
+
+**未覆盖 (Phase 35c-iv / 后续)**：per-theme inline blame grey、
+Merge Conflict Accept/Reject UI、tooltip 的自动化截图断言。
+
+## Phase 35c-iv · Inline Blame deterministic verification hook（2026-04-29）
+
+**背景**：35c-iii 已接上 dwell/calltip 路径，但 macOS 鼠标 hover
+自动化很难稳定停在 Scintilla 的 dwell 窗口内，截图验收靠手动坐标
+会抖。本拍复用既有 `SCRIBE_TEST_*` 体系，把 Inline Blame 的显示密度、
+caret 行与 tooltip 行变成确定性 app 内命令。
+
+**交付**：
+
+- `Sources/Scribe/Models/FindState.swift`
+  - 新 test-only `Command.testInlineBlame(mode:caretLine:tooltipLine:)`。
+    继续走现有编辑器 command bus，不额外暴露用户菜单。
+- `Sources/Scribe/Views/ScintillaCodeEditor.swift`
+  - `findCommandSink` 新增 Inline Blame verification dispatch。
+- `Sources/Scribe/Views/Scintilla/Coordinator+InlineBlame.swift`
+  - 新 `testInlineBlame(mode:caretLine:tooltipLine:in:)`：
+    切 prefs mode、移动 caret 到 1-based 目标行、重绘 annotation、
+    可选在目标行末直接 `CALLTIPSHOW`。
+  - 行号统一 clamp 到 buffer 范围，避免短文件 screenshot hook
+    越界。
+- `Sources/Scribe/App/TestHooks.swift`
+  - 新环境变量：
+    `SCRIBE_TEST_INLINE_BLAME_MODE=off|currentLine|allLines`、
+    `SCRIBE_TEST_INLINE_BLAME_LINE=<line>`、
+    `SCRIBE_TEST_INLINE_BLAME_TOOLTIP_LINE=<line>`。
+  - hook 在 1.4s / 2.4s 各发一次命令；第一次覆盖快仓库，
+    第二次覆盖慢 `git blame` cache 落地。
+- `README.md`
+  - 自动化截图段落记录 Inline Blame hook 用法。
+  - 补充 `.app` bundle 验收要用 `launchctl setenv`，因为
+    LaunchServices/XPC 启动不会继承当前 shell 前缀的 `SCRIBE_*`
+    环境变量。
+
+**测试**：+1 闸 (328 → 329)。
+`InlineBlameSettingsTests.test_findStatePublishesInlineBlameVerificationCommand`
+覆盖 command bus 可以发布并携带 mode / caret line / tooltip line。
+
+**手动验收**：用临时 git repo 打开 `demo.swift`，通过
+`launchctl setenv SCRIBE_AUTO_FOLDER / SCRIBE_AUTO_OPEN /
+SCRIBE_TEST_INLINE_BLAME_*` + `open -n build/Scribe.app` 启动 release
+bundle，确认 all-lines chip 出现在每一行，且强制 calltip 显示 commit
+summary、作者与 SHA。
+
+**未覆盖 (后续)**：per-theme inline blame grey、Merge Conflict
+Accept/Reject UI。
+
+## Phase 36a · UI polish pass（2026-04-29）
+
+**背景**：Phase 35b/35c 把 Source Control 和 Inline Blame 的功能面补齐后，
+主窗口已有明显工程能力，但中文本地化下侧栏 mode switcher 会被
+`源代码管理` 挤高，Source Control 长路径单行显示也偏拥挤。本拍先做
+低风险 chrome polish，不改 git / editor 核心语义。
+
+**交付**：
+
+- `Sources/Scribe/Views/SidebarView.swift`
+  - 侧栏 mode switcher 改为 icon-only 38×30 工具按钮，保留
+    localized tooltip 与 accessibility label。
+  - active mode 用轻量 accent underline 表达，避免长中文标签换行。
+- `Sources/Scribe/Views/SourceControlSidebar.swift`
+  - 文件行改成 status badge + 文件名 + parent path 副标题的层级结构。
+  - commit panel 增加标题 / staged count capsule，输入框改为更柔和的
+    text-background fill + hairline stroke。
+- `Sources/Scribe/Views/StatusBarView.swift`
+  - large-file saving/loading 与 modified 状态统一成右侧 status capsule。
+- `Sources/Scribe/Resources/{en,zh-Hans}.lproj/Localizable.strings`
+  - 新增 `sourceControl.commit.section`。
+- `README.md`
+  - 当前状态新增 Phase 36a。
+
+**测试**：UI-only，走 build / localization / manual app smoke。
+
+**未覆盖 (后续)**：Command Palette / Quick Open 视觉统一、Settings
+窗口布局密度、diff multibuffer 可编辑 polish。
+
+## Phase 36b · Markdown Preview discoverability（2026-04-29）
+
+**背景**：Markdown Preview 已经有 `⌘⇧V` 与 View 菜单入口，但主窗口没有
+就地可见的 preview affordance；打开 README 时用户容易把状态栏的
+“Markdown”误认为只是语言模式，也看不到预览开关。
+
+**交付**：
+
+- `Sources/Scribe/Models/Workspace.swift`
+  - 新 `canToggleMarkdownPreview` 与 `toggleMarkdownPreview()`，
+    菜单、工具栏、右键菜单、Command Palette 统一走同一路径。
+- `Sources/Scribe/Views/MainWindow.swift`
+  - Markdown 文档时在 toolbar view group 显示眼睛按钮，复用
+    `⌘⇧V` tooltip；打开后用 filled eye 表达 active state。
+- `Sources/Scribe/Views/EditorAreaView.swift`
+  - editor 右键菜单在 Markdown 文档下增加 Markdown Preview 项，
+    开启时显示 checkmark。
+- `Sources/Scribe/Models/CommandRegistration.swift`
+  - Command Palette 新 `view.markdownPreview`，搜索 markdown /
+    preview / render / split / html 都能命中。
+- `Sources/Scribe/App/AppCommands.swift`
+  - View 菜单改走 `Workspace.toggleMarkdownPreview()`，避免入口逻辑漂移。
+- `Tests/ScribeTests/CommandRegistrationTests.swift`
+  - 新红绿测试固定 Command Palette 可发现性与 toggle 行为。
+
+**测试**：+1 闸 (329 → 330)。先红测确认 Command Palette 搜不到
+Markdown Preview，再补入口后变绿。
+
+**手动验收**：打开 `README.md` 的 release bundle，应能在 toolbar 看到
+眼睛 preview 按钮；点击后右侧 split 出 WKWebView 预览，再点一次关闭。
+
+## Phase 36c · Toolbar sidebar de-dup（2026-04-29）
+
+**背景**：`NavigationSplitView(columnVisibility:)` 在 macOS 14 会自动向
+toolbar 注入系统侧边栏按钮；Phase 36a 之前手写的 `.navigation`
+toolbar item 还在，导致窗口左上同时出现两个“显示/隐藏侧栏”按钮。
+
+**交付**：
+
+- `Sources/Scribe/Views/MainWindow.swift`
+  - 移除自定义 sidebar toolbar item，保留系统 `NavigationSplitView`
+    按钮作为唯一可见入口。
+  - 保留 `workspace.sidebarVisible` ↔ `columnVisibility` 双向同步，
+    所以 Command Palette / test hook 仍能程序化展开侧栏。
+- `Tests/ScribeTests/CommandRegistrationTests.swift`
+  - 新测试固定 `view.toggleSidebar` 命令仍可从 Command Palette
+    搜到并翻转 `workspace.sidebarVisible`。
+
+**测试**：+1 闸 (330 → 331)。真实 app smoke 要确认 toolbar 只剩一个
+侧边栏按钮。
+
+## Phase 36d · Palette polish v2（2026-04-29）
+
+**背景**：Command Palette / Quick Open 共用同一个浮窗，但 Quick Open
+此前靠标题前缀 `●` 表示“已打开”，Command Palette 又把 File/View/Tab
+这类类别当成第二行 subtitle 渲染，导致路径、类别、状态混在同一个
+文本层级里。Phase 36d 先把 row presentation 抽成可测 metadata，
+让浮窗行结构统一：左侧图标、中间标题+路径细节、右侧类别/status badge。
+
+**交付**：
+
+- `Sources/Scribe/Views/CommandPresentation.swift`
+  - 新增 `CommandPresentation`，根据 command id / subtitle 产出 icon、
+    title、detail、badge，供 Command Palette、Quick Open、Snippet picker
+    共用同一套 row 语义。
+  - Quick Open 已打开文件用 localized `palette.badge.open` badge，不再污染标题文本。
+  - File/View/Tab/Encoding/Line Ending/Syntax 从第二行 subtitle 收敛到
+    右侧 localized badge，减少命令面板的垂直噪音。
+- `Sources/Scribe/Views/CommandPalette.swift`
+  - row 左侧增加稳定 SF Symbol 图标槽，选中态使用轻量 accent 背景。
+  - 路径/描述保留在第二行并使用 middle truncation；类别/status 进入
+    capsule badge。
+  - 修正 Quick Open prefix route icon 映射：`@` / `:` / `>` 分别显示
+    symbol / go-to-line / command glyph。
+- `Sources/Scribe/Views/QuickOpenController.swift`
+  - 新增可测 `commandMetadata(for:rootURL:isOpenDocument:)`。
+  - `quickopen.open:` / `quickopen.file:` 分离已打开文件和索引文件。
+  - 文件标题保持纯 basename，目录 path 只出现在 detail / keywords。
+  - Quick Open 初始 placeholder 的 indexing / workspace / opened-files
+    三态与 `@symbol :line >command` hint 全部走 Localizable。
+  - `@` symbol / `:` goto-line / `>` command route 的 placeholder、行号
+    detail 和 symbol kind label 全部走 Localizable。
+- `Sources/Scribe/Models/CommandRegistration.swift`
+  - Palette command visible title/subtitle 全部走 Localizable；保留英文
+    mnemonic keywords，中文 UI 下 `toggle sidebar` / `enc` / `line ending`
+    仍可搜到对应命令。
+- `Sources/Scribe/Resources/{en,zh-Hans}.lproj/Localizable.strings`
+  - 新增 palette badge / command title / route placeholder / symbol kind
+    keys，并补齐 FindBar / Find-in-Files / Settings 组装型文案
+    keys（324 → 389），双语包继续 lockstep。
+- `Sources/Scribe/Views/PaletteWindowController.swift`
+  - 移除 `.nonactivatingPanel` style mask，让 palette 能真正成为 key
+    window，避免菜单 / `SCRIBE_TEST_PALETTE_QUERY` 打开后立即丢焦点隐藏。
+  - 调整显示顺序为先激活 App、再 `makeKeyAndOrderFront`。
+- `Sources/Scribe/Views/LocalizationPresentation.swift`
+  - 新增 presentation helper 固定组装型 UI 文案：FindBar count / wrap /
+    replace status、Find-in-Files replace summary + selection accessibility、
+    Settings font/tab/recent 计数。
+- `Scripts/check_localization.swift`
+  - dangling-key 扫描补上 `Text("...", bundle: .module)`，让 SwiftUI
+    直接绑定的本地化 key 也进入 CI 校验。
+- `Tests/ScribeTests/CommandPresentationTests.swift`
+  - 红绿覆盖 Quick Open clean title、open badge、path keywords，
+    command category subtitle → badge，以及 palette badge / goto-line
+    visible text / initial placeholder 的 localization contract。
+- `Tests/ScribeTests/CommandRegistrationTests.swift`
+  - 固定 command title / badge localizer 注入，并覆盖本地化标题下英文
+    mnemonic query 仍可命中。
+- `Tests/ScribeTests/PaletteWindowControllerTests.swift`
+  - 固定 palette panel style 必须允许 key-window focus。
+- `Tests/ScribeTests/LocalizationPresentationTests.swift`
+  - 覆盖 FindBar 状态、Find-in-Files 替换摘要 / 选择可访问性，以及
+    Settings 单位 / recent summary 的本地化注入 contract。
+
+**测试**：+15 闸 (331 → 346)。先红测确认缺少 metadata / presentation、
+localized badge/title/goto-line contract、key-window panel style contract，
+以及 FindBar / Find-in-Files / Settings 组装型文案 contract，再补实现后
+聚焦测试通过；release app smoke 要打开 `⌘P` 与 `⌘⇧P`，并检查 Find /
+Replace / Settings 中文 UI 不露英文类别/status。
+
+## Phase 36e · Screenshot issue polish pass（2026-04-29）
+
+**背景**：用户截图验收指出 10 个问题：Dock 图标视觉过大、Command
+Palette 文案/尺寸/关闭入口不清晰、浮窗会越过其他 App、Inline Blame
+tooltip 残留到其他软件上方、侧栏展开动画在系统按钮与分隔线重叠时卡顿、
+保存按钮像下载、外部磁盘变更提示居中且系统感过重，以及后续文本工具
+（分列/合列/行打乱/右键转换/编码/加密）需求。
+
+**交付**：
+
+- `Resources/icon.svg`
+  - App 图标 squircle、纸张、笔整体内收，降低 Dock 里的视觉尺寸。
+- `Sources/Scribe/Views/PaletteWindowController.swift`
+  - Palette 从 `.floating` 层级回到 `.normal`，`isFloatingPanel = false`，
+    防止切到其他 App 后仍浮在前方。
+  - 面板尺寸收敛为 500×340，和 SwiftUI content metrics 共享测试约束。
+- `Sources/Scribe/Views/CommandPalette.swift`
+  - 新增 `CommandPaletteMetrics`，收紧 list 高度和 row icon 槽尺寸。
+  - 搜索栏右侧增加 localized 关闭按钮，Esc / 失焦 / 点击均可关闭。
+- `Sources/Scribe/Models/Workspace.swift` + `Sources/Scribe/Views/MainWindow.swift`
+  - 外部文件变更从 `NSAlert.runModal()` 改为窗口内 SwiftUI sheet。
+  - `ExternalChangePrompt` 持有 decoded disk payload，用户选择“重新载入”
+    后才覆盖 dirty buffer；选择“保留更改”保持本地未保存文本。
+- `Sources/Scribe/Views/ScintillaCodeEditor.swift`
+  - app resign active / window resign key 时主动取消 Scintilla calltip，
+    防止 Inline Blame hover tooltip 残留到其他 App 上方。
+- `Sources/Scribe/Views/MainWindow.swift`
+  - 移除 sidebarVisible → NavigationSplitView 同步里的额外 `withAnimation`，
+    交给系统 split view 动画，避免展开按钮和分隔线交叠时卡顿。
+  - 保存工具栏图标改为 `doc.badge.checkmark`，不再使用下载托盘语义。
+- `Sources/Scribe/Views/CommandPresentation.swift`
+  - Command Palette 的 `file.save` 图标同步改为 `doc.badge.checkmark`。
+- `TODO.md`
+  - 新增后续自查/自检测队列：文本分列合列工作台、导入文本合并、
+    行顺序打乱、右键转换/编码/解码/对称加密解密、视觉验收与测试闸。
+
+**测试**：+5 闸 (346 → 351)。新增 palette 层级/尺寸红绿测试、外部变更
+prompt reload/keep 红绿测试、保存命令图标语义测试。
+
+**验证**：
+
+- `swift test`：351/351 pass。
+- `swift build -Xswiftc -swift-version -Xswiftc 6`：通过。
+- `swift Scripts/check_localization.swift`：390/390 key 同步。
+- `swift Scripts/render_icon.swift Resources/icon.svg /tmp/ScribeIconCheck.iconset`：
+  可渲染 16px 到 1024px 临时 iconset。
+
+## Phase 37 · Text operations workbench（in progress）
+
+**目标**：把用户提出的文本分列、列重排、列合并、导入新文本后合并、
+行顺序打乱、右键进制转换/编码解码/对称加密解密，做成一个高级但克制的
+macOS 文本工具体系。
+
+**设计方向**：
+
+1. **Text Tools 工作台**：从 Tools 菜单、Command Palette、右键菜单进入；
+   以 sheet / inspector 形态出现，不离开当前文档上下文。
+2. **分列/合列融合 UI**：左侧输入源（当前选区 / 全文 / 导入文本），中间
+   delimiter / regex / fixed-width / preview table，右侧列选择、拖动排序、
+   join delimiter、输出策略（替换选区 / 新标签 / 剪贴板）。
+3. **导入文本合并**：允许添加第二文本源，按行对齐或按 key 列 join；
+   行数不一致时明确显示 mismatch badge。
+4. **行打乱**：支持选区/全文、保留首行、保留空行位置、可选 seed，
+   操作前 preview，输出策略同上。
+5. **右键 Transform 子菜单**：Base 2/8/10/16、URL/Base64/HTML/JSON
+   encode/decode、AES-GCM password prompt（CryptoKit）、失败时不改 buffer。
+6. **测试策略**：纯文本转换先落模型层单测，再接命令注册和 UI smoke；
+   加密只测 round-trip 与错误密码失败，不把用户密码写入日志/偏好。
+
+**Phase 37a 当前完成**：
+
+- 新增 `TextOperations.swift`：`TextTable`、`TextTableSplitter`、`ColumnPlan`、
+  `TextLineShuffler`、`TextTransformAction`。支持 CSV 引号/转义、TSV、pipe、
+  custom delimiter、regex、fixed-width 分列；行打乱会把文件末尾换行排除在
+  shuffle pool 外，避免把尾随空行洗到正文中。
+- 新增 Text Tools sheet：以窗口 sheet 形态打开，避免浮到其他 app 上方；
+  Columns / Shuffle 两个模式已接入，支持选区 / 全文 / 草稿来源、导入第二
+  文本源、按行并列合并、行数 mismatch badge、前 80 行预览、列选择、拖拽
+  / 箭头重排、合并结果预览、复制 / 新标签 / 替换选区 / 替换文档输出。
+- 新增右键 `Transform` 子菜单、Tools 菜单与 Command Palette 文本命令：
+  URL、Base64、HTML、JSON、2/8/10/16 进制转换、AES-GCM 加密/解密、
+  行打乱。AES 密码只在内存中经 prompt 传递，不落日志 / UserDefaults。
+- 转换失败从单纯 beep 升级为当前窗口内 sheet 提示，失败时不改 buffer。
+- Markdown Preview 入口改为始终可发现：工具栏与右键菜单可见，非
+  `.md/.markdown` 文档时禁用并显示本地化原因。
+- Inline Blame calltip 在 Text Tools sheet 展示期间会被 editor coordinator
+  直接取消并禁止重新弹出；`SCRIBE_TEST_TEXT_TOOLS_*` 可直接打开 Columns /
+  Shuffle sheet 做截图烟测，避免依赖菜单点击。
+
+**Phase 37b 待打磨**：
+
+- Text Tools 增加独立 Transform 模式，把右键 one-shot transforms 也做成
+  可预览、可输出到新标签 / 选区 / 文档的工作台流程。
+- Merge 模式增加 prefix / suffix / missing-cell placeholder；后续再做
+  key-column join。
+- 等 Transform 工作台模式落地后，把 `SCRIBE_TEST_TEXT_TOOLS_*` 截图 hook
+  扩展到 Transform sheet，并补中英文视觉烟测。
+
+## Phase 39 · Theme overhaul + custom color overrides（2026-04-30）
+
+**背景**：用户验收指出旧 7 套主题（Scribe Light/Dark · Solarized Light/Dark
+· Dracula · Monokai · GitHub Light）"配色太丑陋了" — 都是直接搬 VS Code /
+社区方案，UI chrome 平、不像 macOS 原生。同时缺少自定义色槽能力，
+即使主题方向不合用户口味也只能整体换。Phase 39 一次性收掉两件事：
+(a) 用 macOS HIG 系统色 + Xcode 默认语法色重铸 6 个主题；
+(b) 加 24 槽 per-theme 用户覆写。两阶段可独立 review。
+
+### Phase 39a · 主题重铸
+
+**新主题表**（共 6 + system = 7 case，与旧 catalog 同 case 数）：
+
+| ThemeID         | 取向 | 锚色                                | 强调色                |
+|-----------------|------|------------------------------------|----------------------|
+| `daylight`      | 浅默认 | paper #FFFFFF · sidebar #F5F5F7    | system blue #007AFF  |
+| `graphiteLight` | 浅中性 | #FAFAFA / sidebar #E8E8E8          | graphite #636366     |
+| `sand`          | 浅暖色 | cream #FBF7EC / sidebar #EEE3C8    | terracotta #B85F2E   |
+| `inkwell`       | 深默认 | Apple dark #1D1D1F / sidebar #252527 | system blue #0A84FF |
+| `graphiteDark`  | 深中性 | #1C1C1E / sidebar #232325          | graphite #AEAEB2     |
+| `midnight`      | 深紫调 | #12121C / sidebar #18182A          | system purple #BF5AF2 |
+
+**迁移表 (`EditorPreferences.legacyThemeAlias`)**：
+
+| 旧 raw          | 新 ThemeID      |
+|-----------------|-----------------|
+| lightDefault    | daylight        |
+| darkDefault     | inkwell         |
+| solarizedLight  | sand            |
+| solarizedDark   | midnight        |
+| dracula         | midnight        |
+| monokai         | inkwell         |
+| githubLight     | daylight        |
+
+`resolveStoredThemeID` 在三个键（`editor.themeID`、`appearance.uiThemeID`、
+`appearance.editorThemeID`）上都先走 `ThemeID(rawValue:)`，再 fallback
+到 alias map，最后 `.system`。任何旧用户重启后视觉不丢，只是配色
+靠近最相似的新主题。
+
+**改动**：
+- `Sources/Scribe/Models/ThemeManager.swift` — 重写 catalog + ThemeID。
+- `Sources/Scribe/Models/EditorPreferences.swift` — `legacyThemeAlias`
+  + `resolveStoredThemeID()` 集中迁移逻辑。
+- `Sources/Scribe/Models/AppTheme.swift` — `placeholder` 改 `.daylight`。
+- `Tests/ScribeTests/ThemeCatalogTests.swift` — assertion 全替换。
+- `Tests/ScribeTests/ThemePreferencesTests.swift` — 加 7 项 alias 覆盖
+  test (`test_migration_phase39LegacyAliasMaps`)。
+
+### Phase 39b · 自定义颜色覆写
+
+**模型** (`Sources/Scribe/Models/ThemeOverrides.swift`)：
+- `enum SlotCategory { editor, ui }`
+- `enum ThemeSlot` — 24 case，rawValue 与 `Theme` 字段同名；带
+  `category` 和 `displayKey`。
+- `struct ThemeOverrides: Codable, Sendable, Equatable { var slots: [ThemeSlot: Int] }` — 稀疏。
+- `Theme.applying(_:)` — 显式 24 字段 switch（reflection-free）；空覆写直接 identity 短路。
+- `Theme.value(for: ThemeSlot)` — 反向读，UI binding 用。
+
+**EditorPreferences 扩展**：
+- `@Published var themeOverrides: [ThemeID: ThemeOverrides]`，JSON
+  序列化为 `[String: ThemeOverrides]` 存于 `appearance.themeOverrides`。
+- 4 helper：`overrides(for:)`、`setOverride(_:slot:color:)`、
+  `clearOverride(_:slot:)`、`clearAllOverrides(_:)`。最后一个 slot
+  清空时连同外层 entry 一起 drop，保证 sparse 状态稳定。
+- 加载时 `loadThemeOverrides` 也走 `legacyThemeAlias` —— Dracula 时期
+  存的覆写会聚合到 Midnight 上。
+
+**resolution pipeline 三处注入**：
+- `Sources/Scribe/Views/ThemeHost.swift:42` — UI + editor 两侧分别
+  `.applying(prefs.overrides(for: ...))`。
+- `Sources/Scribe/Views/Scintilla/Coordinator+Theme.swift:61` — 同样
+  merge；KVO appearance observer 走的就是这条路径，覆写自然跟随
+  Light/Dark 切换。
+- `Sources/Scribe/Views/SettingsView.swift:212` — `ThemePreviewSwatch`
+  也 apply 一次，preview 与正式 chrome 完全一致。
+
+**Settings UI** (`AppearanceSettingsPane` 内插入 `ThemeCustomizationSection`)：
+- 顶部"正在编辑 UI / Editor 主题：%@"双行说明，让用户清楚自己改的
+  是哪一套（`editorFollowsUITheme` 时 Editor 行追加"（跟随 UI）"）。
+- 两个 `DisclosureGroup`（默认折叠）— Editor 13 槽 / UI Chrome 11 槽。
+- 每行：localized 名 + SwiftUI `ColorPicker`（不用 NSColorWell —— 跨
+  well 共享 NSColorPanel.shared 有问题；ColorPicker 是 macOS 11+ 原生
+  方案）+ per-slot Reset。`hasOverride` 控制 Reset 可用性 + 透明度。
+- 底部两个"Reset all UI / Editor colors" 按钮。
+- `Color → Int` helper：`NSColor(self).usingColorSpace(.sRGB)` →
+  rounded 0–255 byte → 0xRRGGBB；nil-safe。
+
+**isDarkUI 语义**（在 `AppTheme` 文档化）：
+继续基于 `prefs.uiThemeID.isDark`（preset 分类），**不**根据覆写后
+背景亮度推断。用户故意把 Daylight 背景调黑，downstream 13 个 chrome
+consumer 仍按 light 行为绘制 — 这是用户意图分类，不是像素亮度探测。
+
+**改动**：
+- 新文件：`Sources/Scribe/Models/ThemeOverrides.swift`
+  ·`Tests/ScribeTests/ThemeOverridesTests.swift`
+- 改：`EditorPreferences` · `ThemeHost` · `Coordinator+Theme`
+  · `SettingsView`（+~190 行 customize section 与 SlotRow / Color helper）
+  · `en.lproj/Localizable.strings` + `zh-Hans.lproj/Localizable.strings`
+  （+30 keys：1 section、6 customize 控件、24 slot 名）。
+
+**测试**：+13 (398 → 411)。新 `ThemeOverridesTests`：applying empty /
+single / 全 24 slot 覆盖 / 不动 base / Codable round-trip 空 + 稀疏 /
+setOverride 持久化 / clearOverride 落回 base / 跨主题隔离 /
+clearAllOverrides drop entry / 损坏 JSON silent fall-back / 旧 outer
+key 通过 alias 迁移 / subscript 写入也持久化（澄清 Plan 道友
+的"footgun"假说不成立 —— Swift 写回的确触发 didSet）。
+
+**验证**：
+
+- `swift build`：clean。
+- `swift test`：411/411 pass。
+- `swift Scripts/check_localization.swift`：558/558 key 同步。
+- 手验证（计议文档 verification §1-§8）：迁移 `defaults write
+  appearance.uiThemeID dracula` → 重启选中 Midnight；改 Daylight 强调
+  色 → 主窗口实时变；切到 Inkwell 仍是 system blue（per-theme 隔离）；
+  覆写 Editor → keyword Scintilla KVO 路径上屏 instant。
+
+## Phase 36+ · 路线展望
 
 下面是想做的事，按重要度而非时间排。多条路线是 zed 调研后决定插入的。
 
-1. **Git v2 polish (Phase 35b-4-g)**：in-place 编辑 hunk excerpt（zed 风可编辑 diff，目前 ProjectDiffView 仍是 read-only）+ submodule diff + 流式 diff load。Phase 35b-1/2a/2b/2c/3/4-a/4-b/4-c/4-d/4-e/4-f 交付了读面 + file-level 写面 + commit + remote sync + per-hunk stage/unstage + 分支 picker + force-with-lease + Project Diff multibuffer (read-only) + Stage All / Unstage All + Revert Hunk + 侧栏右键跳 multibuffer + ⌘F 跨文件 search + ⌘G/⇧⌘G 行级 next/prev 闭环。
-2. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末 annotation 显示 author/time/commit、冲突区上方 Accept/Reject 按钮。35c-i + 35c-ii-α + 35c-ii-β + 35c-ii-γ 已交付完整 Inline Blame：GitClient.blame + parseBlamePorcelain + BlameLine + BlameResult 数据层 · RelativeTime helper（"3 days ago"/"刚刚" 6 buckets） · GitBlameEngine actor + Workspace 6 处 hook (open / close folder + load + plain save + chunked save + external change) · Coordinator+InlineBlame Scintilla `SCI_EOLANNOTATIONSETTEXT` + caret hook + Combine sink + STADIUM 形 grey italic chip。35c-iii 加 Settings 开关（off / cur-line / all-lines） + author "You" 替换 + hover tooltip 出 commit summary + per-theme grey + Merge Conflict Accept/Reject 按钮。
-3. **LargeFile v3 (Phase 34d+)**：中途 cancel save、external-change
+1. **Git v2 polish (Phase 36e / 35b-4-g)**：in-place 编辑 hunk excerpt（zed 风可编辑 diff，目前 ProjectDiffView 仍是 read-only）+ submodule diff + 流式 diff load。Phase 35b-1/2a/2b/2c/3/4-a/4-b/4-c/4-d/4-e/4-f 交付了读面 + file-level 写面 + commit + remote sync + per-hunk stage/unstage + 分支 picker + force-with-lease + Project Diff multibuffer (read-only) + Stage All / Unstage All + Revert Hunk + 侧栏右键跳 multibuffer + ⌘F 跨文件 search + ⌘G/⇧⌘G 行级 next/prev 闭环。
+2. **UI polish v2 (Phase 36f+)**：Settings 窗口布局密度、Project Diff multibuffer 行级 chrome 与空状态继续打磨。Phase 36a 已先收掉侧栏 mode switcher、Source Control 行层级、commit panel 与 status capsule；Phase 36b 补齐 Markdown Preview 可发现性；Phase 36c 去掉重复 sidebar toolbar button；Phase 36d 统一 Command Palette / Quick Open row presentation。
+3. **Inline Git Blame + Merge Conflict UI (Phase 35c)**：行末 annotation 显示 author/time/commit、冲突区上方 Accept/Reject 按钮。35c-i + 35c-ii-α + 35c-ii-β + 35c-ii-γ + 35c-iii + 35c-iv 已交付完整 Inline Blame：GitClient.blame + parseBlamePorcelain + BlameLine + BlameResult 数据层 · RelativeTime helper（"3 days ago"/"刚刚" 6 buckets） · GitBlameEngine actor + Workspace 6 处 hook (open / close folder + load + plain save + chunked save + external change) · Coordinator+InlineBlame Scintilla `SCI_EOLANNOTATIONSETTEXT` + caret hook + Combine sink + STADIUM 形 grey italic chip · Settings off/current/all-lines · author "You" 替换 · hover tooltip 出 commit summary · deterministic screenshot hook。后续剩 per-theme grey 与 Merge Conflict Accept/Reject 按钮。
+4. **LargeFile v3 (Phase 34d+)**：中途 cancel save、external-change
    mtime+size detection、SymbolOutline 读 buffer、细粒度 progress。
-4. **CLI shim v2 (Phase 35d+)**：IPC fifo 让 `--wait` 不再冷启动、bash/zsh completion、brew formula。
-5. **Document Map**：右侧缩略图侧栏（学 npp-mac，仅 SwiftUI）。
-6. **Snippets v2**：`${1:placeholder}` 跳转 + tab 键从 buffer 触发（Scintilla autocomplete） + per-language scope。
-7. **Markdown Preview v3**：代码块语法高亮 + mermaid 图。
-8. **HEX View**：参考 ndd 的 `HEXMode.cpp`。
-9. **官方 disk image** + Sparkle 自动更新。
+5. **CLI shim v2 (Phase 35d+)**：IPC fifo 让 `--wait` 不再冷启动、bash/zsh completion、brew formula。
+6. **Document Map**：右侧缩略图侧栏（学 npp-mac，仅 SwiftUI）。
+7. **Snippets v2**：`${1:placeholder}` 跳转 + tab 键从 buffer 触发（Scintilla autocomplete） + per-language scope。
+8. **Markdown Preview v3**：代码块语法高亮 + mermaid 图。
+9. **HEX View**：参考 ndd 的 `HEXMode.cpp`。
+10. **官方 disk image** + Sparkle 自动更新。
 
 ---
 

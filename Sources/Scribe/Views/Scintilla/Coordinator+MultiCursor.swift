@@ -26,6 +26,7 @@
 //    - everything else `fileprivate`.
 //
 
+import AppKit
 import Foundation
 import Scintilla
 
@@ -349,6 +350,56 @@ extension ScintillaCodeEditor.Coordinator {
         }
     }
 
+    /// Phase 37 — apply an encoding / conversion / line operation to
+    /// the active selection. This deliberately starts with Scintilla's
+    /// main stream selection; rectangular and multi-selection transforms
+    /// need per-range replacement semantics and will get a separate pass.
+    func transformSelection(_ action: TextTransformAction, in view: ScintillaView) {
+        let start = Int(view.message(SCI.GETSELECTIONSTART))
+        let end = Int(view.message(SCI.GETSELECTIONEND))
+        guard end > start else {
+            presentTextTransformFailure("transform.error.noSelection", in: view)
+            return
+        }
+
+        let original = textInRange(in: view, range: start..<end)
+        guard !original.isEmpty else {
+            presentTextTransformFailure("transform.error.noSelection", in: view)
+            return
+        }
+
+        do {
+            let transformed = try action.apply(to: original)
+            replaceSelection(with: transformed, in: view)
+            view.message(SCI.SCROLLCARET)
+        } catch {
+            let key = (error as? TextTransformError)?.messageKey
+                ?? "transform.error.generic"
+            presentTextTransformFailure(key, in: view)
+        }
+    }
+
+    func replaceCurrentSelection(with text: String, in view: ScintillaView) {
+        let start = Int(view.message(SCI.GETSELECTIONSTART))
+        let end = Int(view.message(SCI.GETSELECTIONEND))
+        guard end > start else {
+            presentTextTransformFailure("transform.error.noSelection", in: view)
+            return
+        }
+        replaceSelection(with: text, in: view)
+        view.message(SCI.SCROLLCARET)
+    }
+
+    private func replaceSelection(with text: String, in view: ScintillaView) {
+        let bytes = Array(text.utf8) + [0]
+        bytes.withUnsafeBufferPointer { buf in
+            guard let base = buf.baseAddress else { return }
+            view.message(SCI.REPLACESEL,
+                         wParam: 0,
+                         lParam: Int(bitPattern: base))
+        }
+    }
+
     /// Esc / "Single Cursor". Drops every additional selection
     /// and leaves the main one intact at its current caret.
     /// Re-uses Scintilla's `SCI_CLEARSELECTIONS` semantics: it
@@ -463,18 +514,27 @@ extension ScintillaCodeEditor.Coordinator {
     /// Multi-line selections are truncated at the first newline
     /// because Find in Files is a single-line query field.
     func currentSelectionText(in view: ScintillaView) -> String {
+        let str = currentFullSelectionText(in: view)
+        guard !str.isEmpty else { return "" }
+        // Stop at first newline — the Find bar is single-line.
+        if let nl = str.firstIndex(where: { $0.isNewline }) {
+            return String(str[..<nl])
+        }
+        return str
+    }
+
+    /// Phase 37 — full selection payload for Text Tools. Kept separate
+    /// from `currentSelectionText` so Find-in-Files can keep its
+    /// single-line query semantics while split / merge / shuffle can
+    /// operate on the complete selected block.
+    func currentFullSelectionText(in view: ScintillaView) -> String {
         let s = Int(view.message(SCI.GETSELECTIONSTART))
         let e = Int(view.message(SCI.GETSELECTIONEND))
         guard e > s, let raw = view.string() else { return "" }
         let bytes = Array(raw.utf8)
         guard e <= bytes.count else { return "" }
         let slice = Array(bytes[s..<e])
-        guard let str = String(data: Data(slice), encoding: .utf8) else { return "" }
-        // Stop at first newline — the Find bar is single-line.
-        if let nl = str.firstIndex(where: { $0.isNewline }) {
-            return String(str[..<nl])
-        }
-        return str
+        return String(data: Data(slice), encoding: .utf8) ?? ""
     }
 
     func adoptSelectionAsQuery(from view: ScintillaView) {
@@ -487,6 +547,19 @@ extension ScintillaCodeEditor.Coordinator {
         if let str = String(data: Data(slice), encoding: .utf8) {
             findState.query = str
             findState.show(replaceMode: findState.isReplaceMode)
+            }
         }
     }
-}
+
+    @MainActor
+    private func presentTextTransformFailure(_ messageKey: String,
+                                             in view: ScintillaView) {
+        NSSound.beep()
+        guard let window = view.window else { return }
+        let alert = NSAlert()
+        alert.messageText = L10n.t("transform.error.title")
+        alert.informativeText = L10n.t(messageKey)
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: L10n.t("common.ok"))
+        alert.beginSheetModal(for: window)
+    }

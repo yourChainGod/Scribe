@@ -8,8 +8,10 @@
 //  Failure modes detected:
 //    1.  A key present in en but missing from zh-Hans (or vice versa).
 //        — common when adding a new string and forgetting one bundle.
-//    2.  A `L10n.t("foo")` / `Text("foo", comment:)` / `LocalizedStringKey`
-//        call referencing a key that isn't in *any* bundle.
+//    2.  A `L10n.t("foo")` / injected `localize("foo")` /
+//        `Text("foo", bundle: .module)` / `Text("foo", comment:)` /
+//        `LocalizedStringKey` call referencing a key that isn't in
+//        *any* bundle.
 //        — indicates a typo or stale rename.
 //
 //  Output:
@@ -58,7 +60,9 @@ func scanSourceForKeys(_ root: URL) -> Set<String> {
     // Patterns we care about. Conservative — only quoted literal keys.
     let patterns = [
         #"L10n\.t\(\s*"([^"]+)""#,
+        #"localize\(\s*"([^"]+)""#,
         #"NSLocalizedString\(\s*"([^"]+)""#,
+        #"Text\(\s*"([^"]+)"\s*,\s*bundle:\s*\.module"#,
         #"Text\(\s*"([^"]+)"\s*,\s*comment:"#,
     ]
     let regexes = patterns.compactMap { try? NSRegularExpression(pattern: $0) }

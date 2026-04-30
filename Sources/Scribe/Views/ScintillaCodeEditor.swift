@@ -102,11 +102,25 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         // Coordinator+LargeFile.swift), so there is no doc.text to
         // resync against.
         if !doc.isLargeFile {
-            let viewLen = Int(view.message(SCI.GETLENGTH))
-            let docLen = doc.text.utf8.count
-            let needsResync: Bool = (viewLen != docLen) || view.string() != doc.text
-            if needsResync {
-                context.coordinator.applyText(doc.text, to: view, isExternal: true)
+            // Phase 40-fix — `doc.cursorColumn` / `doc.isDirty` get
+            // published on every keystroke; SwiftUI then fires
+            // updateNSView while `doc.text` is still 50 ms behind
+            // (Phase 28c throttle). If we resync here, `applyText`
+            // overwrites the freshly-typed character with the stale
+            // `doc.text`, the next SCN_MODIFIED captures the empty
+            // view, and the user sees their input vanish. Skip the
+            // path while a view→doc flush is in flight; the throttle
+            // will land within 50 ms and the next updateNSView tick
+            // will see consistent state. External-change / save
+            // paths drain `flushPendingEdit` first, so they pass
+            // through with `hasPendingViewSync == false` as before.
+            if !context.coordinator.hasPendingViewSync {
+                let viewLen = Int(view.message(SCI.GETLENGTH))
+                let docLen = doc.text.utf8.count
+                let needsResync: Bool = (viewLen != docLen) || view.string() != doc.text
+                if needsResync {
+                    context.coordinator.applyText(doc.text, to: view, isExternal: true)
+                }
             }
         }
         context.coordinator.applyLexer(for: doc, to: view)
@@ -135,6 +149,7 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         /// risk but weakness reads cleaner against future refactors.
         weak var workspace: Workspace?
         weak var view: ScintillaView?
+        weak var inlineBlameTooltipView: NSView?
 
         /// `true` while we are pushing doc → view; suppresses the SCN_MODIFIED
         /// echo that would otherwise overwrite doc.text with the same content.
@@ -161,6 +176,12 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         /// install + reset it.
         var blameSink: AnyCancellable?
 
+        /// Phase 37 — native Scintilla calltips live above SwiftUI
+        /// sheets, so the editor listens directly to Text Tools
+        /// presentation state instead of relying only on view-level
+        /// `.onChange` dispatch from MainWindow.
+        private var textToolsPresentationSink: AnyCancellable?
+
         /// Snapshot of the find inputs that the current set of indicator
         /// highlights was drawn for. Lets `refreshHighlightsIfNeeded`
         /// avoid re-drawing every time SwiftUI sends an updateNSView.
@@ -178,6 +199,18 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         /// paths that need an authoritative `doc.text` (save, external
         /// change check) drain via `flushDocSync()` first.
         private var pendingDocSync: Task<Void, Never>?
+
+        /// `true` while there's an un-flushed view→doc edit in flight
+        /// (i.e. the user typed within the last `docSyncThrottleNanos`
+        /// and the throttled `flushDocSync` hasn't run yet). Used by
+        /// `updateNSView` to suppress the doc→view resync path —
+        /// otherwise a SwiftUI tick triggered by `doc.cursorColumn`
+        /// publishing would see `viewLen != doc.text.utf8.count`,
+        /// flag the view as out-of-sync, and `applyText` the *stale*
+        /// `doc.text` back over the keystroke the user just typed,
+        /// erasing the input. External-change / save paths drain via
+        /// `flushPendingEdit` first, so this stays `false` for them.
+        var hasPendingViewSync: Bool { pendingDocSync != nil }
 
         /// Phase 31 — last `[Int: GitGutterStatus]` actually rendered
         /// to the margin. SwiftUI calls `updateNSView` on every
@@ -220,6 +253,7 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         deinit {
             appearanceObserver?.invalidate()
             pendingDocSync?.cancel()
+            NotificationCenter.default.removeObserver(self)
             // We *don't* clear `doc.flushPendingEdit` here — Swift 6
             // strict makes deinit nonisolated, and `Document` is
             // `@MainActor`. The drain closure captures `self` weakly,
@@ -231,6 +265,7 @@ struct ScintillaCodeEditor: NSViewRepresentable {
 
         func attach(view: ScintillaView) {
             self.view = view
+            installCalltipDismissObservers()
             // Re-theme when the user toggles light/dark in System Settings.
             // We can't capture self in a Sendable closure under strict
             // concurrency, so use a weak NSApp KVO and dispatch onto main.
@@ -263,10 +298,24 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                     case .gotoNextHunk: self.gotoNextHunk(in: view)
                     case .gotoPrevHunk: self.gotoPrevHunk(in: view)
                     case .insertSnippet(let body): self.insertAtCarets(body, in: view)
+                    case .transformSelection(let action): self.transformSelection(action, in: view)
+                    case .replaceSelectionText(let text): self.replaceCurrentSelection(with: text, in: view)
+                    case .hideInlineBlameTooltip: self.hideInlineBlameTooltip(in: view)
                     case .insertAtCarets(let s): self.insertAtCarets(s, in: view)
                     case let .testRectSelectExtend(d, r):
                         self.testRectSelectExtend(linesDown: d, charsRight: r, in: view)
+                    case let .testInlineBlame(mode, caretLine, tooltipLine):
+                        self.testInlineBlame(mode: mode,
+                                             caretLine: caretLine,
+                                             tooltipLine: tooltipLine,
+                                             in: view)
                     }
+                }
+            textToolsPresentationSink = workspace?.$isTextToolsPresented
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self, weak view] presented in
+                    guard presented, let self, let view else { return }
+                    self.hideInlineBlameTooltip(in: view)
                 }
             // Phase 34c — install the large-file save hook so
             // Workspace.write can drive a chunked SCI_GETTEXTRANGEFULL
@@ -289,6 +338,87 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                     progress?(p)
                 }
             }
+        }
+
+        private func installCalltipDismissObservers() {
+            NotificationCenter.default.removeObserver(self,
+                                                      name: NSApplication.willResignActiveNotification,
+                                                      object: NSApp)
+            NotificationCenter.default.removeObserver(self,
+                                                      name: NSApplication.didResignActiveNotification,
+                                                      object: NSApp)
+            NotificationCenter.default.removeObserver(self,
+                                                      name: NSApplication.didHideNotification,
+                                                      object: NSApp)
+            NotificationCenter.default.removeObserver(self,
+                                                      name: NSWindow.didResignKeyNotification,
+                                                      object: nil)
+            NotificationCenter.default.removeObserver(self,
+                                                      name: NSWindow.willBeginSheetNotification,
+                                                      object: nil)
+            NotificationCenter.default.removeObserver(self,
+                                                      name: NSWindow.willCloseNotification,
+                                                      object: nil)
+            NotificationCenter.default.addObserver(self,
+                                                   selector: #selector(appWillResignActive(_:)),
+                                                   name: NSApplication.willResignActiveNotification,
+                                                   object: NSApp)
+            NotificationCenter.default.addObserver(self,
+                                                   selector: #selector(appDidResignActive(_:)),
+                                                   name: NSApplication.didResignActiveNotification,
+                                                   object: NSApp)
+            NotificationCenter.default.addObserver(self,
+                                                   selector: #selector(appDidHide(_:)),
+                                                   name: NSApplication.didHideNotification,
+                                                   object: NSApp)
+            NotificationCenter.default.addObserver(self,
+                                                   selector: #selector(windowDidResignKey(_:)),
+                                                   name: NSWindow.didResignKeyNotification,
+                                                   object: nil)
+            NotificationCenter.default.addObserver(self,
+                                                   selector: #selector(windowWillBeginSheet(_:)),
+                                                   name: NSWindow.willBeginSheetNotification,
+                                                   object: nil)
+            NotificationCenter.default.addObserver(self,
+                                                   selector: #selector(windowWillClose(_:)),
+                                                   name: NSWindow.willCloseNotification,
+                                                   object: nil)
+        }
+
+        @objc private func appWillResignActive(_ notification: Notification) {
+            guard let view else { return }
+            hideInlineBlameTooltip(in: view)
+        }
+
+        @objc private func appDidResignActive(_ notification: Notification) {
+            guard let view else { return }
+            hideInlineBlameTooltip(in: view)
+        }
+
+        @objc private func appDidHide(_ notification: Notification) {
+            guard let view else { return }
+            hideInlineBlameTooltip(in: view)
+        }
+
+        @objc private func windowDidResignKey(_ notification: Notification) {
+            guard let window = notification.object as? NSWindow,
+                  let view,
+                  window === view.window else { return }
+            hideInlineBlameTooltip(in: view)
+        }
+
+        @objc private func windowWillBeginSheet(_ notification: Notification) {
+            guard let window = notification.object as? NSWindow,
+                  let view,
+                  window === view.window else { return }
+            hideInlineBlameTooltip(in: view)
+        }
+
+        @objc private func windowWillClose(_ notification: Notification) {
+            guard let window = notification.object as? NSWindow,
+                  let view,
+                  window === view.window else { return }
+            hideInlineBlameTooltip(in: view)
         }
 
         // MARK: doc → view
@@ -456,6 +586,7 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                 }
             case SCN.UPDATEUI:
                 if let view {
+                    self.hideInlineBlameTooltip(in: view)
                     let pos = view.message(SCI.GETCURRENTPOS)
                     let line = view.message(SCI.LINEFROMPOSITION, wParam: UInt(pos))
                     let col = view.message(SCI.GETCOLUMN, wParam: UInt(pos))
@@ -477,7 +608,17 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                     // expect (the Find bar isn't multi-line).
                     if let workspace {
                         workspace.activeSelection = currentSelectionText(in: view)
+                        workspace.activeTextSelection = currentFullSelectionText(in: view)
                     }
+                }
+            case SCN.DWELLSTART:
+                if let view {
+                    showInlineBlameTooltipIfNeeded(in: view,
+                                                   position: Int(scn.pointee.position))
+                }
+            case SCN.DWELLEND:
+                if let view {
+                    hideInlineBlameTooltip(in: view)
                 }
             default:
                 break

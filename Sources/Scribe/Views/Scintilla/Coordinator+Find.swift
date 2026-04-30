@@ -138,7 +138,7 @@ extension ScintillaCodeEditor.Coordinator {
                                        forward: forward) else {
             findState.currentMatch = 0
             findState.matchCount = 0
-            findState.status = "No matches"
+            findState.status = FindBarPresentation.noMatchesStatus()
             clearHighlights(in: view)
             return
         }
@@ -146,7 +146,7 @@ extension ScintillaCodeEditor.Coordinator {
                      wParam: UInt(bitPattern: hit.range.lowerBound),
                      lParam: hit.range.upperBound)
         view.message(SCI.SCROLLCARET)
-        findState.status = hit.wrapped ? (forward ? "Wrapped to top" : "Wrapped to bottom") : ""
+        findState.status = hit.wrapped ? FindBarPresentation.wrappedStatus(forward: forward) : ""
         highlightAllMatches(in: view, pattern: pattern, flags: flags, currentRange: hit.range)
     }
 
@@ -175,7 +175,7 @@ extension ScintillaCodeEditor.Coordinator {
                 // After replacement, advance to the next hit.
                 let resumeFrom = selStart + replaced
                 performFind(in: view, from: resumeFrom, forward: true, pattern: pattern)
-                findState.status = "Replaced"
+                findState.status = FindBarPresentation.replacedStatus()
                 return
             }
         }
@@ -207,7 +207,9 @@ extension ScintillaCodeEditor.Coordinator {
             view.message(SCI.SETTARGETSTART, wParam: UInt(bitPattern: nextStart))
             view.message(SCI.SETTARGETEND,   wParam: UInt(bitPattern: docLen))
         }
-        findState.status = count == 0 ? "No matches" : "Replaced \(count)"
+        findState.status = count == 0
+            ? FindBarPresentation.noMatchesStatus()
+            : FindBarPresentation.replacedCountStatus(count: count)
         findState.matchCount = 0
         findState.currentMatch = 0
         clearHighlights(in: view)

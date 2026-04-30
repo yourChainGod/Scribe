@@ -35,6 +35,9 @@ enum SCI {
     static let POSITIONFROMLINE: UInt32 = 2167
     static let GETLINEENDPOSITION: UInt32 = 2136
     static let GOTOLINE:         UInt32 = 2024
+    static let POINTXFROMPOSITION: UInt32 = 2164
+    static let POINTYFROMPOSITION: UInt32 = 2165
+    static let TEXTHEIGHT:       UInt32 = 2279
     // Tabs
     static let SETTABWIDTH:      UInt32 = 2036
     static let SETUSETABS:       UInt32 = 2124
@@ -158,6 +161,7 @@ enum SCI {
     static let PASTE:       UInt32 = 2179
     static let CLEAR:       UInt32 = 2180
     static let SELECTALL:   UInt32 = 2013
+    static let CANCEL:      UInt32 = 2325
     /// Caret state queries used by the context-menu enable/disable
     /// logic. Returns 1 / 0 booleans cast as Int.
     static let CANUNDO:     UInt32 = 2174
@@ -191,6 +195,14 @@ enum SCI {
     /// shape selector. We pass `SC.EOLANNOTATION_STADIUM` so the
     /// label renders as a soft rounded chip à la zed.
     static let EOLANNOTATIONSETVISIBLE: UInt32 = 2745
+    /// Scintilla calltips. Inline blame now renders its details as
+    /// an in-editor AppKit subview; we still cancel native calltips
+    /// defensively so an older transient window cannot survive focus
+    /// changes or a running app upgrade.
+    static let CALLTIPCANCEL:           UInt32 = 2201
+    static let CALLTIPUSESTYLE:         UInt32 = 2212
+    /// Mouse dwell notifications drive the calltip hover.
+    static let SETMOUSEDWELLTIME:       UInt32 = 2264
     /// Style getter — used by the theme path to (un)apply colours
     /// without storing a separate "current foreground" value.
     static let STYLEGETFORE:            UInt32 = 2481
@@ -322,4 +334,6 @@ enum SCE_P {
 enum SCN {
     static let MODIFIED: UInt32 = 2008
     static let UPDATEUI: UInt32 = 2007
+    static let DWELLSTART: UInt32 = 2016
+    static let DWELLEND: UInt32 = 2017
 }

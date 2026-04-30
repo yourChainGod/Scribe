@@ -6,7 +6,7 @@ set -euo pipefail
 CONFIG="${1:-release}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="$ROOT/.build"
-APP_DIR="$ROOT/build/Scribe.app"
+APP_DIR="${SCRIBE_APP_DIR:-$ROOT/build/Scribe.app}"
 
 cd "$ROOT"
 
@@ -112,7 +112,7 @@ if [[ -f "$ICON_SVG" ]]; then
 fi
 
 # Info.plist
-cat > "$APP_DIR/Contents/Info.plist" <<PLIST
+cat > "$APP_DIR/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
