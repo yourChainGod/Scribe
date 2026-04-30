@@ -132,11 +132,46 @@ struct ScribeCommands: Commands {
             .disabled(workspace.current == nil)
 
             Menu {
-                TextTransformCommandButtons(findState: findState)
+                TextTransformCommandButtons(findState: findState, workspace: workspace)
             } label: {
                 Text("menu.tools.transformSelection", bundle: .module)
             }
             .disabled(workspace.current == nil)
+
+            // Phase 41a — Hash submenu surfaced at the top level
+            // so users can find it without drilling into Transform
+            // Selection. Same actions, same shortcut path
+            // (FindState.commands → Coordinator → Scintilla
+            // REPLACESEL).
+            Menu {
+                Button { findState.commands.send(.transformSelection(.md5)) } label: {
+                    Text("transform.hash.md5", bundle: .module)
+                }
+                Button { findState.commands.send(.transformSelection(.sha1)) } label: {
+                    Text("transform.hash.sha1", bundle: .module)
+                }
+                Button { findState.commands.send(.transformSelection(.sha256)) } label: {
+                    Text("transform.hash.sha256", bundle: .module)
+                }
+                Button { findState.commands.send(.transformSelection(.sha512)) } label: {
+                    Text("transform.hash.sha512", bundle: .module)
+                }
+                Button { findState.commands.send(.transformSelection(.crc32)) } label: {
+                    Text("transform.hash.crc32", bundle: .module)
+                }
+            } label: {
+                Text("transform.hash.menu", bundle: .module)
+            }
+            .disabled(workspace.current == nil)
+
+            // Phase 41a — JWT decoder. Independent button (no
+            // submenu) — there's only one action.
+            Button {
+                let prefill = workspace.activeTextSelection
+                workspace.jwtSheet = JWTSheetRequest(prefill: prefill)
+            } label: {
+                Text("transform.jwt.decode", bundle: .module)
+            }
 
             Divider()
 

@@ -664,3 +664,34 @@
 "toast.regex.invalid"    = "正则表达式无效";
 "toast.action.retry"     = "重试";
 "toast.action.openFinder" = "在 Finder 中显示";
+
+// MARK: - Phase 41a · Hash & JWT
+
+"transform.hash.menu"   = "哈希";
+"transform.hash.md5"    = "MD5（不安全）";
+"transform.hash.sha1"   = "SHA-1（不安全）";
+"transform.hash.sha256" = "SHA-256";
+"transform.hash.sha512" = "SHA-512";
+"transform.hash.crc32"  = "CRC32（zlib）";
+
+"transform.jwt.decode"  = "解码 JWT…";
+
+"jwt.title"             = "JWT 检视器";
+"jwt.subtitle"          = "解码 header 与 payload — 不验证签名。";
+"jwt.input.label"       = "Token";
+"jwt.section.header"    = "Header";
+"jwt.section.payload"   = "Payload";
+"jwt.section.signature" = "Signature（base64url）";
+"jwt.placeholder"       = "在上方粘贴 JWT 以查看 claims。";
+"jwt.copy.help"         = "复制此段";
+"jwt.error.malformed"   = "Token 必须包含 3 段（以英文句点分隔）。";
+"jwt.error.invalidBase64" = "%@ 段不是合法的 base64url。";
+"jwt.error.invalidUTF8" = "%@ 段不是合法的 UTF-8。";
+
+// 命令面板 — 哈希 & JWT（Phase 41a）
+"palette.command.text.hash.md5"     = "MD5 哈希（不安全）";
+"palette.command.text.hash.sha1"    = "SHA-1 哈希（不安全）";
+"palette.command.text.hash.sha256"  = "SHA-256 哈希";
+"palette.command.text.hash.sha512"  = "SHA-512 哈希";
+"palette.command.text.hash.crc32"   = "CRC32 哈希";
+"palette.command.text.decodeJWT"    = "解码 JWT…";

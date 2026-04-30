@@ -59,6 +59,22 @@ enum TestHooks {
         runInlineBlame(env: env, ctx: ctx)
         runTextTools(env: env, ctx: ctx)
         runToast(env: env, ctx: ctx)
+        runJWTSheet(env: env, ctx: ctx)
+    }
+
+    // MARK: Phase 41a — JWT sheet smoke
+
+    /// SCRIBE_TEST_JWT = "<token>" pops the JWT decoder sheet
+    /// pre-filled with the supplied token. Used by the screenshot
+    /// script to capture the inspector layout deterministically.
+    /// Defers briefly so the main window has finished its first
+    /// layout pass before the sheet attaches.
+    private static func runJWTSheet(env: [String: String],
+                                    ctx: TestHookContext) {
+        guard let token = env["SCRIBE_TEST_JWT"], !token.isEmpty else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            ctx.workspace.jwtSheet = JWTSheetRequest(prefill: token)
+        }
     }
 
     // MARK: Phase 43-T — toast notification smoke

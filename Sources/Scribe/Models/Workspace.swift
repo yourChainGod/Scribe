@@ -64,6 +64,11 @@ final class Workspace: ObservableObject {
     /// ▸ Transform submenu (see TextTransformCommandButtons).
     @Published var isTextToolsPresented: Bool = false
 
+    /// Phase 41a — non-nil ⇒ the JWT decoder sheet is presented,
+    /// pre-filled with the carried text. Bound through MainWindow
+    /// via `.sheet(item:)`. Cleared by the sheet's Close action.
+    @Published var jwtSheet: JWTSheetRequest?
+
     /// Phase 35b-4-d — repo-relative path the multibuffer should
     /// scroll into view on its next render. Used by the sidebar's
     /// "Open in Project Diff" affordance: clicking on a file row

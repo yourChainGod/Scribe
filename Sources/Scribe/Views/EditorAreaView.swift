@@ -134,7 +134,7 @@ private struct DocumentEditorPane: View {
                 Text("menu.tools.textTools", bundle: .module)
             }
             Divider()
-            TextTransformCommandButtons(findState: findState)
+            TextTransformCommandButtons(findState: findState, workspace: workspace)
         } label: {
             Text("editor.context.transform", bundle: .module)
         }

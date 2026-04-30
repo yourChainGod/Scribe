@@ -167,6 +167,16 @@ struct MainWindow: View {
                 .environmentObject(workspace)
                 .environmentObject(findState)
         }
+        // Phase 41a — JWT decoder sheet. Pre-filled with the
+        // current selection if the right-click / palette entry
+        // was invoked while text was selected; otherwise empty
+        // for paste-and-decode.
+        .sheet(item: $workspace.jwtSheet) { request in
+            JWTDecoderSheet(request: request) {
+                workspace.jwtSheet = nil
+            }
+            .environment(\.appTheme, appTheme)
+        }
     }
 
     /// Sidebar column's header row — 4 mode tabs on the leading

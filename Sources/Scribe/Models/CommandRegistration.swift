@@ -180,7 +180,20 @@ enum CommandRegistration {
             ("text.hexToDecimal", "palette.command.text.hexToDecimal", .convertBase(fromBase: 16, toBase: 10),
              ["text", "transform", "hex", "decimal", "base", "convert"]),
             ("text.decimalToHex", "palette.command.text.decimalToHex", .convertBase(fromBase: 10, toBase: 16),
-             ["text", "transform", "decimal", "hex", "base", "convert"])
+             ["text", "transform", "decimal", "hex", "base", "convert"]),
+            // Phase 41a — Hash digests. English keywords listed
+            // alongside the algorithm so the palette finds them on
+            // either side of a Chinese / English locale flip.
+            ("text.hash.md5", "palette.command.text.hash.md5", .md5,
+             ["text", "transform", "hash", "md5", "checksum", "digest"]),
+            ("text.hash.sha1", "palette.command.text.hash.sha1", .sha1,
+             ["text", "transform", "hash", "sha", "sha1", "sha-1", "checksum", "digest"]),
+            ("text.hash.sha256", "palette.command.text.hash.sha256", .sha256,
+             ["text", "transform", "hash", "sha", "sha256", "sha-256", "checksum", "digest"]),
+            ("text.hash.sha512", "palette.command.text.hash.sha512", .sha512,
+             ["text", "transform", "hash", "sha", "sha512", "sha-512", "checksum", "digest"]),
+            ("text.hash.crc32", "palette.command.text.hash.crc32", .crc32,
+             ["text", "transform", "hash", "crc", "crc32", "checksum", "zlib"])
         ]
 
         commands.append(contentsOf: specs.map { spec in
@@ -197,6 +210,17 @@ enum CommandRegistration {
                           subtitle: localize("palette.badge.text"),
                           keywords: ["text", "transform", "shuffle", "random", "lines", "row", "rows"]) {
                 findState.commands.send(.transformSelection(.shuffleLines(seed: UInt64.random(in: UInt64.min...UInt64.max))))
+            }
+        )
+        // Phase 41a — JWT decoder palette entry. Pre-fills with
+        // the live selection (empty string ⇒ blank panel; the
+        // sheet's text editor lets the user paste).
+        commands.append(
+            ScribeCommand(id: "text.decodeJWT",
+                          title: localize("palette.command.text.decodeJWT"),
+                          subtitle: localize("palette.badge.text"),
+                          keywords: ["text", "transform", "jwt", "json", "web", "token", "decode", "claims"]) {
+                workspace.jwtSheet = JWTSheetRequest(prefill: workspace.activeTextSelection)
             }
         )
         return commands

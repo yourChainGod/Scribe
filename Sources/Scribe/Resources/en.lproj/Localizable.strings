@@ -667,3 +667,34 @@
 "toast.regex.invalid"    = "Invalid regular expression";
 "toast.action.retry"     = "Retry";
 "toast.action.openFinder" = "Show in Finder";
+
+// MARK: - Phase 41a · Hash & JWT
+
+"transform.hash.menu"   = "Hash";
+"transform.hash.md5"    = "MD5 (insecure)";
+"transform.hash.sha1"   = "SHA-1 (insecure)";
+"transform.hash.sha256" = "SHA-256";
+"transform.hash.sha512" = "SHA-512";
+"transform.hash.crc32"  = "CRC32 (zlib)";
+
+"transform.jwt.decode"  = "Decode JWT…";
+
+"jwt.title"             = "JWT Inspector";
+"jwt.subtitle"          = "Decode header and payload — signature is not verified.";
+"jwt.input.label"       = "Token";
+"jwt.section.header"    = "Header";
+"jwt.section.payload"   = "Payload";
+"jwt.section.signature" = "Signature (base64url)";
+"jwt.placeholder"       = "Paste a JWT above to inspect its claims.";
+"jwt.copy.help"         = "Copy section";
+"jwt.error.malformed"   = "Token must contain three dot-separated sections.";
+"jwt.error.invalidBase64" = "%@ section is not valid base64url.";
+"jwt.error.invalidUTF8" = "%@ section is not valid UTF-8.";
+
+// Palette — hash & JWT (Phase 41a)
+"palette.command.text.hash.md5"     = "Hash with MD5 (insecure)";
+"palette.command.text.hash.sha1"    = "Hash with SHA-1 (insecure)";
+"palette.command.text.hash.sha256"  = "Hash with SHA-256";
+"palette.command.text.hash.sha512"  = "Hash with SHA-512";
+"palette.command.text.hash.crc32"   = "Hash with CRC32";
+"palette.command.text.decodeJWT"    = "Decode JWT…";

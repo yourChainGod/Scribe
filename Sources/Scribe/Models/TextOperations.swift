@@ -478,6 +478,17 @@ enum TextTransformAction: Equatable {
     case shuffleLines(seed: UInt64,
                       preserveFirstLine: Bool = false,
                       preserveBlankLinePositions: Bool = false)
+    /// Phase 41a — hash digests. Output replaces the selection
+    /// with the lowercase hex digest of the UTF-8 bytes. MD5 /
+    /// SHA-1 are still useful as ETag-style checksums even though
+    /// they're cryptographically broken; SHA-256 / SHA-512 are
+    /// the safe defaults; CRC32 matches zlib so users can cross-
+    /// check against `python -c "zlib.crc32(...)"` etc.
+    case md5
+    case sha1
+    case sha256
+    case sha512
+    case crc32
 
     func apply(to text: String) throws -> String {
         switch self {
@@ -510,6 +521,11 @@ enum TextTransformAction: Equatable {
                                             seed: seed,
                                             preserveFirstLine: preserveFirstLine,
                                             preserveBlankLinePositions: preserveBlankLinePositions)
+        case .md5:    return HashSuite.md5(text)
+        case .sha1:   return HashSuite.sha1(text)
+        case .sha256: return HashSuite.sha256(text)
+        case .sha512: return HashSuite.sha512(text)
+        case .crc32:  return HashSuite.crc32(text)
         }
     }
 }
