@@ -746,3 +746,22 @@
 "palette.command.case.camel"            = "Convert to camelCase";
 "palette.command.case.snake"            = "Convert to snake_case";
 "palette.command.case.kebab"            = "Convert to kebab-case";
+
+// Phase 41c — Format / Minify (JSON / XML / CSS / SQL)
+"format.menu"           = "Format";
+"format.lang.json"      = "JSON";
+"format.lang.xml"       = "XML / HTML";
+"format.lang.css"       = "CSS";
+"format.lang.sql"       = "SQL";
+"format.action.pretty"  = "Pretty";
+"format.action.minify"  = "Minify";
+
+// Palette — Format / Minify
+"palette.command.format.json.pretty" = "Format JSON (Pretty)";
+"palette.command.format.json.minify" = "Format JSON (Minify)";
+"palette.command.format.xml.pretty"  = "Format XML / HTML (Pretty)";
+"palette.command.format.xml.minify"  = "Format XML / HTML (Minify)";
+"palette.command.format.css.pretty"  = "Format CSS (Pretty)";
+"palette.command.format.css.minify"  = "Format CSS (Minify)";
+"palette.command.format.sql.pretty"  = "Format SQL (Pretty)";
+"palette.command.format.sql.minify"  = "Format SQL (Minify)";

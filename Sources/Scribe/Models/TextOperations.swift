@@ -502,6 +502,18 @@ enum TextTransformAction: Equatable {
     case sortLines(mode: LineOps.SortMode, descending: Bool)
     case caseTransform(mode: LineOps.CaseMode)
 
+    // Phase 41c — language-aware Pretty / Minify. Each pair routes
+    // to `CodeFormatter.<Lang>.{pretty,minify}`. Errors propagate up
+    // and land in the toast surface (Phase 43-T).
+    case formatJSON
+    case minifyJSON
+    case formatXML
+    case minifyXML
+    case formatCSS
+    case minifyCSS
+    case formatSQL
+    case minifySQL
+
     func apply(to text: String) throws -> String {
         switch self {
         case .urlEncode:
@@ -548,6 +560,14 @@ enum TextTransformAction: Equatable {
             return LineOps.sort(text, mode: mode, descending: descending)
         case .caseTransform(let mode):
             return LineOps.transformCase(text, mode: mode)
+        case .formatJSON:  return try CodeFormatter.JSON.pretty(text)
+        case .minifyJSON:  return try CodeFormatter.JSON.minify(text)
+        case .formatXML:   return try CodeFormatter.XML.pretty(text)
+        case .minifyXML:   return try CodeFormatter.XML.minify(text)
+        case .formatCSS:   return try CodeFormatter.CSS.pretty(text)
+        case .minifyCSS:   return try CodeFormatter.CSS.minify(text)
+        case .formatSQL:   return try CodeFormatter.SQL.pretty(text)
+        case .minifySQL:   return try CodeFormatter.SQL.minify(text)
         }
     }
 }

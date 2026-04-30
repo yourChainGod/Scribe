@@ -61,6 +61,36 @@ enum TestHooks {
         runToast(env: env, ctx: ctx)
         runJWTSheet(env: env, ctx: ctx)
         runLineOp(env: env, ctx: ctx)
+        runFormat(env: env, ctx: ctx)
+    }
+
+    // MARK: Phase 41c — Format / Minify smoke
+
+    /// SCRIBE_TEST_FORMAT = "<id>" fires the named language
+    /// formatter against the active document a moment after launch.
+    /// Used by the screenshot script to capture before/after pairs
+    /// for JSON / XML / CSS / SQL pretty + minify.
+    /// Supported ids: jsonPretty, jsonMinify, xmlPretty, xmlMinify,
+    /// cssPretty, cssMinify, sqlPretty, sqlMinify.
+    private static func runFormat(env: [String: String],
+                                  ctx: TestHookContext) {
+        guard let raw = env["SCRIBE_TEST_FORMAT"], !raw.isEmpty else { return }
+        let action: TextTransformAction?
+        switch raw {
+        case "jsonPretty":  action = .formatJSON
+        case "jsonMinify":  action = .minifyJSON
+        case "xmlPretty":   action = .formatXML
+        case "xmlMinify":   action = .minifyXML
+        case "cssPretty":   action = .formatCSS
+        case "cssMinify":   action = .minifyCSS
+        case "sqlPretty":   action = .formatSQL
+        case "sqlMinify":   action = .minifySQL
+        default: return
+        }
+        guard let action else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            ctx.findState.commands.send(.transformSelection(action))
+        }
     }
 
     // MARK: Phase 41d — Line Ops smoke

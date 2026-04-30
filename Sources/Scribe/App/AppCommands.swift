@@ -181,6 +181,15 @@ struct ScribeCommands: Commands {
             }
             .disabled(workspace.current == nil)
 
+            // Phase 41c — Format / Minify per language. Two-level
+            // submenu: Format ▸ Lang ▸ {Pretty, Minify}.
+            Menu {
+                CodeFormatCommandButtons(findState: findState)
+            } label: {
+                Text("format.menu", bundle: .module)
+            }
+            .disabled(workspace.current == nil)
+
             Divider()
 
             Button {

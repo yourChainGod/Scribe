@@ -176,6 +176,14 @@ struct TextTransformCommandButtons: View {
                 Text("lineops.menu", bundle: .module)
             }
         }
+        // Phase 41c — Format / Minify nested by language. Same
+        // shape as Tools ▸ Format so the user can reach it via
+        // right-click without leaving the editor.
+        Menu {
+            CodeFormatCommandButtons(findState: findState)
+        } label: {
+            Text("format.menu", bundle: .module)
+        }
     }
 
     @MainActor

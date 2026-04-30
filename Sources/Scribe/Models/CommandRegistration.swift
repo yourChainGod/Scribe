@@ -278,6 +278,26 @@ enum CommandRegistration {
              ["case", "snake", "snake_case"]),
             ("text.case.kebab", "palette.command.case.kebab", .caseTransform(mode: .kebab),
              ["case", "kebab", "kebab-case"]),
+            // Phase 41c — Format / Minify per language. JSON / XML
+            // have a wide audience (config, RSS, SVG); CSS / SQL
+            // serve devs. All are pure transforms via TextTransform-
+            // Action so palette routing is identical to line ops.
+            ("text.format.json.pretty", "palette.command.format.json.pretty", .formatJSON,
+             ["format", "pretty", "json", "格式化"]),
+            ("text.format.json.minify", "palette.command.format.json.minify", .minifyJSON,
+             ["format", "minify", "json", "压缩"]),
+            ("text.format.xml.pretty", "palette.command.format.xml.pretty", .formatXML,
+             ["format", "pretty", "xml", "html"]),
+            ("text.format.xml.minify", "palette.command.format.xml.minify", .minifyXML,
+             ["format", "minify", "xml", "html"]),
+            ("text.format.css.pretty", "palette.command.format.css.pretty", .formatCSS,
+             ["format", "pretty", "css", "stylesheet"]),
+            ("text.format.css.minify", "palette.command.format.css.minify", .minifyCSS,
+             ["format", "minify", "css", "stylesheet"]),
+            ("text.format.sql.pretty", "palette.command.format.sql.pretty", .formatSQL,
+             ["format", "pretty", "sql", "query"]),
+            ("text.format.sql.minify", "palette.command.format.sql.minify", .minifySQL,
+             ["format", "minify", "sql", "query"]),
         ]
         commands.append(contentsOf: lineOpSpecs.map { spec in
             ScribeCommand(id: spec.id,
