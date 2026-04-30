@@ -54,6 +54,11 @@ final class EditorPreferences: ObservableObject {
         // compat — see ThemeOverrides.swift header comment).
         static let themeOverrides = "appearance.themeOverrides"
         static let inlineBlameMode = "editor.inlineBlameMode"
+        // Phase 41f — toggle for the inline color-swatch overlay.
+        // ON by default: the feature is universally useful for any
+        // file containing CSS-style hex / rgb / hsl literals, and
+        // costs nothing on documents without colors.
+        static let inlineColorSwatchesEnabled = "editor.inlineColorSwatchesEnabled"
     }
 
     /// Phase 39a — translates raw values from the pre-39 theme
@@ -147,6 +152,15 @@ final class EditorPreferences: ObservableObject {
         didSet { defaults.set(inlineBlameMode.rawValue, forKey: Key.inlineBlameMode) }
     }
 
+    /// Phase 41f — paint a translucent rectangle behind every
+    /// recognised color literal (#hex / rgb() / hsl()). Active in
+    /// every file type, not just CSS — devs sprinkle hex codes
+    /// through Markdown, JSON config, code comments, etc.
+    @Published var inlineColorSwatchesEnabled: Bool {
+        didSet { defaults.set(inlineColorSwatchesEnabled,
+                              forKey: Key.inlineColorSwatchesEnabled) }
+    }
+
     /// Phase 39b — per-theme custom slot overrides. Sparse map: a
     /// missing `ThemeID` key means "no overrides for that preset",
     /// and an empty `ThemeOverrides.slots` should be cleaned up by
@@ -219,6 +233,14 @@ final class EditorPreferences: ObservableObject {
 
         let blameModeRaw = defaults.string(forKey: Key.inlineBlameMode) ?? ""
         self.inlineBlameMode = InlineBlameMode(rawValue: blameModeRaw) ?? .currentLine
+
+        // Phase 41f — default ON. Only flip OFF if the user
+        // explicitly stored false; missing key keeps swatches on.
+        if defaults.object(forKey: Key.inlineColorSwatchesEnabled) != nil {
+            self.inlineColorSwatchesEnabled = defaults.bool(forKey: Key.inlineColorSwatchesEnabled)
+        } else {
+            self.inlineColorSwatchesEnabled = true
+        }
 
         // Phase 39b — load per-theme override map. Silent fall-back
         // to empty map on decode failure (corrupted blob, future

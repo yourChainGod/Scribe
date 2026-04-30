@@ -571,6 +571,9 @@
 "settings.field.softTabs"    = "按 Tab 键插入空格";
 "settings.font.size.points"  = "%lld pt";
 "settings.indent.tabWidth.spaces" = "%lld 个空格";
+"settings.section.display"              = "显示";
+"settings.display.colorSwatches"        = "内联颜色色块";
+"settings.display.colorSwatchesFooter"  = "在任意文件中以实际颜色高亮显示色值字面量（#hex、rgb()、hsl()）。";
 "settings.inlineBlame.section"          = "行内 Blame";
 "settings.inlineBlame.mode"             = "模式";
 "settings.inlineBlame.mode.off"         = "关闭";
@@ -630,7 +633,7 @@
 "inlineBlame.author.you"              = "你";
 
 "about.tagline"  = "原生 macOS 文本编辑器";
-"about.version"  = "v1.0 · 打磨阶段 (Phase 25)";
+"about.version"  = "v1.0 · 第 44 阶段构建";
 "about.license"  = "GPL-3.0 · 与 notepad-- 对齐";
 
 // MARK: - Diff view
@@ -651,3 +654,194 @@
 "common.replace"  = "替换";
 "common.yes"      = "是";
 "common.no"       = "否";
+
+// MARK: - Toast (Phase 43-T)
+
+"toast.region.label"     = "通知";
+"toast.close.help"       = "关闭通知";
+"toast.fileLoad.failed"  = "无法打开文件";
+"toast.fileSave.failed"  = "无法保存文件";
+"toast.encoding.cannotDecode"  = "所选编码无法解码";
+"toast.encoding.cannotEncode"  = "所选编码无法保存";
+"toast.git.failed"       = "Git 命令失败";
+"toast.regex.invalid"    = "正则表达式无效";
+"toast.action.retry"     = "重试";
+"toast.action.openFinder" = "在 Finder 中显示";
+
+// MARK: - Phase 41a · Hash & JWT
+
+"transform.hash.menu"   = "哈希";
+"transform.hash.md5"    = "MD5（不安全）";
+"transform.hash.sha1"   = "SHA-1（不安全）";
+"transform.hash.sha256" = "SHA-256";
+"transform.hash.sha512" = "SHA-512";
+"transform.hash.crc32"  = "CRC32（zlib）";
+
+"transform.jwt.decode"  = "解码 JWT…";
+
+"jwt.title"             = "JWT 检视器";
+"jwt.subtitle"          = "解码 header 与 payload — 不验证签名。";
+"jwt.input.label"       = "Token";
+"jwt.section.header"    = "Header";
+"jwt.section.payload"   = "Payload";
+"jwt.section.signature" = "Signature（base64url）";
+"jwt.placeholder"       = "在上方粘贴 JWT 以查看 claims。";
+"jwt.copy.help"         = "复制此段";
+"jwt.error.malformed"   = "Token 必须包含 3 段（以英文句点分隔）。";
+"jwt.error.invalidBase64" = "%@ 段不是合法的 base64url。";
+"jwt.error.invalidUTF8" = "%@ 段不是合法的 UTF-8。";
+
+// 命令面板 — 哈希 & JWT（Phase 41a）
+"palette.command.text.hash.md5"     = "MD5 哈希（不安全）";
+"palette.command.text.hash.sha1"    = "SHA-1 哈希（不安全）";
+"palette.command.text.hash.sha256"  = "SHA-256 哈希";
+"palette.command.text.hash.sha512"  = "SHA-512 哈希";
+"palette.command.text.hash.crc32"   = "CRC32 哈希";
+"palette.command.text.decodeJWT"    = "解码 JWT…";
+
+// MARK: - Phase 41d · 行操作
+
+"lineops.menu"          = "行操作";
+"lineops.dedupe"        = "去重";
+"lineops.dropBlank"     = "去空行";
+"lineops.reverse"       = "反转";
+"lineops.trimTrailing"  = "去除行尾空白";
+"lineops.tabsToSpaces"  = "Tab → 空格";
+"lineops.spacesToTabs"  = "空格 → Tab";
+
+"lineops.sort.menu"     = "排序";
+"lineops.sort.lex"      = "字典序（升序）";
+"lineops.sort.lex.desc" = "字典序（降序）";
+"lineops.sort.icase"    = "忽略大小写";
+"lineops.sort.natural"  = "自然顺序（item2 < item10）";
+"lineops.sort.numeric"  = "数值";
+"lineops.sort.length"   = "按长度";
+
+"lineops.case.menu"     = "大小写";
+"lineops.case.lower"    = "全部小写";
+"lineops.case.upper"    = "全部大写";
+"lineops.case.title"    = "首字母大写";
+"lineops.case.sentence" = "句首大写";
+"lineops.case.camel"    = "驼峰 camelCase";
+"lineops.case.snake"    = "蛇形 snake_case";
+"lineops.case.kebab"    = "短横 kebab-case";
+
+// 命令面板 — 行操作
+"palette.command.lines.dedupe"          = "去重行";
+"palette.command.lines.dropBlank"       = "去除空行";
+"palette.command.lines.reverse"         = "反转行";
+"palette.command.lines.trim"            = "去除行尾空白";
+"palette.command.lines.tabsToSpaces"    = "Tab 转空格";
+"palette.command.lines.spacesToTabs"    = "空格转 Tab";
+"palette.command.lines.sort.lex"        = "排序行（升序）";
+"palette.command.lines.sort.lex.desc"   = "排序行（降序）";
+"palette.command.lines.sort.icase"      = "排序行（忽略大小写）";
+"palette.command.lines.sort.natural"    = "排序行（自然顺序）";
+"palette.command.lines.sort.numeric"    = "排序行（数值）";
+"palette.command.lines.sort.length"     = "排序行（按长度）";
+"palette.command.case.lower"            = "转为小写";
+"palette.command.case.upper"            = "转为大写";
+"palette.command.case.title"            = "转为首字母大写";
+"palette.command.case.sentence"         = "转为句首大写";
+"palette.command.case.camel"            = "转为 camelCase";
+"palette.command.case.snake"            = "转为 snake_case";
+"palette.command.case.kebab"            = "转为 kebab-case";
+
+// Phase 41c — Format / Minify (JSON / XML / CSS / SQL)
+"format.menu"           = "格式化";
+"format.lang.json"      = "JSON";
+"format.lang.xml"       = "XML / HTML";
+"format.lang.css"       = "CSS";
+"format.lang.sql"       = "SQL";
+"format.action.pretty"  = "美化";
+"format.action.minify"  = "压缩";
+
+// Palette — Format / Minify
+"palette.command.format.json.pretty" = "美化 JSON";
+"palette.command.format.json.minify" = "压缩 JSON";
+"palette.command.format.xml.pretty"  = "美化 XML / HTML";
+"palette.command.format.xml.minify"  = "压缩 XML / HTML";
+"palette.command.format.css.pretty"  = "美化 CSS";
+"palette.command.format.css.minify"  = "压缩 CSS";
+"palette.command.format.sql.pretty"  = "美化 SQL";
+"palette.command.format.sql.minify"  = "压缩 SQL";
+
+// Phase 41f — Inline Color Swatch
+"menu.view.colorSwatch.show" = "显示内联色块";
+"menu.view.colorSwatch.hide" = "隐藏内联色块";
+"palette.command.colorSwatch.show" = "显示内联色块";
+"palette.command.colorSwatch.hide" = "隐藏内联色块";
+
+// Phase 41b — Generator Pack (UUID / Lorem / Password / Timestamp / QR)
+"generator.menu"        = "生成";
+"generator.uuid"        = "UUID v4";
+"generator.lorem.menu"  = "Lorem ipsum 占位文本";
+"generator.lorem.short"     = "短（10 词）";
+"generator.lorem.paragraph" = "一段（50 词）";
+"generator.lorem.long"      = "长（100 词）";
+"generator.password.menu"   = "密码…";
+"generator.password.title"  = "生成密码";
+"generator.password.length" = "长度";
+"generator.password.lowercase" = "小写字母";
+"generator.password.uppercase" = "大写字母";
+"generator.password.digits"    = "数字";
+"generator.password.symbols"   = "符号";
+"generator.password.preview"   = "预览";
+"generator.password.regenerate" = "重新生成";
+"generator.password.insert"    = "插入";
+"generator.timestamp.menu"     = "时间戳";
+"generator.timestamp.iso8601"  = "ISO 8601（含毫秒）";
+"generator.timestamp.iso8601Compact" = "ISO 8601（紧凑）";
+"generator.timestamp.unixSeconds"    = "Unix 秒";
+"generator.timestamp.unixMillis"     = "Unix 毫秒";
+"generator.timestamp.rfc2822"  = "RFC 2822";
+"generator.timestamp.date"     = "yyyy-MM-dd";
+"generator.timestamp.dateTime" = "yyyy-MM-dd HH:mm:ss";
+"generator.qr.menu"  = "二维码…";
+"generator.qr.title" = "生成二维码";
+"generator.qr.payload" = "内容";
+"generator.qr.regenerate" = "重新生成";
+"generator.qr.insert"  = "插入";
+
+// Palette — generators
+"palette.command.generator.uuid"            = "生成 UUID v4";
+"palette.command.generator.lorem.short"     = "生成 Lorem 占位（10 词）";
+"palette.command.generator.lorem.paragraph" = "生成 Lorem 占位（一段）";
+"palette.command.generator.lorem.long"      = "生成 Lorem 占位（100 词）";
+"palette.command.generator.timestamp.iso"        = "插入时间戳（ISO 8601）";
+"palette.command.generator.timestamp.isoCompact" = "插入时间戳（ISO 紧凑）";
+"palette.command.generator.timestamp.unixS"      = "插入时间戳（Unix 秒）";
+"palette.command.generator.timestamp.unixMs"     = "插入时间戳（Unix 毫秒）";
+"palette.command.generator.timestamp.rfc"        = "插入时间戳（RFC 2822）";
+"palette.command.generator.timestamp.date"       = "插入日期（yyyy-MM-dd）";
+"palette.command.generator.timestamp.dateTime"   = "插入日期 + 时间";
+"palette.command.generator.password" = "生成密码…";
+"palette.command.generator.qr"       = "生成二维码…";
+
+// Phase 41e — Regex Playground
+"regex.menu"            = "正则演练场…";
+"regex.sheet.title"     = "正则演练场";
+"regex.pattern"         = "正则";
+"regex.pattern.placeholder" = "例如  (\\d+) 或 [a-z]+@[a-z.]+";
+"regex.flag.caseInsensitive" = "忽略大小写";
+"regex.flag.multiline"  = "多行（^/$）";
+"regex.flag.dotAll"     = ". 匹配换行";
+"regex.flag.allowComments" = "允许注释";
+"regex.subject"         = "测试文本";
+"regex.matches"         = "匹配结果";
+"regex.matches.none"    = "无匹配。";
+"regex.replace.template"  = "替换模板";
+"regex.replace.placeholder" = "使用 $1, $2, $0 引用捕获组";
+"regex.replace.preview" = "替换预览";
+"regex.status.matchCount" = "%lld 处匹配";
+"button.close"          = "关闭";
+
+// Palette — Regex
+"palette.command.regex.playground" = "打开正则演练场…";
+
+// Phase 44 — Hex Viewer
+"hexview.menu"      = "十六进制查看…";
+"hexview.title"     = "十六进制查看器";
+"hexview.size"      = "%lld 字节";
+"hexview.truncated" = "仅显示前 %lld 字节";
+"palette.command.hexview" = "十六进制查看…";

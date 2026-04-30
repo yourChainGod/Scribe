@@ -25,7 +25,7 @@ enum CommandRegistration {
         var batch: [ScribeCommand] = []
         batch.append(contentsOf: fileCommands(workspace: workspace, prefs: prefs, localize: localize))
         batch.append(contentsOf: viewCommands(workspace: workspace, prefs: prefs, localize: localize))
-        batch.append(contentsOf: textCommands(workspace: workspace, findState: findState, localize: localize))
+        batch.append(contentsOf: textCommands(workspace: workspace, findState: findState, prefs: prefs, localize: localize))
         batch.append(contentsOf: tabCommands(workspace: workspace, localize: localize))
         batch.append(contentsOf: encodingCommands(workspace: workspace, localize: localize))
         batch.append(contentsOf: lineEndingCommands(workspace: workspace, localize: localize))
@@ -121,6 +121,18 @@ enum CommandRegistration {
                   subtitle: localize("menu.view"),
                   keywords: ["soft", "tabs", "tab", "spaces", "indent", "view"]) {
                 prefs.softTabs.toggle()
+            },
+            // Phase 41f — toggle inline color swatches. Title flips
+            // with the current setting so the palette match always
+            // reads as the verb the user expects.
+            .init(id: "view.toggleColorSwatches",
+                  title: prefs.inlineColorSwatchesEnabled
+                    ? localize("palette.command.colorSwatch.hide")
+                    : localize("palette.command.colorSwatch.show"),
+                  subtitle: localize("menu.view"),
+                  keywords: ["color", "swatch", "hex", "rgb", "hsl",
+                             "preview", "highlight", "颜色", "色块"]) {
+                prefs.inlineColorSwatchesEnabled.toggle()
             }
         ]
 
@@ -142,6 +154,7 @@ enum CommandRegistration {
 
     private static func textCommands(workspace: Workspace,
                                      findState: FindState?,
+                                     prefs: EditorPreferences,
                                      localize: (String) -> String) -> [ScribeCommand] {
         guard workspace.current != nil, let findState else { return [] }
         var commands: [ScribeCommand] = [
@@ -180,7 +193,20 @@ enum CommandRegistration {
             ("text.hexToDecimal", "palette.command.text.hexToDecimal", .convertBase(fromBase: 16, toBase: 10),
              ["text", "transform", "hex", "decimal", "base", "convert"]),
             ("text.decimalToHex", "palette.command.text.decimalToHex", .convertBase(fromBase: 10, toBase: 16),
-             ["text", "transform", "decimal", "hex", "base", "convert"])
+             ["text", "transform", "decimal", "hex", "base", "convert"]),
+            // Phase 41a — Hash digests. English keywords listed
+            // alongside the algorithm so the palette finds them on
+            // either side of a Chinese / English locale flip.
+            ("text.hash.md5", "palette.command.text.hash.md5", .md5,
+             ["text", "transform", "hash", "md5", "checksum", "digest"]),
+            ("text.hash.sha1", "palette.command.text.hash.sha1", .sha1,
+             ["text", "transform", "hash", "sha", "sha1", "sha-1", "checksum", "digest"]),
+            ("text.hash.sha256", "palette.command.text.hash.sha256", .sha256,
+             ["text", "transform", "hash", "sha", "sha256", "sha-256", "checksum", "digest"]),
+            ("text.hash.sha512", "palette.command.text.hash.sha512", .sha512,
+             ["text", "transform", "hash", "sha", "sha512", "sha-512", "checksum", "digest"]),
+            ("text.hash.crc32", "palette.command.text.hash.crc32", .crc32,
+             ["text", "transform", "hash", "crc", "crc32", "checksum", "zlib"])
         ]
 
         commands.append(contentsOf: specs.map { spec in
@@ -199,6 +225,196 @@ enum CommandRegistration {
                 findState.commands.send(.transformSelection(.shuffleLines(seed: UInt64.random(in: UInt64.min...UInt64.max))))
             }
         )
+        // Phase 41a — JWT decoder palette entry. Pre-fills with
+        // the live selection (empty string ⇒ blank panel; the
+        // sheet's text editor lets the user paste).
+        commands.append(
+            ScribeCommand(id: "text.decodeJWT",
+                          title: localize("palette.command.text.decodeJWT"),
+                          subtitle: localize("palette.badge.text"),
+                          keywords: ["text", "transform", "jwt", "json", "web", "token", "decode", "claims"]) {
+                workspace.jwtSheet = JWTSheetRequest(prefill: workspace.activeTextSelection)
+            }
+        )
+        // Phase 41d — Line Ops palette entries. The IDs and
+        // keywords mirror the Tools ▶ Line Ops menu so the
+        // palette finds them via either English or Chinese
+        // mnemonic on `Cmd+Shift+P`.
+        let lineOpSpecs: [(id: String,
+                           titleKey: String,
+                           action: TextTransformAction,
+                           keywords: [String])] = [
+            ("text.lines.dedupe", "palette.command.lines.dedupe", .dedupeLines,
+             ["lines", "dedupe", "deduplicate", "unique", "去重"]),
+            ("text.lines.dropBlank", "palette.command.lines.dropBlank", .dropBlankLines,
+             ["lines", "blank", "empty", "drop", "去空行"]),
+            ("text.lines.reverse", "palette.command.lines.reverse", .reverseLines,
+             ["lines", "reverse", "flip", "反转"]),
+            ("text.lines.trim", "palette.command.lines.trim", .trimTrailing,
+             ["lines", "trim", "trailing", "whitespace", "去尾空格"]),
+            ("text.lines.tabsToSpaces", "palette.command.lines.tabsToSpaces",
+             .tabsToSpaces(width: prefs.tabWidth),
+             ["lines", "tabs", "spaces", "indent"]),
+            ("text.lines.spacesToTabs", "palette.command.lines.spacesToTabs",
+             .spacesToTabs(width: prefs.tabWidth),
+             ["lines", "spaces", "tabs", "indent"]),
+            ("text.lines.sortLex", "palette.command.lines.sort.lex",
+             .sortLines(mode: .lexicographic, descending: false),
+             ["lines", "sort", "lexicographic", "asc", "排序"]),
+            ("text.lines.sortLexDesc", "palette.command.lines.sort.lex.desc",
+             .sortLines(mode: .lexicographic, descending: true),
+             ["lines", "sort", "lexicographic", "desc", "倒序"]),
+            ("text.lines.sortIcase", "palette.command.lines.sort.icase",
+             .sortLines(mode: .caseInsensitive, descending: false),
+             ["lines", "sort", "case", "insensitive"]),
+            ("text.lines.sortNatural", "palette.command.lines.sort.natural",
+             .sortLines(mode: .natural, descending: false),
+             ["lines", "sort", "natural", "version"]),
+            ("text.lines.sortNumeric", "palette.command.lines.sort.numeric",
+             .sortLines(mode: .numeric, descending: false),
+             ["lines", "sort", "numeric"]),
+            ("text.lines.sortLength", "palette.command.lines.sort.length",
+             .sortLines(mode: .length, descending: false),
+             ["lines", "sort", "length"]),
+            ("text.case.lower", "palette.command.case.lower", .caseTransform(mode: .lower),
+             ["case", "lower", "lowercase", "小写"]),
+            ("text.case.upper", "palette.command.case.upper", .caseTransform(mode: .upper),
+             ["case", "upper", "uppercase", "大写"]),
+            ("text.case.title", "palette.command.case.title", .caseTransform(mode: .title),
+             ["case", "title"]),
+            ("text.case.sentence", "palette.command.case.sentence", .caseTransform(mode: .sentence),
+             ["case", "sentence"]),
+            ("text.case.camel", "palette.command.case.camel", .caseTransform(mode: .camel),
+             ["case", "camel", "camelCase"]),
+            ("text.case.snake", "palette.command.case.snake", .caseTransform(mode: .snake),
+             ["case", "snake", "snake_case"]),
+            ("text.case.kebab", "palette.command.case.kebab", .caseTransform(mode: .kebab),
+             ["case", "kebab", "kebab-case"]),
+            // Phase 41c — Format / Minify per language. JSON / XML
+            // have a wide audience (config, RSS, SVG); CSS / SQL
+            // serve devs. All are pure transforms via TextTransform-
+            // Action so palette routing is identical to line ops.
+            ("text.format.json.pretty", "palette.command.format.json.pretty", .formatJSON,
+             ["format", "pretty", "json", "格式化"]),
+            ("text.format.json.minify", "palette.command.format.json.minify", .minifyJSON,
+             ["format", "minify", "json", "压缩"]),
+            ("text.format.xml.pretty", "palette.command.format.xml.pretty", .formatXML,
+             ["format", "pretty", "xml", "html"]),
+            ("text.format.xml.minify", "palette.command.format.xml.minify", .minifyXML,
+             ["format", "minify", "xml", "html"]),
+            ("text.format.css.pretty", "palette.command.format.css.pretty", .formatCSS,
+             ["format", "pretty", "css", "stylesheet"]),
+            ("text.format.css.minify", "palette.command.format.css.minify", .minifyCSS,
+             ["format", "minify", "css", "stylesheet"]),
+            ("text.format.sql.pretty", "palette.command.format.sql.pretty", .formatSQL,
+             ["format", "pretty", "sql", "query"]),
+            ("text.format.sql.minify", "palette.command.format.sql.minify", .minifySQL,
+             ["format", "minify", "sql", "query"]),
+        ]
+
+        // Phase 41b — Generator pack. UUID / Lorem / Timestamp
+        // insert immediately; Password / QR live as separate
+        // palette entries that pop their respective sheets via
+        // the workspace state. Done as plain commands (not via
+        // textCommands' TextTransformAction list) because the
+        // dispatch shape is "insert literal" rather than
+        // "transform selection".
+        let now = Date()
+        let snippetSpecs: [(id: String, titleKey: String,
+                            generate: () -> String,
+                            keywords: [String])] = [
+            ("text.gen.uuid", "palette.command.generator.uuid",
+             { Generators.uuidV4() },
+             ["uuid", "guid", "generate", "id"]),
+            ("text.gen.lorem.short", "palette.command.generator.lorem.short",
+             { Generators.lorem(wordCount: 10) },
+             ["lorem", "ipsum", "placeholder", "fill", "短", "占位"]),
+            ("text.gen.lorem.paragraph", "palette.command.generator.lorem.paragraph",
+             { Generators.lorem(wordCount: 50) },
+             ["lorem", "ipsum", "placeholder", "paragraph"]),
+            ("text.gen.lorem.long", "palette.command.generator.lorem.long",
+             { Generators.lorem(wordCount: 100) },
+             ["lorem", "ipsum", "placeholder", "long"]),
+            ("text.gen.ts.iso", "palette.command.generator.timestamp.iso",
+             { Generators.timestamp(format: .iso8601, now: now) },
+             ["timestamp", "iso8601", "now", "时间戳"]),
+            ("text.gen.ts.isoCompact", "palette.command.generator.timestamp.isoCompact",
+             { Generators.timestamp(format: .iso8601Compact, now: now) },
+             ["timestamp", "iso", "compact"]),
+            ("text.gen.ts.unixS", "palette.command.generator.timestamp.unixS",
+             { Generators.timestamp(format: .unixSeconds, now: now) },
+             ["timestamp", "unix", "epoch", "seconds"]),
+            ("text.gen.ts.unixMs", "palette.command.generator.timestamp.unixMs",
+             { Generators.timestamp(format: .unixMillis, now: now) },
+             ["timestamp", "unix", "epoch", "millis"]),
+            ("text.gen.ts.rfc", "palette.command.generator.timestamp.rfc",
+             { Generators.timestamp(format: .rfc2822, now: now) },
+             ["timestamp", "rfc2822", "email"]),
+            ("text.gen.ts.date", "palette.command.generator.timestamp.date",
+             { Generators.timestamp(format: .yyyymmdd, now: now) },
+             ["timestamp", "date", "yyyy"]),
+            ("text.gen.ts.dateTime", "palette.command.generator.timestamp.dateTime",
+             { Generators.timestamp(format: .yyyymmddHHMMSS, now: now) },
+             ["timestamp", "datetime"]),
+        ]
+        commands.append(contentsOf: snippetSpecs.map { spec in
+            ScribeCommand(id: spec.id,
+                          title: localize(spec.titleKey),
+                          subtitle: localize("palette.badge.text"),
+                          keywords: spec.keywords) {
+                findState.commands.send(.insertSnippet(spec.generate()))
+            }
+        })
+
+        // Sheet-bound generators — split out so the cap-on-now()
+        // logic above stays clean. Capture `workspace` directly
+        // (already in scope as a function arg).
+        commands.append(ScribeCommand(
+            id: "text.gen.password",
+            title: localize("palette.command.generator.password"),
+            subtitle: localize("palette.badge.text"),
+            keywords: ["password", "generate", "random", "密码"]) {
+            workspace.passwordSheet = PasswordSheetRequest()
+        })
+        commands.append(ScribeCommand(
+            id: "text.gen.qr",
+            title: localize("palette.command.generator.qr"),
+            subtitle: localize("palette.badge.text"),
+            keywords: ["qr", "qrcode", "二维码"]) {
+            let prefill = workspace.activeTextSelection
+            workspace.qrSheet = QRSheetRequest(prefill: prefill)
+        })
+        // Phase 41e — Regex Playground.
+        commands.append(ScribeCommand(
+            id: "text.regex.playground",
+            title: localize("palette.command.regex.playground"),
+            subtitle: localize("palette.badge.text"),
+            keywords: ["regex", "regexp", "regular", "expression",
+                       "match", "test", "正则"]) {
+            let prefill = workspace.activeTextSelection
+            workspace.regexSheet = RegexSheetRequest(prefillSubject: prefill)
+        })
+        // Phase 44 — Hex viewer.
+        commands.append(ScribeCommand(
+            id: "text.hexview",
+            title: localize("palette.command.hexview"),
+            subtitle: localize("palette.badge.text"),
+            keywords: ["hex", "hexadecimal", "binary", "dump",
+                       "xxd", "hexdump", "十六进制"]) {
+            guard let doc = workspace.current else { return }
+            let data = Data(doc.text.utf8)
+            workspace.hexViewerSheet = HexViewerRequest(
+                title: doc.title, data: data)
+        })
+
+        commands.append(contentsOf: lineOpSpecs.map { spec in
+            ScribeCommand(id: spec.id,
+                          title: localize(spec.titleKey),
+                          subtitle: localize("palette.badge.text"),
+                          keywords: spec.keywords) {
+                findState.commands.send(.transformSelection(spec.action))
+            }
+        })
         return commands
     }
 

@@ -478,6 +478,41 @@ enum TextTransformAction: Equatable {
     case shuffleLines(seed: UInt64,
                       preserveFirstLine: Bool = false,
                       preserveBlankLinePositions: Bool = false)
+    /// Phase 41a — hash digests. Output replaces the selection
+    /// with the lowercase hex digest of the UTF-8 bytes. MD5 /
+    /// SHA-1 are still useful as ETag-style checksums even though
+    /// they're cryptographically broken; SHA-256 / SHA-512 are
+    /// the safe defaults; CRC32 matches zlib so users can cross-
+    /// check against `python -c "zlib.crc32(...)"` etc.
+    case md5
+    case sha1
+    case sha256
+    case sha512
+    case crc32
+
+    // Phase 41d — line operations. All read the input as a series
+    // of newline-separated rows (LF / CRLF / CR auto-detected) and
+    // re-emit the same line ending so a Windows file stays Windows.
+    case dedupeLines
+    case dropBlankLines
+    case reverseLines
+    case trimTrailing
+    case tabsToSpaces(width: Int)
+    case spacesToTabs(width: Int)
+    case sortLines(mode: LineOps.SortMode, descending: Bool)
+    case caseTransform(mode: LineOps.CaseMode)
+
+    // Phase 41c — language-aware Pretty / Minify. Each pair routes
+    // to `CodeFormatter.<Lang>.{pretty,minify}`. Errors propagate up
+    // and land in the toast surface (Phase 43-T).
+    case formatJSON
+    case minifyJSON
+    case formatXML
+    case minifyXML
+    case formatCSS
+    case minifyCSS
+    case formatSQL
+    case minifySQL
 
     func apply(to text: String) throws -> String {
         switch self {
@@ -510,6 +545,29 @@ enum TextTransformAction: Equatable {
                                             seed: seed,
                                             preserveFirstLine: preserveFirstLine,
                                             preserveBlankLinePositions: preserveBlankLinePositions)
+        case .md5:    return HashSuite.md5(text)
+        case .sha1:   return HashSuite.sha1(text)
+        case .sha256: return HashSuite.sha256(text)
+        case .sha512: return HashSuite.sha512(text)
+        case .crc32:  return HashSuite.crc32(text)
+        case .dedupeLines:      return LineOps.deduplicate(text)
+        case .dropBlankLines:   return LineOps.dropBlankLines(text)
+        case .reverseLines:     return LineOps.reverse(text)
+        case .trimTrailing:     return LineOps.trimTrailingWhitespace(text)
+        case .tabsToSpaces(let w): return LineOps.tabsToSpaces(text, tabWidth: w)
+        case .spacesToTabs(let w): return LineOps.spacesToTabs(text, tabWidth: w)
+        case let .sortLines(mode, descending):
+            return LineOps.sort(text, mode: mode, descending: descending)
+        case .caseTransform(let mode):
+            return LineOps.transformCase(text, mode: mode)
+        case .formatJSON:  return try CodeFormatter.JSON.pretty(text)
+        case .minifyJSON:  return try CodeFormatter.JSON.minify(text)
+        case .formatXML:   return try CodeFormatter.XML.pretty(text)
+        case .minifyXML:   return try CodeFormatter.XML.minify(text)
+        case .formatCSS:   return try CodeFormatter.CSS.pretty(text)
+        case .minifyCSS:   return try CodeFormatter.CSS.minify(text)
+        case .formatSQL:   return try CodeFormatter.SQL.pretty(text)
+        case .minifySQL:   return try CodeFormatter.SQL.minify(text)
         }
     }
 }

@@ -120,6 +120,23 @@ struct ScribeCommands: Commands {
                 workspace.sidebarMode = .outline
             } label: { Text("menu.view.showOutline", bundle: .module) }
             .keyboardShortcut("o", modifiers: [.command, .shift])
+
+            Divider()
+
+            // Phase 41f — toggle the inline color-swatch overlay.
+            // Sits in View, not Tools, because it's a pure visual
+            // affordance (no document mutation). Title flips with
+            // the current state so the user always sees the verb
+            // for the *opposite* action.
+            Button {
+                prefs.inlineColorSwatchesEnabled.toggle()
+            } label: {
+                if prefs.inlineColorSwatchesEnabled {
+                    Text("menu.view.colorSwatch.hide", bundle: .module)
+                } else {
+                    Text("menu.view.colorSwatch.show", bundle: .module)
+                }
+            }
         }
 
         // — Tools menu —
@@ -132,9 +149,95 @@ struct ScribeCommands: Commands {
             .disabled(workspace.current == nil)
 
             Menu {
-                TextTransformCommandButtons(findState: findState)
+                TextTransformCommandButtons(findState: findState, workspace: workspace, prefs: prefs)
             } label: {
                 Text("menu.tools.transformSelection", bundle: .module)
+            }
+            .disabled(workspace.current == nil)
+
+            // Phase 41a — Hash submenu surfaced at the top level
+            // so users can find it without drilling into Transform
+            // Selection. Same actions, same shortcut path
+            // (FindState.commands → Coordinator → Scintilla
+            // REPLACESEL).
+            Menu {
+                Button { findState.commands.send(.transformSelection(.md5)) } label: {
+                    Text("transform.hash.md5", bundle: .module)
+                }
+                Button { findState.commands.send(.transformSelection(.sha1)) } label: {
+                    Text("transform.hash.sha1", bundle: .module)
+                }
+                Button { findState.commands.send(.transformSelection(.sha256)) } label: {
+                    Text("transform.hash.sha256", bundle: .module)
+                }
+                Button { findState.commands.send(.transformSelection(.sha512)) } label: {
+                    Text("transform.hash.sha512", bundle: .module)
+                }
+                Button { findState.commands.send(.transformSelection(.crc32)) } label: {
+                    Text("transform.hash.crc32", bundle: .module)
+                }
+            } label: {
+                Text("transform.hash.menu", bundle: .module)
+            }
+            .disabled(workspace.current == nil)
+
+            // Phase 41a — JWT decoder. Independent button (no
+            // submenu) — there's only one action.
+            Button {
+                let prefill = workspace.activeTextSelection
+                workspace.jwtSheet = JWTSheetRequest(prefill: prefill)
+            } label: {
+                Text("transform.jwt.decode", bundle: .module)
+            }
+
+            // Phase 41d — Line operations grouped by purpose.
+            Menu {
+                LineOpsCommandButtons(findState: findState, prefs: prefs)
+            } label: {
+                Text("lineops.menu", bundle: .module)
+            }
+            .disabled(workspace.current == nil)
+
+            // Phase 41c — Format / Minify per language. Two-level
+            // submenu: Format ▸ Lang ▸ {Pretty, Minify}.
+            Menu {
+                CodeFormatCommandButtons(findState: findState)
+            } label: {
+                Text("format.menu", bundle: .module)
+            }
+            .disabled(workspace.current == nil)
+
+            // Phase 41b — Generator pack (UUID / Lorem / Password /
+            // Timestamp / QR). Inserts at every active caret via the
+            // snippet channel; Password / QR raise sheets first
+            // because they take parameters.
+            Menu {
+                GenerateCommandButtons(findState: findState, workspace: workspace)
+            } label: {
+                Text("generator.menu", bundle: .module)
+            }
+            .disabled(workspace.current == nil)
+
+            // Phase 41e — Regex Playground. Pre-fills with the
+            // current selection if any so iterating on a regex
+            // against real data is one click away.
+            Button {
+                let prefill = workspace.activeTextSelection
+                workspace.regexSheet = RegexSheetRequest(prefillSubject: prefill)
+            } label: {
+                Text("regex.menu", bundle: .module)
+            }
+
+            // Phase 44 — Hex viewer. Captures the document text as
+            // UTF-8 bytes at click time so the dump is stable even
+            // if the user keeps typing.
+            Button {
+                guard let doc = workspace.current else { return }
+                let data = Data(doc.text.utf8)
+                workspace.hexViewerSheet = HexViewerRequest(
+                    title: doc.title, data: data)
+            } label: {
+                Text("hexview.menu", bundle: .module)
             }
             .disabled(workspace.current == nil)
 

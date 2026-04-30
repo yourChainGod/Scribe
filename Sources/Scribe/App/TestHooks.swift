@@ -58,6 +58,206 @@ enum TestHooks {
         runFindInFiles(env: env, ctx: ctx)
         runInlineBlame(env: env, ctx: ctx)
         runTextTools(env: env, ctx: ctx)
+        runToast(env: env, ctx: ctx)
+        runJWTSheet(env: env, ctx: ctx)
+        runLineOp(env: env, ctx: ctx)
+        runFormat(env: env, ctx: ctx)
+        runGenerate(env: env, ctx: ctx)
+        runRegexPlayground(env: env, ctx: ctx)
+        runHexView(env: env, ctx: ctx)
+    }
+
+    // MARK: Phase 44 — Hex viewer smoke
+
+    /// SCRIBE_TEST_HEX = "1" pops the hex viewer sheet for the
+    /// active document. Used by the screenshot script.
+    private static func runHexView(env: [String: String],
+                                   ctx: TestHookContext) {
+        guard env["SCRIBE_TEST_HEX"] == "1" else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            guard let doc = ctx.workspace.current else { return }
+            let data = Data(doc.text.utf8)
+            ctx.workspace.hexViewerSheet = HexViewerRequest(
+                title: doc.title, data: data)
+        }
+    }
+
+    // MARK: Phase 41e — Regex Playground smoke
+
+    /// SCRIBE_TEST_REGEX = "<subject>" pops the regex playground
+    /// pre-filled with the supplied subject text. Used by the
+    /// screenshot script to capture the sheet deterministically
+    /// without driving NSAlert / menu-click via System Events.
+    private static func runRegexPlayground(env: [String: String],
+                                           ctx: TestHookContext) {
+        guard let subject = env["SCRIBE_TEST_REGEX"], !subject.isEmpty else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            ctx.workspace.regexSheet = RegexSheetRequest(prefillSubject: subject)
+        }
+    }
+
+    // MARK: Phase 41b — Generator pack smoke
+
+    /// SCRIBE_TEST_GENERATE = "<id>" inserts the named generator's
+    /// output at the active caret a moment after launch. Used by
+    /// the screenshot script to confirm the snippet channel is
+    /// wired and the inserted text lands in Scintilla without
+    /// going through SwiftUI's menu — menu bar click via System
+    /// Events is fragile across system locales.
+    /// Supported ids: uuid, lorem, lorem.long, ts.iso, ts.unixS,
+    /// ts.date, ts.dateTime.
+    /// `qr.<payload>` triggers the QR ASCII generator with the
+    /// suffix string as the payload, e.g.
+    /// `qr.https://scribe.example/`.
+    /// `pwd.<length>` generates a password of the given length
+    /// with all four character classes.
+    private static func runGenerate(env: [String: String],
+                                    ctx: TestHookContext) {
+        guard let raw = env["SCRIBE_TEST_GENERATE"], !raw.isEmpty else { return }
+        let text: String
+        switch raw {
+        case "uuid":
+            text = Generators.uuidV4()
+        case "lorem":
+            text = Generators.lorem(wordCount: 50)
+        case "lorem.long":
+            text = Generators.lorem(wordCount: 100)
+        case "ts.iso":
+            text = Generators.timestamp(format: .iso8601)
+        case "ts.unixS":
+            text = Generators.timestamp(format: .unixSeconds)
+        case "ts.date":
+            text = Generators.timestamp(format: .yyyymmdd)
+        case "ts.dateTime":
+            text = Generators.timestamp(format: .yyyymmddHHMMSS)
+        default:
+            if raw.hasPrefix("qr.") {
+                let payload = String(raw.dropFirst(3))
+                guard let ascii = try? Generators.qrASCII(payload: payload) else { return }
+                text = ascii
+            } else if raw.hasPrefix("pwd.") {
+                var opts = Generators.PasswordOptions()
+                opts.length = Int(raw.dropFirst(4)) ?? 16
+                opts.includeSymbols = true
+                guard let pwd = try? Generators.password(options: opts) else { return }
+                text = pwd
+            } else {
+                return
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            ctx.findState.commands.send(.insertSnippet(text))
+        }
+    }
+
+    // MARK: Phase 41c — Format / Minify smoke
+
+    /// SCRIBE_TEST_FORMAT = "<id>" fires the named language
+    /// formatter against the active document a moment after launch.
+    /// Used by the screenshot script to capture before/after pairs
+    /// for JSON / XML / CSS / SQL pretty + minify.
+    /// Supported ids: jsonPretty, jsonMinify, xmlPretty, xmlMinify,
+    /// cssPretty, cssMinify, sqlPretty, sqlMinify.
+    private static func runFormat(env: [String: String],
+                                  ctx: TestHookContext) {
+        guard let raw = env["SCRIBE_TEST_FORMAT"], !raw.isEmpty else { return }
+        let action: TextTransformAction?
+        switch raw {
+        case "jsonPretty":  action = .formatJSON
+        case "jsonMinify":  action = .minifyJSON
+        case "xmlPretty":   action = .formatXML
+        case "xmlMinify":   action = .minifyXML
+        case "cssPretty":   action = .formatCSS
+        case "cssMinify":   action = .minifyCSS
+        case "sqlPretty":   action = .formatSQL
+        case "sqlMinify":   action = .minifySQL
+        default: return
+        }
+        guard let action else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            ctx.findState.commands.send(.transformSelection(action))
+        }
+    }
+
+    // MARK: Phase 41d — Line Ops smoke
+
+    /// SCRIBE_TEST_LINEOP = "<id>" fires the named line operation
+    /// against the active document a moment after launch. Used by
+    /// the screenshot script to capture before/after pairs.
+    /// Supported ids: dedupe, dropBlank, reverse, trim, sortLex,
+    /// sortNatural, sortNumeric, sortLength, lower, upper, title,
+    /// camel, snake, kebab.
+    private static func runLineOp(env: [String: String],
+                                  ctx: TestHookContext) {
+        guard let raw = env["SCRIBE_TEST_LINEOP"], !raw.isEmpty else { return }
+        let action: TextTransformAction?
+        switch raw {
+        case "dedupe":      action = .dedupeLines
+        case "dropBlank":   action = .dropBlankLines
+        case "reverse":     action = .reverseLines
+        case "trim":        action = .trimTrailing
+        case "tabsToSpaces": action = .tabsToSpaces(width: ctx.prefs.tabWidth)
+        case "spacesToTabs": action = .spacesToTabs(width: ctx.prefs.tabWidth)
+        case "sortLex":     action = .sortLines(mode: .lexicographic, descending: false)
+        case "sortNatural": action = .sortLines(mode: .natural, descending: false)
+        case "sortNumeric": action = .sortLines(mode: .numeric, descending: false)
+        case "sortLength":  action = .sortLines(mode: .length, descending: false)
+        case "lower":       action = .caseTransform(mode: .lower)
+        case "upper":       action = .caseTransform(mode: .upper)
+        case "title":       action = .caseTransform(mode: .title)
+        case "camel":       action = .caseTransform(mode: .camel)
+        case "snake":       action = .caseTransform(mode: .snake)
+        case "kebab":       action = .caseTransform(mode: .kebab)
+        default: return
+        }
+        guard let action else { return }
+        // Defer slightly so the editor has installed its
+        // FindCommand sink before we send.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            ctx.findState.commands.send(.transformSelection(action))
+        }
+    }
+
+    // MARK: Phase 41a — JWT sheet smoke
+
+    /// SCRIBE_TEST_JWT = "<token>" pops the JWT decoder sheet
+    /// pre-filled with the supplied token. Used by the screenshot
+    /// script to capture the inspector layout deterministically.
+    /// Defers briefly so the main window has finished its first
+    /// layout pass before the sheet attaches.
+    private static func runJWTSheet(env: [String: String],
+                                    ctx: TestHookContext) {
+        guard let token = env["SCRIBE_TEST_JWT"], !token.isEmpty else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            ctx.workspace.jwtSheet = JWTSheetRequest(prefill: token)
+        }
+    }
+
+    // MARK: Phase 43-T — toast notification smoke
+
+    /// SCRIBE_TEST_TOAST = "success|info|warning|error" — pipe-separated
+    /// list of toast severities to spawn on launch. Lets the
+    /// screenshot script capture the banner stack without having to
+    /// manufacture a real failure (which would otherwise need a
+    /// missing file or a poisoned encoding). Each severity gets a
+    /// generic "Phase 43-T · <severity>" title and a fixed message
+    /// so the layout matches what error paths actually produce.
+    private static func runToast(env: [String: String],
+                                 ctx: TestHookContext) {
+        guard let raw = env["SCRIBE_TEST_TOAST"], !raw.isEmpty else { return }
+        let parts = raw.split(separator: "|").map(String.init)
+        let center = ctx.workspace.toastCenter
+        for part in parts {
+            guard let sev = ToastSeverity(rawValue: part) else { continue }
+            let title = "Phase 43-T · \(sev.rawValue)"
+            let msg = "Toast smoke hook"
+            switch sev {
+            case .success: center.success(title, message: msg)
+            case .info:    center.info(title, message: msg)
+            case .warning: center.warning(title, message: msg)
+            case .error:   center.error(title, message: msg)
+            }
+        }
     }
 
     // MARK: Phase 23 — rectangular selection

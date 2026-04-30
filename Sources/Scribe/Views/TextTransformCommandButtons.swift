@@ -8,6 +8,16 @@ import SwiftUI
 
 struct TextTransformCommandButtons: View {
     @ObservedObject var findState: FindState
+    /// Phase 41a — JWT decoder + future encode/hash actions that
+    /// raise sheets need a workspace handle. Optional so legacy
+    /// callers that haven't updated yet keep compiling; the JWT
+    /// menu item silently no-ops if it's nil (which can only happen
+    /// in tests / detached previews).
+    var workspace: Workspace?
+    /// Phase 41d — Line Ops submenu reads `prefs.tabWidth` for the
+    /// tabs/spaces converters. Optional for the same reason as
+    /// `workspace`.
+    var prefs: EditorPreferences?
 
     var body: some View {
         Button {
@@ -108,6 +118,79 @@ struct TextTransformCommandButtons: View {
         } label: {
             Text("transform.lines.shuffle", bundle: .module)
         }
+        // Phase 41a — Hash submenu. Replaces the selection with the
+        // lowercase hex digest of the UTF-8 bytes. MD5 / SHA-1 are
+        // kept around for ETag / checksum use (cryptographically
+        // broken — labelled as such in the menu); SHA-256 / SHA-512
+        // are the safe defaults; CRC32 matches zlib so users can
+        // cross-check against `python -c "zlib.crc32(...)"`.
+        Divider()
+        Menu {
+            Button {
+                send(.md5)
+            } label: {
+                Text("transform.hash.md5", bundle: .module)
+            }
+            Button {
+                send(.sha1)
+            } label: {
+                Text("transform.hash.sha1", bundle: .module)
+            }
+            Button {
+                send(.sha256)
+            } label: {
+                Text("transform.hash.sha256", bundle: .module)
+            }
+            Button {
+                send(.sha512)
+            } label: {
+                Text("transform.hash.sha512", bundle: .module)
+            }
+            Button {
+                send(.crc32)
+            } label: {
+                Text("transform.hash.crc32", bundle: .module)
+            }
+        } label: {
+            Text("transform.hash.menu", bundle: .module)
+        }
+        // Phase 41a — JWT decoder pops a sheet pre-filled with the
+        // current selection (if any). Read-only inspector — does
+        // NOT verify the signature; that's a server-side concern.
+        if workspace != nil {
+            Button {
+                presentJWTDecoder()
+            } label: {
+                Text("transform.jwt.decode", bundle: .module)
+            }
+        }
+        // Phase 41d — Line Ops submenu. Surfaces the same actions
+        // the Tools ▶ Line Ops menu owns; mirrors the right-click
+        // muscle memory editors like BBEdit / Sublime have for
+        // sort-line / dedupe / case toggles.
+        if let prefs {
+            Divider()
+            Menu {
+                LineOpsCommandButtons(findState: findState, prefs: prefs)
+            } label: {
+                Text("lineops.menu", bundle: .module)
+            }
+        }
+        // Phase 41c — Format / Minify nested by language. Same
+        // shape as Tools ▸ Format so the user can reach it via
+        // right-click without leaving the editor.
+        Menu {
+            CodeFormatCommandButtons(findState: findState)
+        } label: {
+            Text("format.menu", bundle: .module)
+        }
+    }
+
+    @MainActor
+    private func presentJWTDecoder() {
+        guard let workspace else { return }
+        let prefill = workspace.activeTextSelection
+        workspace.jwtSheet = JWTSheetRequest(prefill: prefill)
     }
 
     @MainActor

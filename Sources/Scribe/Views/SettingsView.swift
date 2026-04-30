@@ -33,7 +33,7 @@ struct SettingsView: View {
                     Label {
                         Text("settings.tab.snippets", bundle: .module)
                     } icon: {
-                        Image(systemName: "doc.text.below.ecg")
+                        Image(systemName: "chevron.left.forwardslash.chevron.right")
                     }
                 }
             AboutPane()
@@ -45,11 +45,14 @@ struct SettingsView: View {
                     }
                 }
         }
-        // Phase 33 — wider + slightly taller than the previous panel
-        // to give the multi-line snippet body editor room to breathe.
-        // The other tabs were already comfortable inside the old size,
-        // so they just inherit the extra space without re-layout.
-        .frame(width: 720, height: 460)
+        // Phase 33 set width=720,height=460 for the multi-line
+        // snippet body editor. Phase 43-S added a fifth section to
+        // the Editor tab (Display, hosting the inline color-swatch
+        // toggle), and 460 px started clipping the Recent Files
+        // row. Bumping to 520 px lets all five sections stand
+        // without needing scroll, and the other tabs still inherit
+        // the extra space without re-layout.
+        .frame(width: 720, height: 520)
     }
 }
 
@@ -103,6 +106,18 @@ private struct EditorSettingsPane: View {
                 }
             } header: {
                 Text("settings.section.indent", bundle: .module)
+            }
+
+            Section {
+                Toggle(isOn: $prefs.inlineColorSwatchesEnabled) {
+                    Text("settings.display.colorSwatches", bundle: .module)
+                }
+            } header: {
+                Text("settings.section.display", bundle: .module)
+            } footer: {
+                Text("settings.display.colorSwatchesFooter", bundle: .module)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section {

@@ -573,6 +573,9 @@
 "settings.field.softTabs"    = "Insert spaces when Tab is pressed";
 "settings.font.size.points"  = "%lld pt";
 "settings.indent.tabWidth.spaces" = "%lld spaces";
+"settings.section.display"              = "Display";
+"settings.display.colorSwatches"        = "Inline color swatches";
+"settings.display.colorSwatchesFooter"  = "Highlights color literals (#hex, rgb(), hsl()) with their actual color in any file type.";
 "settings.inlineBlame.section"          = "Inline Blame";
 "settings.inlineBlame.mode"             = "Mode";
 "settings.inlineBlame.mode.off"         = "Off";
@@ -633,7 +636,7 @@
 "inlineBlame.author.you"              = "You";
 
 "about.tagline"  = "Native macOS text editor";
-"about.version"  = "v1.0 · Phase 25 polish";
+"about.version"  = "v1.0 · Phase 44 build";
 "about.license"  = "GPL-3.0 · aligned with notepad--";
 
 // MARK: - Diff view
@@ -654,3 +657,194 @@
 "common.replace"  = "Replace";
 "common.yes"      = "yes";
 "common.no"       = "no";
+
+// MARK: - Toast (Phase 43-T)
+
+"toast.region.label"     = "Notifications";
+"toast.close.help"       = "Close notification";
+"toast.fileLoad.failed"  = "Couldn't open file";
+"toast.fileSave.failed"  = "Couldn't save file";
+"toast.encoding.cannotDecode"  = "Cannot decode with chosen encoding";
+"toast.encoding.cannotEncode"  = "Cannot save with chosen encoding";
+"toast.git.failed"       = "Git command failed";
+"toast.regex.invalid"    = "Invalid regular expression";
+"toast.action.retry"     = "Retry";
+"toast.action.openFinder" = "Show in Finder";
+
+// MARK: - Phase 41a · Hash & JWT
+
+"transform.hash.menu"   = "Hash";
+"transform.hash.md5"    = "MD5 (insecure)";
+"transform.hash.sha1"   = "SHA-1 (insecure)";
+"transform.hash.sha256" = "SHA-256";
+"transform.hash.sha512" = "SHA-512";
+"transform.hash.crc32"  = "CRC32 (zlib)";
+
+"transform.jwt.decode"  = "Decode JWT…";
+
+"jwt.title"             = "JWT Inspector";
+"jwt.subtitle"          = "Decode header and payload — signature is not verified.";
+"jwt.input.label"       = "Token";
+"jwt.section.header"    = "Header";
+"jwt.section.payload"   = "Payload";
+"jwt.section.signature" = "Signature (base64url)";
+"jwt.placeholder"       = "Paste a JWT above to inspect its claims.";
+"jwt.copy.help"         = "Copy section";
+"jwt.error.malformed"   = "Token must contain three dot-separated sections.";
+"jwt.error.invalidBase64" = "%@ section is not valid base64url.";
+"jwt.error.invalidUTF8" = "%@ section is not valid UTF-8.";
+
+// Palette — hash & JWT (Phase 41a)
+"palette.command.text.hash.md5"     = "Hash with MD5 (insecure)";
+"palette.command.text.hash.sha1"    = "Hash with SHA-1 (insecure)";
+"palette.command.text.hash.sha256"  = "Hash with SHA-256";
+"palette.command.text.hash.sha512"  = "Hash with SHA-512";
+"palette.command.text.hash.crc32"   = "Hash with CRC32";
+"palette.command.text.decodeJWT"    = "Decode JWT…";
+
+// MARK: - Phase 41d · Line Ops menu
+
+"lineops.menu"          = "Line Ops";
+"lineops.dedupe"        = "Deduplicate Lines";
+"lineops.dropBlank"     = "Drop Blank Lines";
+"lineops.reverse"       = "Reverse Lines";
+"lineops.trimTrailing"  = "Trim Trailing Whitespace";
+"lineops.tabsToSpaces"  = "Tabs → Spaces";
+"lineops.spacesToTabs"  = "Spaces → Tabs";
+
+"lineops.sort.menu"     = "Sort";
+"lineops.sort.lex"      = "Lexicographic (A→Z)";
+"lineops.sort.lex.desc" = "Lexicographic (Z→A)";
+"lineops.sort.icase"    = "Case-Insensitive";
+"lineops.sort.natural"  = "Natural (item2 < item10)";
+"lineops.sort.numeric"  = "Numeric";
+"lineops.sort.length"   = "By Length";
+
+"lineops.case.menu"     = "Case";
+"lineops.case.lower"    = "lowercase";
+"lineops.case.upper"    = "UPPERCASE";
+"lineops.case.title"    = "Title Case";
+"lineops.case.sentence" = "Sentence case";
+"lineops.case.camel"    = "camelCase";
+"lineops.case.snake"    = "snake_case";
+"lineops.case.kebab"    = "kebab-case";
+
+// Palette — Line Ops
+"palette.command.lines.dedupe"          = "Deduplicate Lines";
+"palette.command.lines.dropBlank"       = "Drop Blank Lines";
+"palette.command.lines.reverse"         = "Reverse Lines";
+"palette.command.lines.trim"            = "Trim Trailing Whitespace";
+"palette.command.lines.tabsToSpaces"    = "Convert Tabs to Spaces";
+"palette.command.lines.spacesToTabs"    = "Convert Spaces to Tabs";
+"palette.command.lines.sort.lex"        = "Sort Lines (A→Z)";
+"palette.command.lines.sort.lex.desc"   = "Sort Lines (Z→A)";
+"palette.command.lines.sort.icase"      = "Sort Lines (Case-Insensitive)";
+"palette.command.lines.sort.natural"    = "Sort Lines (Natural)";
+"palette.command.lines.sort.numeric"    = "Sort Lines (Numeric)";
+"palette.command.lines.sort.length"     = "Sort Lines (By Length)";
+"palette.command.case.lower"            = "Convert to lowercase";
+"palette.command.case.upper"            = "Convert to UPPERCASE";
+"palette.command.case.title"            = "Convert to Title Case";
+"palette.command.case.sentence"         = "Convert to Sentence case";
+"palette.command.case.camel"            = "Convert to camelCase";
+"palette.command.case.snake"            = "Convert to snake_case";
+"palette.command.case.kebab"            = "Convert to kebab-case";
+
+// Phase 41c — Format / Minify (JSON / XML / CSS / SQL)
+"format.menu"           = "Format";
+"format.lang.json"      = "JSON";
+"format.lang.xml"       = "XML / HTML";
+"format.lang.css"       = "CSS";
+"format.lang.sql"       = "SQL";
+"format.action.pretty"  = "Pretty";
+"format.action.minify"  = "Minify";
+
+// Palette — Format / Minify
+"palette.command.format.json.pretty" = "Format JSON (Pretty)";
+"palette.command.format.json.minify" = "Format JSON (Minify)";
+"palette.command.format.xml.pretty"  = "Format XML / HTML (Pretty)";
+"palette.command.format.xml.minify"  = "Format XML / HTML (Minify)";
+"palette.command.format.css.pretty"  = "Format CSS (Pretty)";
+"palette.command.format.css.minify"  = "Format CSS (Minify)";
+"palette.command.format.sql.pretty"  = "Format SQL (Pretty)";
+"palette.command.format.sql.minify"  = "Format SQL (Minify)";
+
+// Phase 41f — Inline Color Swatch
+"menu.view.colorSwatch.show" = "Show Inline Color Swatches";
+"menu.view.colorSwatch.hide" = "Hide Inline Color Swatches";
+"palette.command.colorSwatch.show" = "Show Inline Color Swatches";
+"palette.command.colorSwatch.hide" = "Hide Inline Color Swatches";
+
+// Phase 41b — Generator Pack (UUID / Lorem / Password / Timestamp / QR)
+"generator.menu"        = "Generate";
+"generator.uuid"        = "UUID v4";
+"generator.lorem.menu"  = "Lorem ipsum";
+"generator.lorem.short"     = "Short (10 words)";
+"generator.lorem.paragraph" = "Paragraph (50 words)";
+"generator.lorem.long"      = "Long (100 words)";
+"generator.password.menu"   = "Password…";
+"generator.password.title"  = "Generate Password";
+"generator.password.length" = "Length";
+"generator.password.lowercase" = "Lowercase letters";
+"generator.password.uppercase" = "Uppercase letters";
+"generator.password.digits"    = "Digits";
+"generator.password.symbols"   = "Symbols";
+"generator.password.preview"   = "Preview";
+"generator.password.regenerate" = "Regenerate";
+"generator.password.insert"    = "Insert";
+"generator.timestamp.menu"     = "Timestamp";
+"generator.timestamp.iso8601"  = "ISO 8601 (with millis)";
+"generator.timestamp.iso8601Compact" = "ISO 8601 (compact)";
+"generator.timestamp.unixSeconds"    = "Unix seconds";
+"generator.timestamp.unixMillis"     = "Unix milliseconds";
+"generator.timestamp.rfc2822"  = "RFC 2822";
+"generator.timestamp.date"     = "yyyy-MM-dd";
+"generator.timestamp.dateTime" = "yyyy-MM-dd HH:mm:ss";
+"generator.qr.menu"  = "QR Code…";
+"generator.qr.title" = "Generate QR Code";
+"generator.qr.payload" = "Payload";
+"generator.qr.regenerate" = "Regenerate";
+"generator.qr.insert"  = "Insert";
+
+// Palette — generators
+"palette.command.generator.uuid"            = "Generate UUID v4";
+"palette.command.generator.lorem.short"     = "Generate Lorem (10 words)";
+"palette.command.generator.lorem.paragraph" = "Generate Lorem (paragraph)";
+"palette.command.generator.lorem.long"      = "Generate Lorem (100 words)";
+"palette.command.generator.timestamp.iso"        = "Insert Timestamp (ISO 8601)";
+"palette.command.generator.timestamp.isoCompact" = "Insert Timestamp (ISO compact)";
+"palette.command.generator.timestamp.unixS"      = "Insert Timestamp (Unix s)";
+"palette.command.generator.timestamp.unixMs"     = "Insert Timestamp (Unix ms)";
+"palette.command.generator.timestamp.rfc"        = "Insert Timestamp (RFC 2822)";
+"palette.command.generator.timestamp.date"       = "Insert Date (yyyy-MM-dd)";
+"palette.command.generator.timestamp.dateTime"   = "Insert Date+Time";
+"palette.command.generator.password" = "Generate Password…";
+"palette.command.generator.qr"       = "Generate QR Code…";
+
+// Phase 41e — Regex Playground
+"regex.menu"            = "Regex Playground…";
+"regex.sheet.title"     = "Regex Playground";
+"regex.pattern"         = "Pattern";
+"regex.pattern.placeholder" = "e.g.  (\\d+) | [a-z]+@[a-z.]+";
+"regex.flag.caseInsensitive" = "Case insensitive";
+"regex.flag.multiline"  = "Multiline (^/$)";
+"regex.flag.dotAll"     = ". matches newline";
+"regex.flag.allowComments" = "Allow comments";
+"regex.subject"         = "Subject";
+"regex.matches"         = "Matches";
+"regex.matches.none"    = "No matches.";
+"regex.replace.template"  = "Replacement template";
+"regex.replace.placeholder" = "Use $1, $2, $0 for captures";
+"regex.replace.preview" = "Preview";
+"regex.status.matchCount" = "%lld match(es)";
+"button.close"          = "Close";
+
+// Palette — Regex
+"palette.command.regex.playground" = "Open Regex Playground…";
+
+// Phase 44 — Hex Viewer
+"hexview.menu"      = "View as Hex…";
+"hexview.title"     = "Hex Viewer";
+"hexview.size"      = "%lld bytes";
+"hexview.truncated" = "Showing first %lld bytes";
+"palette.command.hexview" = "View as Hex…";

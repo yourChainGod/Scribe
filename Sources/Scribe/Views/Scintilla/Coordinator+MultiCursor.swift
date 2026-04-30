@@ -357,12 +357,20 @@ extension ScintillaCodeEditor.Coordinator {
     func transformSelection(_ action: TextTransformAction, in view: ScintillaView) {
         let start = Int(view.message(SCI.GETSELECTIONSTART))
         let end = Int(view.message(SCI.GETSELECTIONEND))
-        guard end > start else {
-            presentTextTransformFailure("transform.error.noSelection", in: view)
-            return
-        }
+        let hasSelection = end > start
 
-        let original = textInRange(in: view, range: start..<end)
+        // Phase 41d — when nothing is selected, fall back to the
+        // whole document. Line ops in particular are useless on a
+        // pure caret (sort one line?), and even the byte-oriented
+        // transforms (URL encode / hash) tend to want the file
+        // body when there's no explicit selection. Empty document
+        // still emits the no-selection error.
+        let original: String
+        if hasSelection {
+            original = textInRange(in: view, range: start..<end)
+        } else {
+            original = view.string() ?? ""
+        }
         guard !original.isEmpty else {
             presentTextTransformFailure("transform.error.noSelection", in: view)
             return
@@ -370,12 +378,30 @@ extension ScintillaCodeEditor.Coordinator {
 
         do {
             let transformed = try action.apply(to: original)
-            replaceSelection(with: transformed, in: view)
+            if hasSelection {
+                replaceSelection(with: transformed, in: view)
+            } else {
+                replaceWholeDocument(with: transformed, in: view)
+            }
             view.message(SCI.SCROLLCARET)
         } catch {
             let key = (error as? TextTransformError)?.messageKey
                 ?? "transform.error.generic"
             presentTextTransformFailure(key, in: view)
+        }
+    }
+
+    /// Phase 41d — replace the entire Scintilla document via
+    /// `SCI_SETTEXT`. Used by `transformSelection` when no
+    /// selection exists; goes through the same change-history
+    /// machinery so undo (⌘Z) reverts it as one step.
+    private func replaceWholeDocument(with text: String, in view: ScintillaView) {
+        let bytes = Array(text.utf8) + [0]
+        bytes.withUnsafeBufferPointer { buf in
+            guard let base = buf.baseAddress else { return }
+            view.message(SCI.SETTEXT,
+                         wParam: 0,
+                         lParam: Int(bitPattern: base))
         }
     }
 
@@ -547,19 +573,36 @@ extension ScintillaCodeEditor.Coordinator {
         if let str = String(data: Data(slice), encoding: .utf8) {
             findState.query = str
             findState.show(replaceMode: findState.isReplaceMode)
-            }
         }
     }
 
+    // Phase 43-T — pulled this back inside the extension. It was
+    // originally written as a top-level free function (one stray
+    // `}` closed the extension above), which compiled fine while
+    // the body never touched `self.*`. Now that it reaches into
+    // `workspace?.toastCenter` it must be a real Coordinator
+    // method.
     @MainActor
     private func presentTextTransformFailure(_ messageKey: String,
                                              in view: ScintillaView) {
         NSSound.beep()
-        guard let window = view.window else { return }
-        let alert = NSAlert()
-        alert.messageText = L10n.t("transform.error.title")
-        alert.informativeText = L10n.t(messageKey)
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: L10n.t("common.ok"))
-        alert.beginSheetModal(for: window)
+        // Phase 43-T — replace the modal sheet with a non-blocking
+        // toast. Transform failures (no selection, decode failed,
+        // crypto rejected) carry no user-decision; surfacing them
+        // as a banner keeps the editor interactive.
+        if let center = workspace?.toastCenter {
+            center.warning(L10n.t("transform.error.title"),
+                           message: L10n.t(messageKey))
+        } else {
+            // Fallback: keep sheet behaviour for tests / detached
+            // editors with no live workspace binding.
+            guard let window = view.window else { return }
+            let alert = NSAlert()
+            alert.messageText = L10n.t("transform.error.title")
+            alert.informativeText = L10n.t(messageKey)
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: L10n.t("common.ok"))
+            alert.beginSheetModal(for: window)
+        }
     }
+}
