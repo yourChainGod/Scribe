@@ -106,6 +106,18 @@ private struct EditorSettingsPane: View {
             }
 
             Section {
+                Toggle(isOn: $prefs.inlineColorSwatchesEnabled) {
+                    Text("settings.display.colorSwatches", bundle: .module)
+                }
+            } header: {
+                Text("settings.section.display", bundle: .module)
+            } footer: {
+                Text("settings.display.colorSwatchesFooter", bundle: .module)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
                 Picker(selection: $prefs.inlineBlameMode) {
                     ForEach(InlineBlameMode.allCases) { mode in
                         Text(LocalizedStringKey(mode.titleKey), bundle: .module)

@@ -573,6 +573,9 @@
 "settings.field.softTabs"    = "Insert spaces when Tab is pressed";
 "settings.font.size.points"  = "%lld pt";
 "settings.indent.tabWidth.spaces" = "%lld spaces";
+"settings.section.display"              = "Display";
+"settings.display.colorSwatches"        = "Inline color swatches";
+"settings.display.colorSwatchesFooter"  = "Highlights color literals (#hex, rgb(), hsl()) with their actual color in any file type.";
 "settings.inlineBlame.section"          = "Inline Blame";
 "settings.inlineBlame.mode"             = "Mode";
 "settings.inlineBlame.mode.off"         = "Off";

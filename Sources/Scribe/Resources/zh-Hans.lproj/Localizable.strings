@@ -571,6 +571,9 @@
 "settings.field.softTabs"    = "按 Tab 键插入空格";
 "settings.font.size.points"  = "%lld pt";
 "settings.indent.tabWidth.spaces" = "%lld 个空格";
+"settings.section.display"              = "显示";
+"settings.display.colorSwatches"        = "内联颜色色块";
+"settings.display.colorSwatchesFooter"  = "在任意文件中以实际颜色高亮显示色值字面量（#hex、rgb()、hsl()）。";
 "settings.inlineBlame.section"          = "行内 Blame";
 "settings.inlineBlame.mode"             = "模式";
 "settings.inlineBlame.mode.off"         = "关闭";
