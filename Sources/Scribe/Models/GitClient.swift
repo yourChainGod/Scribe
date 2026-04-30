@@ -833,6 +833,36 @@ enum GitClient {
         case failure(String)    // git's stderr / "non-zero exit" message
     }
 
+    private final class PipeCapture: @unchecked Sendable {
+        private let group = DispatchGroup()
+        private let lock = NSLock()
+        private var captured = Data()
+
+        func start(reading handle: FileHandle) {
+            group.enter()
+            DispatchQueue.global(qos: .userInitiated).async { [self] in
+                let data = handle.readDataToEndOfFile()
+                lock.lock()
+                captured = data
+                lock.unlock()
+                group.leave()
+            }
+        }
+
+        func waitAndRead() -> Data {
+            group.wait()
+            lock.lock()
+            defer { lock.unlock() }
+            return captured
+        }
+    }
+
+    private nonisolated static func startPipeCapture(_ pipe: Pipe) -> PipeCapture {
+        let capture = PipeCapture()
+        capture.start(reading: pipe.fileHandleForReading)
+        return capture
+    }
+
     /// Run `git <args>` with cwd `cwd`. Captures stdout on success and
     /// stderr on failure; both are stripped of the trailing newline that
     /// every git command appends.
@@ -861,9 +891,11 @@ enum GitClient {
         } catch {
             return .failure("Couldn't launch git: \(error.localizedDescription)")
         }
-        let outData = stdout.fileHandleForReading.readDataToEndOfFile()
-        let errData = stderr.fileHandleForReading.readDataToEndOfFile()
+        let outCapture = startPipeCapture(stdout)
+        let errCapture = startPipeCapture(stderr)
         task.waitUntilExit()
+        let outData = outCapture.waitAndRead()
+        let errData = errCapture.waitAndRead()
 
         if task.terminationStatus == 0 {
             return .success(String(data: outData, encoding: .utf8) ?? "")
@@ -908,6 +940,8 @@ enum GitClient {
         } catch {
             return .failure("Couldn't launch git: \(error.localizedDescription)")
         }
+        let outCapture = startPipeCapture(stdout)
+        let errCapture = startPipeCapture(stderr)
         // Feed the message in, then close the write end so git sees EOF
         // and stops reading. Closing matters: without it `git commit -F -`
         // would block forever waiting for more input.
@@ -916,9 +950,9 @@ enum GitClient {
         }
         try? stdin.fileHandleForWriting.close()
 
-        let outData = stdout.fileHandleForReading.readDataToEndOfFile()
-        let errData = stderr.fileHandleForReading.readDataToEndOfFile()
         task.waitUntilExit()
+        let outData = outCapture.waitAndRead()
+        let errData = errCapture.waitAndRead()
 
         if task.terminationStatus == 0 {
             return .success(String(data: outData, encoding: .utf8) ?? "")

@@ -431,21 +431,61 @@ enum TextTransform {
     }
 
     static func aesGCMEncrypt(_ text: String, password: String) throws -> String {
-        let sealed = try AES.GCM.seal(Data(text.utf8), using: symmetricKey(for: password))
+        let salt = randomSalt()
+        let sealed = try AES.GCM.seal(
+            Data(text.utf8),
+            using: try symmetricKey(for: password,
+                                    salt: salt,
+                                    iterations: aesGCMPBKDF2Iterations)
+        )
         guard let combined = sealed.combined else {
             throw TextTransformError.invalidCiphertext
         }
-        return combined.base64EncodedString()
+        return [
+            aesGCMEnvelopeVersion,
+            aesGCMKDFName,
+            String(aesGCMPBKDF2Iterations),
+            salt.base64EncodedString(),
+            combined.base64EncodedString()
+        ].joined(separator: aesGCMEnvelopeSeparator)
     }
 
     static func aesGCMDecrypt(_ text: String, password: String) throws -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let data = Data(base64Encoded: trimmed) else {
+        if trimmed.hasPrefix(aesGCMEnvelopeVersion + aesGCMEnvelopeSeparator) {
+            return try decryptVersionedAESGCMEnvelope(trimmed, password: password)
+        }
+        return try decryptLegacyAESGCMBase64(trimmed, password: password)
+    }
+
+    private static let aesGCMEnvelopeVersion = "scribe-aesgcm-v2"
+    private static let aesGCMKDFName = "pbkdf2-sha256"
+    private static let aesGCMEnvelopeSeparator = "$"
+    private static let aesGCMPBKDF2Iterations = 100_000
+    private static let aesGCMPBKDF2MaxIterations = 1_000_000
+    private static let aesGCMSaltByteCount = 16
+    private static let aesGCMKeyByteCount = 32
+
+    private static func decryptVersionedAESGCMEnvelope(_ text: String,
+                                                       password: String) throws -> String {
+        let parts = text.components(separatedBy: aesGCMEnvelopeSeparator)
+        guard parts.count == 5,
+              parts[0] == aesGCMEnvelopeVersion,
+              parts[1] == aesGCMKDFName,
+              let iterations = Int(parts[2]),
+              (1...aesGCMPBKDF2MaxIterations).contains(iterations),
+              let salt = Data(base64Encoded: parts[3]),
+              let data = Data(base64Encoded: parts[4]) else {
             throw TextTransformError.invalidCiphertext
         }
         do {
             let sealed = try AES.GCM.SealedBox(combined: data)
-            let opened = try AES.GCM.open(sealed, using: symmetricKey(for: password))
+            let opened = try AES.GCM.open(
+                sealed,
+                using: try symmetricKey(for: password,
+                                        salt: salt,
+                                        iterations: iterations)
+            )
             guard let decoded = String(data: opened, encoding: .utf8) else {
                 throw TextTransformError.invalidUTF8
             }
@@ -457,9 +497,78 @@ enum TextTransform {
         }
     }
 
-    private static func symmetricKey(for password: String) -> SymmetricKey {
+    private static func decryptLegacyAESGCMBase64(_ text: String,
+                                                  password: String) throws -> String {
+        guard let data = Data(base64Encoded: text) else {
+            throw TextTransformError.invalidCiphertext
+        }
+        do {
+            let sealed = try AES.GCM.SealedBox(combined: data)
+            let opened = try AES.GCM.open(sealed, using: legacySymmetricKey(for: password))
+            guard let decoded = String(data: opened, encoding: .utf8) else {
+                throw TextTransformError.invalidUTF8
+            }
+            return decoded
+        } catch TextTransformError.invalidUTF8 {
+            throw TextTransformError.invalidUTF8
+        } catch {
+            throw TextTransformError.invalidCiphertext
+        }
+    }
+
+    private static func randomSalt() -> Data {
+        Data((0..<aesGCMSaltByteCount).map { _ in UInt8.random(in: 0...255) })
+    }
+
+    private static func symmetricKey(for password: String,
+                                     salt: Data,
+                                     iterations: Int) throws -> SymmetricKey {
+        guard iterations > 0 else { throw TextTransformError.invalidCiphertext }
+        let bytes = try pbkdf2SHA256(password: Data(password.utf8),
+                                     salt: salt,
+                                     iterations: iterations,
+                                     keyByteCount: aesGCMKeyByteCount)
+        return SymmetricKey(data: bytes)
+    }
+
+    private static func legacySymmetricKey(for password: String) -> SymmetricKey {
         let digest = SHA256.hash(data: Data(password.utf8))
         return SymmetricKey(data: digest)
+    }
+
+    private static func pbkdf2SHA256(password: Data,
+                                     salt: Data,
+                                     iterations: Int,
+                                     keyByteCount: Int) throws -> Data {
+        guard iterations > 0, keyByteCount > 0 else {
+            throw TextTransformError.invalidCiphertext
+        }
+        let key = SymmetricKey(data: password)
+        var derived = Data()
+        var blockIndex: UInt32 = 1
+
+        while derived.count < keyByteCount {
+            var blockInput = salt
+            blockInput.append(UInt8((blockIndex >> 24) & 0xff))
+            blockInput.append(UInt8((blockIndex >> 16) & 0xff))
+            blockInput.append(UInt8((blockIndex >> 8) & 0xff))
+            blockInput.append(UInt8(blockIndex & 0xff))
+
+            var u = Array(HMAC<SHA256>.authenticationCode(for: blockInput, using: key))
+            var t = u
+            if iterations > 1 {
+                for _ in 1..<iterations {
+                    u = Array(HMAC<SHA256>.authenticationCode(for: Data(u), using: key))
+                    for index in t.indices {
+                        t[index] ^= u[index]
+                    }
+                }
+            }
+            derived.append(contentsOf: t)
+            blockIndex &+= 1
+        }
+
+        return Data(derived.prefix(keyByteCount))
     }
 }
 

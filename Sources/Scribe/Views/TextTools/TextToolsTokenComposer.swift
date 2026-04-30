@@ -499,6 +499,7 @@ private struct ConditionalDrag: ViewModifier {
 
 // MARK: - Shared remove button
 
+@MainActor
 @ViewBuilder
 private func removeButton(model: TextToolsModel, id: UUID) -> some View {
     Button {

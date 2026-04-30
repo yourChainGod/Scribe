@@ -572,20 +572,31 @@ final class Workspace: ObservableObject {
         }
     }
 
-    private func saveAs(doc: Document) {
+    @discardableResult
+    private func saveAs(doc: Document) -> Bool {
         let panel = NSSavePanel()
         panel.nameFieldStringValue = doc.title
         if panel.runModal() == .OK, let url = panel.url {
             let normalized = url.standardizedFileURL
-            write(doc: doc, to: normalized)
-            doc.url = normalized
-            doc.title = normalized.lastPathComponent
-            prefs.addRecent(normalized)
-            startWatching(doc)   // URL just changed — rewatch the new location
+            return write(doc: doc,
+                         to: normalized,
+                         commitURLOnSuccess: normalized)
         }
+        return false
     }
 
-    private func write(doc: Document, to url: URL) {
+    private func commitSaveURLIfNeeded(_ url: URL?, for doc: Document) {
+        guard let url else { return }
+        doc.url = url
+        doc.title = url.lastPathComponent
+        prefs.addRecent(url)
+        startWatching(doc)   // URL just changed — rewatch the new location
+    }
+
+    @discardableResult
+    private func write(doc: Document,
+                       to url: URL,
+                       commitURLOnSuccess: URL? = nil) -> Bool {
         // Phase 34c — large-file path skips the String-based encode +
         // atomic write entirely. The buffer lives on the C++ side
         // and `doc.text` stays empty for the document's lifetime;
@@ -601,7 +612,7 @@ final class Workspace: ObservableObject {
             // Re-entrancy guard: ⌘S during an in-flight save is a
             // no-op rather than queuing a second pipeline that would
             // race the first for the same temp-file slot.
-            guard doc.saveProgress < 0 else { return }
+            guard doc.saveProgress < 0 else { return false }
             guard let hook = doc.largeFileSaveHook else {
                 // No editor attached — should be impossible for a
                 // doc the user can ⌘S, but bail with a toast
@@ -609,16 +620,16 @@ final class Workspace: ObservableObject {
                 // Phase 43-T — toast replaces NSAlert.
                 toastCenter.error(L10n.t("toast.fileSave.failed"),
                                   message: L10n.t("error.largeFileSaveNoEditor"))
-                return
+                return false
             }
             doc.saveProgress = 0
             let docRef = doc
-            let docID = doc.id
             Task { @MainActor [weak self] in
                 do {
                     try await hook(url) { p in
                         docRef.saveProgress = p
                     }
+                    self?.commitSaveURLIfNeeded(commitURLOnSuccess, for: docRef)
                     docRef.saveProgress = -1
                     docRef.isDirty = false
                     // Mirror small-file save's gutter refresh; the
@@ -645,9 +656,8 @@ final class Workspace: ObservableObject {
                     self?.toastCenter.error(L10n.t("toast.fileSave.failed"),
                                             message: (error as NSError).localizedDescription)
                 }
-                _ = docID
             }
-            return
+            return true
         }
 
         // Phase 28c — drain any throttled keystrokes before reading
@@ -664,9 +674,10 @@ final class Workspace: ObservableObject {
                 // Phase 43-T — toast replaces NSAlert.
                 toastCenter.error(L10n.t("toast.encoding.cannotEncode"),
                                   message: L10n.t("error.cannotEncode", doc.encoding.displayName as NSString))
-                return
+                return false
             }
             try payload.write(to: url, options: .atomic)
+            commitSaveURLIfNeeded(commitURLOnSuccess, for: doc)
             doc.isDirty = false
             // Phase 31 — the just-written bytes are what `git diff`
             // sees; refresh the gutter so the saved-then-unmodified
@@ -685,7 +696,9 @@ final class Workspace: ObservableObject {
             // Phase 43-T — toast replaces NSAlert.
             toastCenter.error(L10n.t("toast.fileSave.failed"),
                               message: (error as NSError).localizedDescription)
+            return false
         }
+        return true
     }
 
     func close(documentID: UUID) {
@@ -703,12 +716,13 @@ final class Workspace: ObservableObject {
 
             switch alert.runModal() {
             case .alertFirstButtonReturn:
+                let didStartSave: Bool
                 if doc.url != nil {
-                    write(doc: doc, to: doc.url!)
+                    didStartSave = write(doc: doc, to: doc.url!)
                 } else {
-                    saveAs(doc: doc)
+                    didStartSave = saveAs(doc: doc)
                 }
-                if doc.isDirty { return } // user cancelled the save panel
+                if !didStartSave || doc.isDirty { return } // user cancelled, save failed, or async save is still running
             case .alertSecondButtonReturn:
                 break // discard
             default:

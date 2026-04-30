@@ -835,6 +835,7 @@
 "regex.replace.preview" = "替换预览";
 "regex.status.matchCount" = "%lld 处匹配";
 "button.close"          = "关闭";
+"button.cancel"         = "取消";
 
 // Palette — Regex
 "palette.command.regex.playground" = "打开正则演练场…";

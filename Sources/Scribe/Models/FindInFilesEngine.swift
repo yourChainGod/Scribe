@@ -59,9 +59,16 @@ final class FindInFilesEngine {
     /// any previous one before starting.
     private var task: Task<Void, Never>?
 
+    /// Generation token for search result streams. Cancellation is
+    /// cooperative, so a previous detached task can still reach a
+    /// MainActor flush after a newer search has started; this token
+    /// keeps those stale flushes from touching shared state.
+    private var searchRunID = UUID()
+
     func cancel() {
         task?.cancel()
         task = nil
+        searchRunID = UUID()
     }
 
     /// Kick off a workspace-wide search. Streams partial results back
@@ -78,6 +85,8 @@ final class FindInFilesEngine {
         }
         state.reset()
         state.setSearching(true)
+        let runID = UUID()
+        searchRunID = runID
 
         let regex: NSRegularExpression?
         do {
@@ -94,6 +103,7 @@ final class FindInFilesEngine {
             await self.run(options: options,
                            root: root,
                            regex: regex,
+                           runID: runID,
                            into: state)
         }
     }
@@ -277,6 +287,7 @@ final class FindInFilesEngine {
     private nonisolated func run(options: FindInFilesOptions,
                                  root: URL,
                                  regex: NSRegularExpression?,
+                                 runID: UUID,
                                  into state: FindInFilesState) async {
         let fm = FileManager.default
         guard let enumerator = fm.enumerator(
@@ -285,7 +296,10 @@ final class FindInFilesEngine {
             options: [.skipsPackageDescendants],
             errorHandler: { _, _ in true }
         ) else {
-            await MainActor.run { state.setSearching(false) }
+            await MainActor.run { [weak self] in
+                guard let self, self.searchRunID == runID else { return }
+                state.setSearching(false)
+            }
             return
         }
 
@@ -302,7 +316,7 @@ final class FindInFilesEngine {
         // walk and is fine in async code.
         while let next = enumerator.nextObject() {
             guard let url = next as? URL else { continue }
-            if Task.isCancelled { break }
+            if Task.isCancelled { return }
 
             // Directory pruning happens via skipDescendants on the enumerator.
             let lastComponent = url.lastPathComponent
@@ -347,12 +361,14 @@ final class FindInFilesEngine {
             // jumps from "Searching…" to a finished list.
             pendingFlush += 1
             if pendingFlush >= 25 {
+                if Task.isCancelled { return }
                 pendingFlush = 0
                 let snapshot = collected
                 let totalSnapshot = total
                 let scannedSnapshot = scanned
                 let withMatchesSnapshot = withMatches
-                await MainActor.run {
+                await MainActor.run { [weak self] in
+                    guard let self, self.searchRunID == runID else { return }
                     state.update(results: snapshot,
                                  totalMatches: totalSnapshot,
                                  filesScanned: scannedSnapshot,
@@ -366,7 +382,9 @@ final class FindInFilesEngine {
         let totalFinal = total
         let scannedFinal = scanned
         let withMatchesFinal = withMatches
-        await MainActor.run {
+        if Task.isCancelled { return }
+        await MainActor.run { [weak self] in
+            guard let self, self.searchRunID == runID else { return }
             state.update(results: finalSnapshot,
                          totalMatches: totalFinal,
                          filesScanned: scannedFinal,

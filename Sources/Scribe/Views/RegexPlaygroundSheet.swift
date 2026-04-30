@@ -203,7 +203,7 @@ struct RegexPlaygroundSheet: View {
                     .font(.caption)
                     .foregroundStyle(.red)
             } else {
-                Text("regex.status.matchCount \(matches.count)", bundle: .module)
+                Text(L10n.t("regex.status.matchCount", matches.count))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

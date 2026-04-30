@@ -47,11 +47,11 @@ struct HexViewerSheet: View {
             }
 
             HStack(spacing: 16) {
-                Text("hexview.size \(dump.originalByteCount)", bundle: .module)
+                Text(L10n.t("hexview.size", dump.originalByteCount))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
                 if dump.truncated {
-                    Text("hexview.truncated \(dump.dumpedByteCount)", bundle: .module)
+                    Text(L10n.t("hexview.truncated", dump.dumpedByteCount))
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }

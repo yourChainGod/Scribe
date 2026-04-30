@@ -3,6 +3,7 @@
 //  Phase 37 — pure text split / merge / shuffle operations.
 //
 
+import CryptoKit
 import XCTest
 @testable import Scribe
 
@@ -273,8 +274,26 @@ final class TextOperationsTests: XCTestCase {
             .apply(to: "Scribe secret")
 
         XCTAssertNotEqual(encrypted, "Scribe secret")
+        XCTAssertTrue(encrypted.hasPrefix("scribe-aesgcm-v2$pbkdf2-sha256$100000$"))
         XCTAssertEqual(
             try TextTransformAction.aesGCMDecrypt(password: "correct horse").apply(to: encrypted),
+            "Scribe secret"
+        )
+    }
+
+    func test_transformActionAESGCMUsesFreshSalt() throws {
+        let first = try TextTransformAction.aesGCMEncrypt(password: "same password")
+            .apply(to: "Scribe secret")
+        let second = try TextTransformAction.aesGCMEncrypt(password: "same password")
+            .apply(to: "Scribe secret")
+
+        XCTAssertNotEqual(first, second)
+        XCTAssertEqual(
+            try TextTransformAction.aesGCMDecrypt(password: "same password").apply(to: first),
+            "Scribe secret"
+        )
+        XCTAssertEqual(
+            try TextTransformAction.aesGCMDecrypt(password: "same password").apply(to: second),
             "Scribe secret"
         )
     }
@@ -288,5 +307,26 @@ final class TextOperationsTests: XCTestCase {
         ) { error in
             XCTAssertEqual(error as? TextTransformError, .invalidCiphertext)
         }
+    }
+
+    func test_transformActionAESGCMDecryptsLegacyCiphertext() throws {
+        let legacy = try legacyAESGCMCiphertext("Legacy secret", password: "old password")
+
+        XCTAssertFalse(legacy.hasPrefix("scribe-aesgcm-v2$"))
+        XCTAssertEqual(
+            try TextTransformAction.aesGCMDecrypt(password: "old password").apply(to: legacy),
+            "Legacy secret"
+        )
+    }
+
+    private func legacyAESGCMCiphertext(_ text: String,
+                                        password: String) throws -> String {
+        let digest = SHA256.hash(data: Data(password.utf8))
+        let sealed = try AES.GCM.seal(Data(text.utf8),
+                                      using: SymmetricKey(data: digest))
+        guard let combined = sealed.combined else {
+            throw TextTransformError.invalidCiphertext
+        }
+        return combined.base64EncodedString()
     }
 }

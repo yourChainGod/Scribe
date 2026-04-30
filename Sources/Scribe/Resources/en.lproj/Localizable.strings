@@ -838,6 +838,7 @@
 "regex.replace.preview" = "Preview";
 "regex.status.matchCount" = "%lld match(es)";
 "button.close"          = "Close";
+"button.cancel"         = "Cancel";
 
 // Palette — Regex
 "palette.command.regex.playground" = "Open Regex Playground…";

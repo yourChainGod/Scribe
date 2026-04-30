@@ -335,11 +335,13 @@ struct ScintillaCodeEditor: NSViewRepresentable {
             // → atomic temp file save without touching the
             // ScintillaView directly. `weak view` mirrors the rest of
             // this method's capture story; if the view is torn down
-            // while a save is in flight, the hook becomes a no-op
-            // (Workspace gives the user the alert via the timeout
-            // path instead of crashing on a dangling pointer).
+            // while a save is in flight, the hook throws so Workspace
+            // keeps the document dirty instead of reporting a no-op
+            // as a successful save.
             doc.largeFileSaveHook = { [weak view] url, progress in
-                guard let view else { return }
+                guard let view else {
+                    throw ChunkedFileWriterError.editorUnavailable
+                }
                 let length = Int(view.message(SCI.GETLENGTH))
                 let writer = ChunkedFileWriter()
                 try await writer.write(view: view,

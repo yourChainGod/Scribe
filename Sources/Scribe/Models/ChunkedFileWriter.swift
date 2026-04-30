@@ -30,7 +30,12 @@ import Scintilla
 /// Failure modes specific to the chunked save path. Plain enum —
 /// every case is recoverable by re-running the save (no partial
 /// corruption possible because the rename is atomic).
-enum ChunkedFileWriterError: Error, Sendable {
+enum ChunkedFileWriterError: Error, Sendable, LocalizedError {
+
+    /// The Scintilla view disappeared before the async save hook could
+    /// read from it. Treat this as a failed save, never a successful
+    /// no-op.
+    case editorUnavailable
 
     /// The temp file couldn't be created in the destination's
     /// directory — usually a permissions issue or out-of-space.
@@ -54,6 +59,21 @@ enum ChunkedFileWriterError: Error, Sendable {
     /// destination locked); we leave the temp on disk so the user
     /// can recover manually.
     case replaceFailed(underlying: Error)
+
+    var errorDescription: String? {
+        switch self {
+        case .editorUnavailable:
+            return "The editor view is no longer available for this large-file save."
+        case .openTempFailed(let underlying):
+            return "Couldn't create a temporary save file: \(underlying.localizedDescription)"
+        case .writeFailed(let underlying):
+            return "Couldn't write the temporary save file: \(underlying.localizedDescription)"
+        case .readFailed(let start, let length):
+            return "Couldn't read editor bytes at offset \(start) for \(length) bytes."
+        case .replaceFailed(let underlying):
+            return "Couldn't replace the destination file: \(underlying.localizedDescription)"
+        }
+    }
 }
 
 /// Phase 34c — chunk size used by `ChunkedFileWriter.write(...)`.

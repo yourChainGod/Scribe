@@ -30,6 +30,7 @@ final class FileIndex: ObservableObject {
     nonisolated static let maxFiles: Int = 200_000
 
     private var rebuildTask: Task<Void, Never>?
+    private var rebuildGeneration: Int = 0
 
     /// Workspace-wide FS watcher. Created when rebuild(at:) starts a
     /// fresh root and torn down by clear(). Triggers a debounced
@@ -53,6 +54,8 @@ final class FileIndex: ObservableObject {
     /// mount) recoverable.
     func rebuild(at root: URL) {
         rebuildTask?.cancel()
+        rebuildGeneration &+= 1
+        let generation = rebuildGeneration
         watcher = nil   // tear down the previous root's watcher first
         rootURL = root
         files = []
@@ -66,7 +69,8 @@ final class FileIndex: ObservableObject {
             }.value
             await MainActor.run { [weak self] in
                 guard let self else { return }
-                guard self.rootURL == root else { return }   // stale scan
+                guard self.rootURL == root,
+                      self.rebuildGeneration == generation else { return }   // stale scan
                 self.files = collected
                 self.isIndexing = false
             }
@@ -87,6 +91,7 @@ final class FileIndex: ObservableObject {
     func clear() {
         rebuildTask?.cancel()
         rebuildTask = nil
+        rebuildGeneration &+= 1
         watcher = nil
         rootURL = nil
         files = []
@@ -100,13 +105,17 @@ final class FileIndex: ObservableObject {
     private func handleFSChange() {
         guard let root = rootURL else { return }
         rebuildTask?.cancel()
+        rebuildGeneration &+= 1
+        let generation = rebuildGeneration
         isIndexing = true
         rebuildTask = Task { [weak self, root] in
             let collected: [URL] = await Task.detached(priority: .userInitiated) {
                 Self.walk(root: root)
             }.value
             await MainActor.run { [weak self] in
-                guard let self, self.rootURL == root else { return }
+                guard let self,
+                      self.rootURL == root,
+                      self.rebuildGeneration == generation else { return }
                 self.files = collected
                 self.isIndexing = false
                 self.onFileSystemChange?()
