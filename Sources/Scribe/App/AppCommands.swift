@@ -120,6 +120,23 @@ struct ScribeCommands: Commands {
                 workspace.sidebarMode = .outline
             } label: { Text("menu.view.showOutline", bundle: .module) }
             .keyboardShortcut("o", modifiers: [.command, .shift])
+
+            Divider()
+
+            // Phase 41f — toggle the inline color-swatch overlay.
+            // Sits in View, not Tools, because it's a pure visual
+            // affordance (no document mutation). Title flips with
+            // the current state so the user always sees the verb
+            // for the *opposite* action.
+            Button {
+                prefs.inlineColorSwatchesEnabled.toggle()
+            } label: {
+                if prefs.inlineColorSwatchesEnabled {
+                    Text("menu.view.colorSwatch.hide", bundle: .module)
+                } else {
+                    Text("menu.view.colorSwatch.show", bundle: .module)
+                }
+            }
         }
 
         // — Tools menu —

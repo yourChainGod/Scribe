@@ -762,3 +762,9 @@
 "palette.command.format.css.minify"  = "压缩 CSS";
 "palette.command.format.sql.pretty"  = "美化 SQL";
 "palette.command.format.sql.minify"  = "压缩 SQL";
+
+// Phase 41f — Inline Color Swatch
+"menu.view.colorSwatch.show" = "显示内联色块";
+"menu.view.colorSwatch.hide" = "隐藏内联色块";
+"palette.command.colorSwatch.show" = "显示内联色块";
+"palette.command.colorSwatch.hide" = "隐藏内联色块";

@@ -121,6 +121,18 @@ enum CommandRegistration {
                   subtitle: localize("menu.view"),
                   keywords: ["soft", "tabs", "tab", "spaces", "indent", "view"]) {
                 prefs.softTabs.toggle()
+            },
+            // Phase 41f — toggle inline color swatches. Title flips
+            // with the current setting so the palette match always
+            // reads as the verb the user expects.
+            .init(id: "view.toggleColorSwatches",
+                  title: prefs.inlineColorSwatchesEnabled
+                    ? localize("palette.command.colorSwatch.hide")
+                    : localize("palette.command.colorSwatch.show"),
+                  subtitle: localize("menu.view"),
+                  keywords: ["color", "swatch", "hex", "rgb", "hsl",
+                             "preview", "highlight", "颜色", "色块"]) {
+                prefs.inlineColorSwatchesEnabled.toggle()
             }
         ]
 

@@ -765,3 +765,9 @@
 "palette.command.format.css.minify"  = "Format CSS (Minify)";
 "palette.command.format.sql.pretty"  = "Format SQL (Pretty)";
 "palette.command.format.sql.minify"  = "Format SQL (Minify)";
+
+// Phase 41f — Inline Color Swatch
+"menu.view.colorSwatch.show" = "Show Inline Color Swatches";
+"menu.view.colorSwatch.hide" = "Hide Inline Color Swatches";
+"palette.command.colorSwatch.show" = "Show Inline Color Swatches";
+"palette.command.colorSwatch.hide" = "Hide Inline Color Swatches";

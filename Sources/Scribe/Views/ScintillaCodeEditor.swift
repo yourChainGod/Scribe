@@ -51,6 +51,7 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         context.coordinator.configureGitGutterMargin(in: view)
         context.coordinator.applyTheme(to: view)
         context.coordinator.configureMatchIndicator(to: view)
+        context.coordinator.configureColorSwatchIndicator(to: view)
         context.coordinator.configureMultiSelection(to: view)
         // Phase 35c-ii-γ — inline-blame style + visibility +
         // engine subscription. Three calls because the lifecycle
@@ -134,6 +135,10 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         // the same view; repaint so the chip tracks the new
         // file's blame instead of stale rows from the previous tab.
         context.coordinator.applyInlineBlame(in: view)
+        // Phase 41f — refresh color swatches. Self-gates via
+        // length / enabled / docID signature so the typical
+        // caret-move tick is a no-op (one O(1) Scintilla query).
+        context.coordinator.applyColorSwatches(in: view)
     }
 
     // MARK: - Coordinator (Scintilla delegate)
@@ -191,6 +196,14 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         var lastHighlightedQuery: String = ""
         var lastHighlightedFlags: UInt = 0
         var lastHighlightedDocLength: Int = -1
+
+        /// Phase 41f — cheap-equality cache for the inline color
+        /// swatch indicator. Re-scanning a document on every
+        /// SwiftUI tick is wasteful when the user is just moving
+        /// the caret; we only re-paint when length / enabled /
+        /// docID changes. `nil` means "force a repaint on the
+        /// next call" — used after toggle flips and doc swaps.
+        var colorSwatchSignature: ColorSwatchSignature?
 
         /// Phase 28c — debounce handle for the SCN_MODIFIED → doc.text
         /// sync. Each modification cancels the previous in-flight Task

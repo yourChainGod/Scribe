@@ -96,6 +96,18 @@ enum SCI {
     static let SETINDICCURRENT:  UInt32 = 2500
     static let INDICFILLRANGE:   UInt32 = 2504
     static let INDICCLEARRANGE:  UInt32 = 2505
+    /// Phase 41f — `SCI_INDICSETFLAGS(indicator, flags)`. Set the
+    /// `SC_INDICFLAG_VALUEFORE` bit so each `INDICATORFILLRANGE`
+    /// call can carry its own fill colour via `SETINDICATORVALUE`.
+    /// Lets one indicator slot host arbitrarily many distinct
+    /// colours — necessary for inline color swatches where every
+    /// match has its own RGB.
+    static let INDICSETFLAGS:    UInt32 = 2684
+    /// Phase 41f — `SCI_SETINDICATORVALUE(value)`. The value is
+    /// `SC_INDICVALUEBIT | (BGR & SC_INDICVALUEMASK)` and supplies
+    /// the per-range colour read by indicators that have
+    /// `SC_INDICFLAG_VALUEFORE` set.
+    static let SETINDICATORVALUE:UInt32 = 2502
     // Phase 20 — multi-cursor / multi-selection
     static let SETMULTIPLESELECTION:        UInt32 = 2563
     static let SETADDITIONALSELECTIONTYPING:UInt32 = 2565
@@ -232,9 +244,25 @@ enum SCIND {
     /// Indicator index 0 (out of 0–7 user-available; 8–31 are reserved
     /// by Scintilla for things like decorations).
     static let MATCHES:   UInt = 0
+    /// Phase 41f — Indicator slot 1 hosts inline color swatches.
+    /// Style is `INDIC_STRAIGHTBOX` (8) with `SC_INDICFLAG_VALUEFORE`
+    /// set so each filled range carries its own colour. Drawn UNDER
+    /// the text so the literal stays legible against light fills.
+    static let COLOR_SWATCH: UInt = 1
     /// INDIC_ROUNDBOX = 7 — translucent rounded rectangle, common for
     /// "all matches" overlays.
     static let ROUNDBOX:  Int  = 7
+    /// INDIC_STRAIGHTBOX = 8 — flat translucent rectangle. Used by
+    /// the color-swatch indicator.
+    static let STRAIGHTBOX: Int = 8
+    /// `SC_INDICFLAG_VALUEFORE = 1` — the foreground colour of each
+    /// filled range comes from the indicator value, not from a single
+    /// `INDICSETFORE` call.
+    static let FLAG_VALUEFORE: Int = 1
+    /// `SC_INDICVALUEBIT = 0x1000000` — must be OR'd into the value
+    /// passed to `SETINDICATORVALUE` so Scintilla knows the low 24
+    /// bits are a real colour, not "use the indicator's default".
+    static let INDICVALUEBIT: UInt = 0x1000000
 }
 
 // MARK: - Misc Scintilla constants
