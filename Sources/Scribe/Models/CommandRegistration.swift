@@ -394,6 +394,18 @@ enum CommandRegistration {
             let prefill = workspace.activeTextSelection
             workspace.regexSheet = RegexSheetRequest(prefillSubject: prefill)
         })
+        // Phase 44 — Hex viewer.
+        commands.append(ScribeCommand(
+            id: "text.hexview",
+            title: localize("palette.command.hexview"),
+            subtitle: localize("palette.badge.text"),
+            keywords: ["hex", "hexadecimal", "binary", "dump",
+                       "xxd", "hexdump", "十六进制"]) {
+            guard let doc = workspace.current else { return }
+            let data = Data(doc.text.utf8)
+            workspace.hexViewerSheet = HexViewerRequest(
+                title: doc.title, data: data)
+        })
 
         commands.append(contentsOf: lineOpSpecs.map { spec in
             ScribeCommand(id: spec.id,

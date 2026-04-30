@@ -64,6 +64,22 @@ enum TestHooks {
         runFormat(env: env, ctx: ctx)
         runGenerate(env: env, ctx: ctx)
         runRegexPlayground(env: env, ctx: ctx)
+        runHexView(env: env, ctx: ctx)
+    }
+
+    // MARK: Phase 44 — Hex viewer smoke
+
+    /// SCRIBE_TEST_HEX = "1" pops the hex viewer sheet for the
+    /// active document. Used by the screenshot script.
+    private static func runHexView(env: [String: String],
+                                   ctx: TestHookContext) {
+        guard env["SCRIBE_TEST_HEX"] == "1" else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            guard let doc = ctx.workspace.current else { return }
+            let data = Data(doc.text.utf8)
+            ctx.workspace.hexViewerSheet = HexViewerRequest(
+                title: doc.title, data: data)
+        }
     }
 
     // MARK: Phase 41e — Regex Playground smoke

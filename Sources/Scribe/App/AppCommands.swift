@@ -228,6 +228,19 @@ struct ScribeCommands: Commands {
                 Text("regex.menu", bundle: .module)
             }
 
+            // Phase 44 — Hex viewer. Captures the document text as
+            // UTF-8 bytes at click time so the dump is stable even
+            // if the user keeps typing.
+            Button {
+                guard let doc = workspace.current else { return }
+                let data = Data(doc.text.utf8)
+                workspace.hexViewerSheet = HexViewerRequest(
+                    title: doc.title, data: data)
+            } label: {
+                Text("hexview.menu", bundle: .module)
+            }
+            .disabled(workspace.current == nil)
+
             Divider()
 
             Button {

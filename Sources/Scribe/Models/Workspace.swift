@@ -77,6 +77,9 @@ final class Workspace: ObservableObject {
     /// selection as the prefill subject so the user can poke at
     /// whatever they had highlighted without an extra paste.
     @Published var regexSheet: RegexSheetRequest?
+    /// Phase 44 — Hex viewer sheet. Captures the document content
+    /// at open time so mid-frame edits can't tear the dump.
+    @Published var hexViewerSheet: HexViewerRequest?
 
     /// Phase 35b-4-d — repo-relative path the multibuffer should
     /// scroll into view on its next render. Used by the sidebar's

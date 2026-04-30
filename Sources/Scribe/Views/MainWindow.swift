@@ -214,6 +214,13 @@ struct MainWindow: View {
             }
             .environment(\.appTheme, appTheme)
         }
+        // Phase 44 — Hex viewer sheet. Read-only.
+        .sheet(item: $workspace.hexViewerSheet) { request in
+            HexViewerSheet(request: request) {
+                workspace.hexViewerSheet = nil
+            }
+            .environment(\.appTheme, appTheme)
+        }
     }
 
     /// Sidebar column's header row — 4 mode tabs on the leading

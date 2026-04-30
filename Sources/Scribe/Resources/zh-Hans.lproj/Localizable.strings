@@ -835,3 +835,10 @@
 
 // Palette — Regex
 "palette.command.regex.playground" = "打开正则演练场…";
+
+// Phase 44 — Hex Viewer
+"hexview.menu"      = "十六进制查看…";
+"hexview.title"     = "十六进制查看器";
+"hexview.size"      = "%lld 字节";
+"hexview.truncated" = "仅显示前 %lld 字节";
+"palette.command.hexview" = "十六进制查看…";

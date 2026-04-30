@@ -838,3 +838,10 @@
 
 // Palette — Regex
 "palette.command.regex.playground" = "Open Regex Playground…";
+
+// Phase 44 — Hex Viewer
+"hexview.menu"      = "View as Hex…";
+"hexview.title"     = "Hex Viewer";
+"hexview.size"      = "%lld bytes";
+"hexview.truncated" = "Showing first %lld bytes";
+"palette.command.hexview" = "View as Hex…";
