@@ -102,11 +102,25 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         // Coordinator+LargeFile.swift), so there is no doc.text to
         // resync against.
         if !doc.isLargeFile {
-            let viewLen = Int(view.message(SCI.GETLENGTH))
-            let docLen = doc.text.utf8.count
-            let needsResync: Bool = (viewLen != docLen) || view.string() != doc.text
-            if needsResync {
-                context.coordinator.applyText(doc.text, to: view, isExternal: true)
+            // Phase 40-fix — `doc.cursorColumn` / `doc.isDirty` get
+            // published on every keystroke; SwiftUI then fires
+            // updateNSView while `doc.text` is still 50 ms behind
+            // (Phase 28c throttle). If we resync here, `applyText`
+            // overwrites the freshly-typed character with the stale
+            // `doc.text`, the next SCN_MODIFIED captures the empty
+            // view, and the user sees their input vanish. Skip the
+            // path while a view→doc flush is in flight; the throttle
+            // will land within 50 ms and the next updateNSView tick
+            // will see consistent state. External-change / save
+            // paths drain `flushPendingEdit` first, so they pass
+            // through with `hasPendingViewSync == false` as before.
+            if !context.coordinator.hasPendingViewSync {
+                let viewLen = Int(view.message(SCI.GETLENGTH))
+                let docLen = doc.text.utf8.count
+                let needsResync: Bool = (viewLen != docLen) || view.string() != doc.text
+                if needsResync {
+                    context.coordinator.applyText(doc.text, to: view, isExternal: true)
+                }
             }
         }
         context.coordinator.applyLexer(for: doc, to: view)
@@ -185,6 +199,18 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         /// paths that need an authoritative `doc.text` (save, external
         /// change check) drain via `flushDocSync()` first.
         private var pendingDocSync: Task<Void, Never>?
+
+        /// `true` while there's an un-flushed view→doc edit in flight
+        /// (i.e. the user typed within the last `docSyncThrottleNanos`
+        /// and the throttled `flushDocSync` hasn't run yet). Used by
+        /// `updateNSView` to suppress the doc→view resync path —
+        /// otherwise a SwiftUI tick triggered by `doc.cursorColumn`
+        /// publishing would see `viewLen != doc.text.utf8.count`,
+        /// flag the view as out-of-sync, and `applyText` the *stale*
+        /// `doc.text` back over the keystroke the user just typed,
+        /// erasing the input. External-change / save paths drain via
+        /// `flushPendingEdit` first, so this stays `false` for them.
+        var hasPendingViewSync: Bool { pendingDocSync != nil }
 
         /// Phase 31 — last `[Int: GitGutterStatus]` actually rendered
         /// to the margin. SwiftUI calls `updateNSView` on every
