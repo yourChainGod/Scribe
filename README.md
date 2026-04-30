@@ -16,6 +16,22 @@ Scribe 是一款 **macOS 原生** 文本与代码编辑器。SwiftUI 主壳 + Sc
 
 ---
 
+## 📸 Screenshots
+
+主编辑器 — Daylight 主题、Swift lexer、Inline Color Swatches 高亮 `#hex` / `rgb()` / `hsl()` 字面量：
+
+![Main Editor](docs/screenshots/01-main-editor.png)
+
+| 设置面板（重设计） | Tools 菜单（二级嵌套） |
+|:---:|:---:|
+| ![Settings — Editor tab](docs/screenshots/02-settings-editor.png) | ![Tools menu](docs/screenshots/03-tools-menu.png) |
+
+HEX Viewer — xxd 风格三列 dump（offset · hex · ASCII），任意文件长度：
+
+![HEX Viewer](docs/screenshots/04-hex-viewer.png)
+
+---
+
 ## ✨ Features
 
 ### 编辑核心
