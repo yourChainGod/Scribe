@@ -35,6 +35,16 @@ final class FindState: ObservableObject {
     @Published var query: String = ""
     @Published var replacement: String = ""
 
+    /// Phase 45-D — debounced view of `query` (150ms, RunLoop.main).
+    /// `query` itself stays bound to the TextField so typing reflects
+    /// instantly; `debouncedQuery` drives the *heavy* paths (the
+    /// "highlight all" overlay re-scan and live-search caret jump)
+    /// so a 4-character burst collapses to one full-text scan instead
+    /// of four. Explicit commands (findNext / findPrev / findCurrent
+    /// from ⌘G / Enter / TestHooks) still read `query` directly so
+    /// they remain immediate.
+    @Published var debouncedQuery: String = ""
+
     @Published var matchCase: Bool = false
     @Published var wholeWord: Bool = false
     @Published var regex: Bool = false
@@ -137,6 +147,14 @@ final class FindState: ObservableObject {
         self.defaults = defaults
         self.queryHistory = defaults.stringArray(forKey: Key.queryHistory) ?? []
         self.replacementHistory = defaults.stringArray(forKey: Key.replacementHistory) ?? []
+        // Phase 45-D — collapse query keystroke bursts into a single
+        // settled value before any full-text scan runs downstream.
+        // 150ms is the lower end of audit § 7's recommended window:
+        // long enough to absorb typical typing cadence (~6-8 cps),
+        // short enough that the highlight overlay still feels live.
+        $query
+            .debounce(for: .milliseconds(150), scheduler: RunLoop.main)
+            .assign(to: &$debouncedQuery)
     }
 
     // MARK: - Convenience

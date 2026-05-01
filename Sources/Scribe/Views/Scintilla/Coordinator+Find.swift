@@ -244,19 +244,28 @@ extension ScintillaCodeEditor.Coordinator {
 
     /// Recompute the "highlight all" indicator overlay only when
     /// inputs that affect it actually changed.
+    ///
+    /// Phase 45-D — the *clear* path still keys off `query` so the
+    /// overlay disappears the instant the user empties the field.
+    /// The *scan* path keys off `debouncedQuery` so a multi-keystroke
+    /// burst collapses to a single full-text re-scan after the user
+    /// settles. Between keystrokes the previous overlay is left in
+    /// place (no flicker, no churn).
     func refreshHighlightsIfNeeded() {
         guard let view else { return }
         guard findState.isVisible, !findState.query.isEmpty else {
             clearHighlights(in: view)
             return
         }
+        let pattern = findState.debouncedQuery
+        guard !pattern.isEmpty else { return }
         let flags = currentSearchFlags()
         let docLen = Int(view.message(SCI.GETLENGTH))
-        if findState.query == lastHighlightedQuery,
+        if pattern == lastHighlightedQuery,
            flags == lastHighlightedFlags,
            docLen == lastHighlightedDocLength { return }
         highlightAllMatches(in: view,
-                            pattern: findState.query,
+                            pattern: pattern,
                             flags: flags,
                             currentRange: nil)
     }

@@ -64,10 +64,15 @@ struct FindBar: View {
                     state.commitQueryToHistory()
                     state.commands.send(.findNext)
                 }
-                .onChange(of: state.query) { _, _ in
-                    // Live-search like VSCode: every keystroke confirms
-                    // the current hit (or moves to the next one) and
-                    // refreshes the highlight overlay.
+                .onChange(of: state.debouncedQuery) { _, _ in
+                    // Phase 45-D — live-search like VSCode: every
+                    // *settled* keystroke (after a 150ms debounce on
+                    // `query`) confirms the current hit (or moves to
+                    // the next one) and refreshes the highlight
+                    // overlay. The TextField stays bound to `query`
+                    // so the field itself still echoes input
+                    // instantly; only the heavy scan / caret-jump
+                    // path waits for the burst to settle.
                     state.commands.send(.findCurrent)
                 }
                 .onChange(of: state.matchCase) { _, _ in
