@@ -119,4 +119,128 @@ final class PerformanceTests: XCTestCase {
         XCTAssertEqual(state.totalMatches, 0,
                        "expected zero hits for the obscure-literal probe")
     }
+
+    // MARK: - Baseline benchmarks (perf-A)
+    //
+    // These intentionally do *not* enforce a tight budget — they
+    // exist to pin a current number into the test log so future
+    // work can detect regressions. The wide ceilings are paranoia
+    // stops: if any of these crosses them we'd want to investigate,
+    // but the real numbers we expect are far below.
+    //
+    // See docs/perf_audit.md for the surrounding investigation.
+
+    /// Pure ColorScanner.scan over the 5 MB perf fixture. Touches
+    /// every byte once. Baselines the inline-color-swatch hot path
+    /// (audit § L5 / I5).
+    func test_colorScanner_scan_5mb_baseline() throws {
+        guard let url = fixtureURL(name: "perf_5mb.txt") else {
+            throw XCTSkip("Fixture perf_5mb.txt missing — run Scripts/gen_perf_samples.sh")
+        }
+        let text = try String(contentsOf: url, encoding: .utf8)
+
+        let t0 = DispatchTime.now()
+        let hits = ColorScanner.scan(text)
+        let elapsedMs = Double(
+            DispatchTime.now().uptimeNanoseconds - t0.uptimeNanoseconds
+        ) / 1_000_000
+
+        // Lorem-ipsum fixture has zero color literals — the scan
+        // path does the full O(n) sweep but emits nothing. That's
+        // the worst case for pure overhead-per-byte.
+        XCTAssertGreaterThanOrEqual(hits.count, 0)
+        XCTAssertLessThan(elapsedMs, 5_000,
+                          "BASELINE colorScanner.scan(5MB) = \(elapsedMs) ms")
+    }
+
+    /// MarkdownConverter.render over the 5 MB perf fixture
+    /// reinterpreted as markdown. The fixture is plain prose so
+    /// the output is mostly `<p>` blocks; the cost of the line-by
+    /// -line BlockContext walk dominates. Baselines audit § L6.
+    func test_markdownConverter_render_5mb_baseline() throws {
+        guard let url = fixtureURL(name: "perf_5mb.txt") else {
+            throw XCTSkip("Fixture perf_5mb.txt missing — run Scripts/gen_perf_samples.sh")
+        }
+        let text = try String(contentsOf: url, encoding: .utf8)
+
+        let t0 = DispatchTime.now()
+        _ = MarkdownConverter.render(text)
+        let elapsedMs = Double(
+            DispatchTime.now().uptimeNanoseconds - t0.uptimeNanoseconds
+        ) / 1_000_000
+
+        XCTAssertLessThan(elapsedMs, 30_000,
+                          "BASELINE markdownConverter.render(5MB) = \(elapsedMs) ms")
+    }
+
+    /// Synthetic git-blame porcelain (~7 700 lines / ~1 MB) parsed
+    /// through the pure `GitClient.parseBlamePorcelain` entry point.
+    /// Baselines audit § L4 / I5-I6 (the Inline Blame chain ends in
+    /// this parser whenever cache misses force a refetch).
+    func test_gitBlame_parsePorcelain_synthetic_baseline() throws {
+        let lineCount = 7_700
+        var raw = ""
+        raw.reserveCapacity(lineCount * 130)
+        for n in 1...lineCount {
+            // Each block emits a fresh sha so the metadata cache
+            // never short-circuits — worst case for the parser.
+            let sha = String(format: "%040x", n)
+            raw += "\(sha) \(n) \(n) 1\n"
+            raw += "author Test Author \(n % 100)\n"
+            raw += "author-mail <test\(n % 100)@example.com>\n"
+            raw += "author-time \(1_700_000_000 + n)\n"
+            raw += "author-tz +0000\n"
+            raw += "committer Test Committer\n"
+            raw += "committer-mail <c@example.com>\n"
+            raw += "committer-time \(1_700_000_000 + n)\n"
+            raw += "committer-tz +0000\n"
+            raw += "summary baseline commit \(n)\n"
+            raw += "filename perf.txt\n"
+            raw += "\tsource line \(n)\n"
+        }
+
+        let t0 = DispatchTime.now()
+        let lines = GitClient.parseBlamePorcelain(raw)
+        let elapsedMs = Double(
+            DispatchTime.now().uptimeNanoseconds - t0.uptimeNanoseconds
+        ) / 1_000_000
+
+        XCTAssertEqual(lines.count, lineCount)
+        XCTAssertLessThan(elapsedMs, 5_000,
+                          "BASELINE parseBlamePorcelain(~\(lineCount) lines) = \(elapsedMs) ms")
+    }
+
+    /// End-to-end open: from `openFile(at:)` to `isLoading == false`.
+    /// Covers the async decode hop + main-thread `applyLoadResult`,
+    /// which is the path the user actually waits on. Baselines
+    /// audit § L1 / L2 (the full load chain, not just the sync
+    /// portion that the existing 50 ms tests cover).
+    func test_workspace_openFile_endToEnd_5mb_baseline() async throws {
+        guard let url = fixtureURL(name: "perf_5mb.txt") else {
+            throw XCTSkip("Fixture perf_5mb.txt missing — run Scripts/gen_perf_samples.sh")
+        }
+        let prefs = EditorPreferences()
+        let workspace = Workspace(prefs: prefs, openInitialUntitled: false)
+
+        let t0 = DispatchTime.now()
+        workspace.openFile(at: url)
+        // Spin until the placeholder flips to loaded.
+        var elapsedMs: Double = 0
+        let budget: Double = 30_000
+        while elapsedMs < budget {
+            if let doc = workspace.documents.first, !doc.isLoading {
+                break
+            }
+            try await Task.sleep(nanoseconds: 10_000_000)
+            elapsedMs = Double(
+                DispatchTime.now().uptimeNanoseconds - t0.uptimeNanoseconds
+            ) / 1_000_000
+        }
+
+        XCTAssertEqual(workspace.documents.count, 1)
+        XCTAssertFalse(workspace.documents.first?.isLoading ?? true,
+                       "BASELINE workspace.openFile end-to-end stuck after \(budget) ms")
+        XCTAssertLessThan(elapsedMs, budget,
+                          "BASELINE workspace.openFile(5MB) end-to-end = \(elapsedMs) ms")
+    }
 }
