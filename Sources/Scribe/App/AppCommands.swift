@@ -38,6 +38,18 @@ struct ScribeCommands: Commands {
                 .keyboardShortcut("o")
             Button { workspace.openFolder() } label: { Text("menu.file.openFolder", bundle: .module) }
                 .keyboardShortcut("o", modifiers: [.command, .option])
+            // Phase 46c — Reopen Closed Tab (⌘⇧T). Pops the top of
+            // Workspace.recentlyClosedURLs and re-opens it as a tab;
+            // disabled when the stack is empty. Chrome / VSCode set
+            // the same shortcut, so hitting ⌘⇧T after accidentally
+            // closing a file does the intuitive thing.
+            Button {
+                workspace.reopenLastClosed()
+            } label: {
+                Text("menu.file.reopenClosed", bundle: .module)
+            }
+            .keyboardShortcut("t", modifiers: [.command, .shift])
+            .disabled(workspace.recentlyClosedURLs.isEmpty)
             RecentFilesMenu(prefs: prefs, workspace: workspace)
             RecentFoldersMenu(prefs: prefs, workspace: workspace)
         }
@@ -422,19 +434,22 @@ struct ScribeCommands: Commands {
 
             Divider()
 
-            // Phase 33 — Insert Snippet… ⌘⇧T. Pops the snippet picker
-            // (a CommandPalette over a snippet-derived registry) so
-            // the user can fuzzy-find a template by name or prefix.
-            // The picker dispatches the body through findState.commands
-            // → Coordinator → insertAtCarets, which lands the same
-            // text at every active caret. Disabled when the catalog
-            // is empty *and* there's no document — Settings → Snippets
-            // is the empty-state recovery path.
+            // Phase 33 → Phase 46c — Insert Snippet. Originally on
+            // ⌘⇧T; that slot was reclaimed for Reopen Closed Tab (the
+            // Chrome / VSCode muscle-memory). Snippets moved to ⌥⌘T
+            // so the "T = templates" mnemonic survives; only the
+            // modifier changed, which minimises retraining.
+            //
+            // The picker dispatches through findState.commands →
+            // Coordinator → insertAtCarets, landing the same text at
+            // every active caret. Disabled when the catalog is empty
+            // *and* there's no document — Settings → Snippets is the
+            // empty-state recovery path.
             Button {
                 SnippetController.shared.toggle(catalog: snippets,
                                                 findState: findState)
             } label: { Text("menu.edit.insertSnippet", bundle: .module) }
-            .keyboardShortcut("t", modifiers: [.command, .shift])
+            .keyboardShortcut("t", modifiers: [.command, .option])
             .disabled(workspace.current == nil)
 
             Divider()

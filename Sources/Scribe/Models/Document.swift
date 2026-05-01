@@ -106,6 +106,16 @@ final class Document: ObservableObject, Identifiable {
     /// rather than juggling its own bool.
     @Published var saveProgress: Double = -1
 
+    /// Phase 46b — user-pinned tab. Pinned tabs float to the front of
+    /// the strip, show a pin glyph instead of the language icon, and
+    /// survive across launches (keyed by URL path in
+    /// `EditorPreferences.pinnedFilePaths`). Untitled documents can
+    /// still toggle the flag but it doesn't persist — there's no
+    /// stable key to write under. Closing a pinned tab is allowed
+    /// (no confirmation); re-opening the same URL re-applies the
+    /// pin via the Workspace.openFile recovery path.
+    @Published var isPinned: Bool = false
+
     init(title: String = L10n.t("tab.untitled"), text: String = "", url: URL? = nil) {
         self.title = title
         self.text = text

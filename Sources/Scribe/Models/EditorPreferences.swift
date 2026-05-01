@@ -59,6 +59,11 @@ final class EditorPreferences: ObservableObject {
         // file containing CSS-style hex / rgb / hsl literals, and
         // costs nothing on documents without colors.
         static let inlineColorSwatchesEnabled = "editor.inlineColorSwatchesEnabled"
+        // Phase 46b — pinned tab paths. Persisted as a sorted string
+        // array under one key so `defaults read` shows a single list
+        // rather than scattered entries. Standardized-file-URL path
+        // is the stable identity; Untitled docs never make it in.
+        static let pinnedFilePaths = "editor.pinnedFilePaths"
     }
 
     /// Phase 39a — translates raw values from the pre-39 theme
@@ -161,6 +166,20 @@ final class EditorPreferences: ObservableObject {
                               forKey: Key.inlineColorSwatchesEnabled) }
     }
 
+    /// Phase 46b — set of standardized file-URL paths the user has
+    /// pinned across sessions. Workspace consults this on
+    /// `openFile(at:)` to re-apply the pin flag to freshly opened
+    /// documents, and mutates it whenever `togglePin` changes the
+    /// state. A `Set` so membership checks are O(1); persisted as a
+    /// sorted array so `defaults read` output stays stable (handy
+    /// for diff-based support dumps).
+    @Published var pinnedFilePaths: Set<String> {
+        didSet {
+            defaults.set(Array(pinnedFilePaths).sorted(),
+                         forKey: Key.pinnedFilePaths)
+        }
+    }
+
     /// Phase 39b — per-theme custom slot overrides. Sparse map: a
     /// missing `ThemeID` key means "no overrides for that preset",
     /// and an empty `ThemeOverrides.slots` should be cleaned up by
@@ -241,6 +260,12 @@ final class EditorPreferences: ObservableObject {
         } else {
             self.inlineColorSwatchesEnabled = true
         }
+
+        // Phase 46b — load pinned URL paths. Missing key ⇒ empty set
+        // (no pins yet); any non-string elements are filtered out so
+        // a corrupted defaults blob can't crash the Set init.
+        let pinnedArray = defaults.stringArray(forKey: Key.pinnedFilePaths) ?? []
+        self.pinnedFilePaths = Set(pinnedArray)
 
         // Phase 39b — load per-theme override map. Silent fall-back
         // to empty map on decode failure (corrupted blob, future

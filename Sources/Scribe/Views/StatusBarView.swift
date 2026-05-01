@@ -5,8 +5,24 @@
 
 import SwiftUI
 
+/// Phase 46f — thin wrapper that forwards the workspace-owned
+/// `GitStatusEngine` down into `StatusBarContent` so the content
+/// view can `@ObservedObject` the engine directly. Without this
+/// split the branch chip would only refresh when Workspace itself
+/// ticked (not when GitStatusEngine's own `@Published` properties
+/// did), leaving the status bar stale after a checkout / refresh.
 struct StatusBarView: View {
     @EnvironmentObject var workspace: Workspace
+
+    var body: some View {
+        StatusBarContent(gitStatus: workspace.gitStatusEngine)
+    }
+}
+
+private struct StatusBarContent: View {
+    @EnvironmentObject var workspace: Workspace
+    @EnvironmentObject var findState: FindState
+    @ObservedObject var gitStatus: GitStatusEngine
     @Environment(\.appTheme) private var appTheme
 
     var body: some View {
@@ -16,7 +32,31 @@ struct StatusBarView: View {
             } else {
                 Text("status.ready", bundle: .module)
             }
+            // Phase 46f — git branch chip. Shows the current branch
+            // + ahead/behind counts so the user doesn't have to open
+            // the Source Control sidebar just to confirm where they
+            // are. Taps here focus the sidebar on the Git tab.
+            if let branch = gitStatus.branch {
+                GitBranchChip(
+                    branch: branch,
+                    aheadBehind: gitStatus.aheadBehind
+                )
+                .onTapGesture {
+                    workspace.sidebarVisible = true
+                    workspace.sidebarMode = .sourceControl
+                }
+            }
             Spacer()
+            // Phase 46g — find-matches pill. Renders only when the
+            // find bar is open and a query is active; the pill reads
+            // "3 / 17" style so the user can track their position
+            // from the status bar without moving focus to the bar.
+            if findState.isVisible, !findState.query.isEmpty {
+                FindMatchesIndicator(
+                    current: findState.currentMatch,
+                    total: findState.matchCount
+                )
+            }
             // Phase 34b/c — large-file load + save banner. Sits on the
             // right before the dirty marker so a user reading
             // "modified" alongside a still-streaming doc gets the
@@ -95,6 +135,82 @@ private struct StatusBarSeparator: View {
         Rectangle()
             .fill(appTheme.separator.opacity(0.6))
             .frame(width: 1, height: 11)
+    }
+}
+
+/// Phase 46f — git branch + ahead/behind capsule rendered in the
+/// status bar. Decoupled from `GitStatusEngine` so the render path
+/// stays deterministic under test; the outer StatusBarContent view
+/// drives the data.
+private struct GitBranchChip: View {
+    let branch: String
+    let aheadBehind: GitClient.AheadBehind?
+    @Environment(\.appTheme) private var appTheme
+
+    var body: some View {
+        StatusBarIndicator {
+            Image(systemName: "arrow.triangle.branch")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(appTheme.secondaryText)
+            Text(branch)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            if let ab = aheadBehind {
+                // Only surface the counts when they're non-zero so a
+                // clean branch doesn't carry extra visual weight. An
+                // `↑N` or `↓N` next to the branch name matches the
+                // Source Control sidebar's conventions verbatim.
+                if ab.ahead > 0 {
+                    HStack(spacing: 1) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 8, weight: .semibold))
+                        Text("\(ab.ahead)")
+                            .monospacedDigit()
+                    }
+                    .foregroundStyle(appTheme.secondaryText)
+                }
+                if ab.behind > 0 {
+                    HStack(spacing: 1) {
+                        Image(systemName: "arrow.down")
+                            .font(.system(size: 8, weight: .semibold))
+                        Text("\(ab.behind)")
+                            .monospacedDigit()
+                    }
+                    .foregroundStyle(appTheme.secondaryText)
+                }
+            }
+        }
+        .contentShape(Rectangle())
+        .help(L10n.t("status.branch.tooltip", branch))
+    }
+}
+
+/// Phase 46g — Find-bar match count rendered inside the status bar
+/// (e.g. "3 / 17"). Hides itself when the find bar is not visible
+/// or the user hasn't typed a query yet; the surrounding view
+/// gates on those conditions before instantiating this.
+private struct FindMatchesIndicator: View {
+    let current: Int
+    let total: Int
+    @Environment(\.appTheme) private var appTheme
+
+    var body: some View {
+        StatusBarIndicator {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 10, weight: .semibold))
+            if total == 0 {
+                // Distinct "no matches" read — status bar still
+                // stays short so the user can spot it, but the
+                // number flip tells them typing hasn't landed on
+                // anything yet.
+                Text("status.find.noMatches", bundle: .module)
+                    .monospacedDigit()
+            } else {
+                Text(verbatim: "\(max(current, 0)) / \(total)")
+                    .monospacedDigit()
+            }
+        }
+        .help(L10n.t("status.find.tooltip"))
     }
 }
 

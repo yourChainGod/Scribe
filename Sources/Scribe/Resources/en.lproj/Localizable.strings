@@ -150,6 +150,9 @@
 "status.largeFileLoading" = "Loading large file…";
 "status.largeFileSaving"  = "Saving large file…";
 "status.largeFile"        = "Large file";
+"status.branch.tooltip"   = "On branch %@ — click to open Source Control";
+"status.find.noMatches"   = "No matches";
+"status.find.tooltip"     = "Current search position";
 
 "status.menu.syntax"           = "Syntax Highlighting";
 "status.menu.resetAuto"        = "Reset to Auto Detect";
@@ -257,6 +260,7 @@
 "menu.file.new"           = "New";
 "menu.file.open"          = "Open…";
 "menu.file.openFolder"    = "Open Folder…";
+"menu.file.reopenClosed"  = "Reopen Closed Tab";
 "menu.file.openRecent"        = "Open Recent";
 "menu.file.openRecentFolder"  = "Open Recent Folder";
 "menu.file.openRecentClear"   = "Clear Menu";
@@ -400,6 +404,8 @@
 "tabContext.close"          = "Close";
 "tabContext.closeOthers"    = "Close Others";
 "tabContext.closeAll"       = "Close All";
+"tabContext.pin"            = "Pin Tab";
+"tabContext.unpin"          = "Unpin Tab";
 "tabContext.revealInFinder" = "Reveal in Finder";
 "tabContext.copyPath"       = "Copy Path";
 
@@ -445,6 +451,17 @@
 "palette.badge.encoding"        = "Encoding";
 "palette.badge.lineEnding"      = "Line Ending";
 "palette.badge.syntax"          = "Syntax";
+
+// MARK: - Command Palette section headers (Phase 46d)
+
+"palette.section.file"       = "File";
+"palette.section.view"       = "View";
+"palette.section.text"       = "Text";
+"palette.section.tabs"       = "Tabs";
+"palette.section.encoding"   = "Encoding";
+"palette.section.lineEnding" = "Line Ending";
+"palette.section.syntax"     = "Syntax";
+"palette.section.other"      = "Other";
 "palette.command.newTab"        = "New Tab";
 "palette.command.openFile"      = "Open File…";
 "palette.command.closeWorkspaceFolder" = "Close Workspace Folder";

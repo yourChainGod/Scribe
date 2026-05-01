@@ -148,6 +148,9 @@
 "status.largeFileLoading" = "正在加载大文件…";
 "status.largeFileSaving"  = "正在保存大文件…";
 "status.largeFile"        = "大文件";
+"status.branch.tooltip"   = "当前分支 %@ — 点击打开源代码管理";
+"status.find.noMatches"   = "无匹配";
+"status.find.tooltip"     = "当前搜索位置";
 
 "status.menu.syntax"           = "语法高亮";
 "status.menu.resetAuto"        = "恢复自动检测";
@@ -255,6 +258,7 @@
 "menu.file.new"           = "新建";
 "menu.file.open"          = "打开…";
 "menu.file.openFolder"    = "打开文件夹…";
+"menu.file.reopenClosed"  = "重新打开已关闭的标签";
 "menu.file.openRecent"        = "打开最近使用";
 "menu.file.openRecentFolder"  = "打开最近文件夹";
 "menu.file.openRecentClear"   = "清空菜单";
@@ -398,6 +402,8 @@
 "tabContext.close"          = "关闭";
 "tabContext.closeOthers"    = "关闭其他";
 "tabContext.closeAll"       = "关闭全部";
+"tabContext.pin"            = "固定标签";
+"tabContext.unpin"          = "取消固定";
 "tabContext.revealInFinder" = "在访达中显示";
 "tabContext.copyPath"       = "拷贝路径";
 
@@ -443,6 +449,17 @@
 "palette.badge.encoding"        = "编码";
 "palette.badge.lineEnding"      = "行尾";
 "palette.badge.syntax"          = "语法";
+
+// MARK: - Command Palette section headers (Phase 46d)
+
+"palette.section.file"       = "文件";
+"palette.section.view"       = "视图";
+"palette.section.text"       = "文本工具";
+"palette.section.tabs"       = "标签页";
+"palette.section.encoding"   = "编码";
+"palette.section.lineEnding" = "行尾";
+"palette.section.syntax"     = "语法";
+"palette.section.other"      = "其他";
 "palette.command.newTab"        = "新建标签";
 "palette.command.openFile"      = "打开文件…";
 "palette.command.closeWorkspaceFolder" = "关闭工作区文件夹";

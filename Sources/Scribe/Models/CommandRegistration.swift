@@ -42,25 +42,29 @@ enum CommandRegistration {
             .init(id: "file.new",
                   title: localize("palette.command.newTab"),
                   subtitle: localize("menu.file"),
-                  keywords: ["new", "create", "tab", "untitled", "file"]) {
+                  keywords: ["new", "create", "tab", "untitled", "file"],
+                  shortcutLabel: "⌘N") {
                 workspace.newDocument()
             },
             .init(id: "file.open",
                   title: localize("palette.command.openFile"),
                   subtitle: localize("menu.file"),
-                  keywords: ["open", "file", "read", "load"]) {
+                  keywords: ["open", "file", "read", "load"],
+                  shortcutLabel: "⌘O") {
                 workspace.openDocument()
             },
             .init(id: "file.openFolder",
                   title: localize("menu.file.openFolder"),
                   subtitle: localize("menu.file"),
-                  keywords: ["open", "folder", "workspace", "directory"]) {
+                  keywords: ["open", "folder", "workspace", "directory"],
+                  shortcutLabel: "⌥⌘O") {
                 workspace.openFolder()
             },
             .init(id: "file.save",
                   title: localize("menu.file.save"),
                   subtitle: localize("menu.file"),
-                  keywords: ["save", "file", "write", "persist"]) {
+                  keywords: ["save", "file", "write", "persist"],
+                  shortcutLabel: "⌘S") {
                 workspace.saveCurrent()
             },
             .init(id: "file.closeFolder",
@@ -68,6 +72,18 @@ enum CommandRegistration {
                   subtitle: localize("menu.file"),
                   keywords: ["close", "folder", "unload", "workspace"]) {
                 workspace.closeFolder()
+            },
+            // Phase 46c — palette entry mirrors the ⌘⇧T File-menu
+            // item. Always registered (even when the stack is empty)
+            // so the user can fuzzy-find it; the body's no-op
+            // handling keeps it safe to invoke on an empty stack.
+            .init(id: "file.reopenClosed",
+                  title: localize("menu.file.reopenClosed"),
+                  subtitle: localize("menu.file"),
+                  keywords: ["reopen", "closed", "tab", "recent",
+                             "restore", "undo", "重新", "打开", "关闭"],
+                  shortcutLabel: "⌘⇧T") {
+                workspace.reopenLastClosed()
             },
             .init(id: "file.clearRecent",
                   title: localize("palette.command.clearRecentFiles"),
@@ -99,19 +115,22 @@ enum CommandRegistration {
             .init(id: "view.zoomIn",
                   title: localize("menu.view.zoomIn"),
                   subtitle: localize("menu.view"),
-                  keywords: ["zoom", "in", "bigger", "increase", "font", "view"]) {
+                  keywords: ["zoom", "in", "bigger", "increase", "font", "view"],
+                  shortcutLabel: "⌘+") {
                 prefs.zoomIn()
             },
             .init(id: "view.zoomOut",
                   title: localize("menu.view.zoomOut"),
                   subtitle: localize("menu.view"),
-                  keywords: ["zoom", "out", "smaller", "decrease", "font", "view"]) {
+                  keywords: ["zoom", "out", "smaller", "decrease", "font", "view"],
+                  shortcutLabel: "⌘-") {
                 prefs.zoomOut()
             },
             .init(id: "view.actualSize",
                   title: localize("palette.command.actualSize"),
                   subtitle: localize("menu.view"),
-                  keywords: ["actual", "size", "reset", "default", "font", "view"]) {
+                  keywords: ["actual", "size", "reset", "default", "font", "view"],
+                  shortcutLabel: "⌘0") {
                 prefs.resetFontSize()
             },
             .init(id: "view.toggleSoftTabs",
@@ -141,7 +160,8 @@ enum CommandRegistration {
                 .init(id: "view.markdownPreview",
                       title: localize("menu.view.markdownPreview"),
                       subtitle: localize("menu.view"),
-                      keywords: ["markdown", "preview", "render", "split", "html", "view"]) {
+                      keywords: ["markdown", "preview", "render", "split", "html", "view"],
+                      shortcutLabel: "⌘⇧V") {
                     workspace.toggleMarkdownPreview()
                 }
             )

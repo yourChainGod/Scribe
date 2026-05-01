@@ -56,8 +56,20 @@ struct CommandPalette: View {
         _query = State(initialValue: initialQuery)
     }
 
+    /// Phase 46d — flat ranked result list used by keyboard navigation
+    /// and the pick action. `sections` below is the grouped view onto
+    /// the exact same matches (it just splits them by category).
     private var matches: [CommandMatch] {
-        registry.search(query)
+        sections.flatMap(\.matches)
+    }
+
+    /// Phase 46d — grouped view. Empty query ⇒ category sections;
+    /// non-empty query ⇒ a single anonymous section so the flat fuzzy
+    /// ranking still reads as one list. Prefix routes (`@`, `:`, `>`)
+    /// also collapse to a single section because their result space
+    /// is already scoped.
+    private var sections: [CommandSection] {
+        registry.grouped(for: query)
     }
 
     /// Placeholder text for the search field. Falls back to the
@@ -152,19 +164,50 @@ struct CommandPalette: View {
                             // so plain typing inside one mode doesn't
                             // pay any tear-down cost.
                             let routeID = registry.activeRoute(for: query)?.id ?? "default"
-                            ForEach(Array(matches.enumerated()), id: \.element.id) { idx, match in
-                                CommandRow(
-                                    match: match,
-                                    isSelected: idx == selection
-                                )
-                                .id("\(routeID)#\(idx)")
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    selection = idx
-                                    invokeSelected()
+                            // Phase 46d — pre-compute each section's
+                            // starting flat index so the `selection`
+                            // key (which indexes into the flat match
+                            // list) stays in lockstep with the rows
+                            // we actually draw. Doing this upfront
+                            // keeps the ForEach bodies pure (no
+                            // mutating captures — SwiftUI's ViewBuilder
+                            // rejects those).
+                            let sectionsSnapshot = sections
+                            let sectionOffsets = Self.flatOffsets(for: sectionsSnapshot)
+                            ForEach(Array(sectionsSnapshot.enumerated()),
+                                    id: \.element.id) { sIdx, section in
+                                // Only draw a header when the section
+                                // has a non-empty title — non-empty-
+                                // query + prefix-route modes return a
+                                // single anonymous section so we skip
+                                // the visual split there.
+                                if !section.title.isEmpty {
+                                    Text(section.title.uppercased())
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundStyle(appTheme.secondaryText.opacity(0.9))
+                                        .tracking(0.6)
+                                        .padding(.horizontal, 18)
+                                        .padding(.top, sIdx == 0 ? 8 : 10)
+                                        .padding(.bottom, 4)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
                                 }
-                                .onHover { hovering in
-                                    if hovering { selection = idx }
+                                let base = sectionOffsets[sIdx]
+                                ForEach(Array(section.matches.enumerated()),
+                                        id: \.element.id) { mIdx, match in
+                                    let idx = base + mIdx
+                                    CommandRow(
+                                        match: match,
+                                        isSelected: idx == selection
+                                    )
+                                    .id("\(routeID)#\(idx)")
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        selection = idx
+                                        invokeSelected()
+                                    }
+                                    .onHover { hovering in
+                                        if hovering { selection = idx }
+                                    }
                                 }
                             }
                         }
@@ -192,6 +235,22 @@ struct CommandPalette: View {
     private func invokeSelected() {
         guard matches.indices.contains(selection) else { return }
         onPick(matches[selection].command)
+    }
+
+    /// Phase 46d — given a list of sections, produce the prefix-sum
+    /// table mapping `sectionIndex → flatIdx of its first match`.
+    /// Used by the ForEach body to compute each row's flat index
+    /// without a mutating captured counter (SwiftUI's ViewBuilder
+    /// forbids those; pre-computing is the standard workaround).
+    private static func flatOffsets(for sections: [CommandSection]) -> [Int] {
+        var offsets: [Int] = []
+        offsets.reserveCapacity(sections.count)
+        var running = 0
+        for section in sections {
+            offsets.append(running)
+            running += section.matches.count
+        }
+        return offsets
     }
 }
 
@@ -245,6 +304,27 @@ private struct CommandRow: View {
                             .fill(Color.primary.opacity(isSelected ? 0.08 : 0.05))
                     )
             }
+            // Phase 46e — shortcut chip. Monospaced mini pill at
+            // the trailing edge so users can rehearse key bindings
+            // inside the palette. Shows only when the command
+            // declares a `shortcutLabel`; otherwise the row stays
+            // quiet.
+            if let shortcut = match.command.shortcutLabel {
+                Text(shortcut)
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(appTheme.secondaryText.opacity(0.9))
+                    .lineLimit(1)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(Color.primary.opacity(isSelected ? 0.10 : 0.06))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .stroke(appTheme.separator.opacity(0.4), lineWidth: 0.5)
+                    )
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 5)
@@ -288,7 +368,11 @@ private struct CommandRow: View {
         [
             presentation.title,
             presentation.detail,
-            presentation.badge
+            presentation.badge,
+            // Phase 46e — append the shortcut so VoiceOver reads the
+            // key binding after the title. Keeps blind users on the
+            // same cognitive path as sighted users who see the chip.
+            match.command.shortcutLabel
         ]
         .compactMap { $0 }
         .joined(separator: ", ")

@@ -91,6 +91,23 @@ final class Workspace: ObservableObject {
     /// re-trigger of the same path still fires.
     @Published var projectDiffFocusPath: String? = nil
 
+    /// Phase 46c — FIFO stack of URLs that were just closed. The
+    /// top of the stack (`.last`) is what `reopenLastClosed()`
+    /// reopens next, matching Chrome/VSCode's ⌘⇧T behavior: each
+    /// press pops one tab in reverse-close order. Untitled docs
+    /// never enter the stack (no URL means nothing meaningful to
+    /// restore). Capped at `recentlyClosedCap` so a marathon session
+    /// closing hundreds of files doesn't grow the array unbounded.
+    /// In-memory only — a crash / relaunch wipes the history; the
+    /// Open Recent menu is the cross-session recovery path.
+    @Published private(set) var recentlyClosedURLs: [URL] = []
+
+    /// Phase 46c — cap for `recentlyClosedURLs`. Ten matches Chrome's
+    /// per-window undo limit; anything more than that and the user
+    /// should reach for Open Recent (which persists and has a
+    /// bigger catalog).
+    static let recentlyClosedCap: Int = 10
+
     /// Phase 35b-4-d — open the Project Diff multibuffer, optionally
     /// anchored to a specific repo-relative path. Centralised so
     /// future entry points (command palette, menu bar, keyboard
@@ -243,6 +260,77 @@ final class Workspace: ObservableObject {
         doc.isMarkdownPreviewVisible.toggle()
     }
 
+    /// Phase 46b — flip a document's pin state and keep the on-disk
+    /// pin roster (`prefs.pinnedFilePaths`) in sync. Pinned tabs
+    /// float to the front of the strip; unpinning re-inserts after
+    /// the last pinned entry so the user's manual ordering of
+    /// unpinned tabs is preserved.
+    ///
+    /// Persistence contract: only documents with a URL make it into
+    /// `prefs.pinnedFilePaths`. Untitled documents can still carry
+    /// the flag for the session — useful if a user pins a scratch
+    /// buffer mid-work — but the flag vanishes on close / restart.
+    func togglePin(_ doc: Document) {
+        objectWillChange.send()
+        doc.isPinned.toggle()
+        if let path = doc.url?.standardizedFileURL.path {
+            if doc.isPinned {
+                prefs.pinnedFilePaths.insert(path)
+            } else {
+                prefs.pinnedFilePaths.remove(path)
+            }
+        }
+        resortByPin()
+    }
+
+    /// Phase 46b — group pinned documents at the head of the strip
+    /// while preserving each group's internal ordering. Not a
+    /// general-purpose sort: every other mutation (drag reorder,
+    /// open / close) is expected to maintain the invariant on its
+    /// own, and this helper is the recovery point whenever the
+    /// invariant may have been broken (togglePin, openFile pin
+    /// restoration). Stable by construction — same-group relative
+    /// order comes straight from the input array.
+    func resortByPin() {
+        let pinned = documents.filter { $0.isPinned }
+        let unpinned = documents.filter { !$0.isPinned }
+        let merged = pinned + unpinned
+        // Guard against spurious `@Published` ticks when the
+        // pinned/unpinned split already matches `documents` order.
+        let unchanged = merged.count == documents.count
+            && zip(merged, documents).allSatisfy { $0 === $1 }
+        if unchanged { return }
+        documents = merged
+    }
+
+    /// Phase 46a — reorder tabs by moving a document to a new slot.
+    /// Uses Foundation's `move(fromOffsets:toOffset:)` semantics where
+    /// `destination` is the target position **in the pre-move array**,
+    /// interpreted as "insert before this index". So for
+    /// `[A, B, C, D]`, moving from 0 to 2 yields `[B, A, C, D]` and
+    /// moving from 0 to 4 yields `[B, C, D, A]` (tail insertion uses
+    /// `documents.count`, not `documents.count - 1`).
+    ///
+    /// `selectedID` stays stable (the active Document.id doesn't
+    /// change) so a user mid-edit keeps focus even when another drop
+    /// reshuffles the strip. Out-of-range source indices return early;
+    /// destination is clamped to `[0, documents.count]` so drop
+    /// handlers can pass tail + 1 or negative values without
+    /// precondition fuss. A no-op move (destination translates to the
+    /// same slot) skips the mutation entirely so `@Published`
+    /// observers don't fire spuriously.
+    func moveDocument(fromIndex source: Int, toIndex destination: Int) {
+        guard documents.indices.contains(source) else { return }
+        let clampedDest = max(0, min(destination, documents.count))
+        // Move semantics: destination == source or source + 1 both mean
+        // "same slot" (inserting-before-self or inserting-just-after-
+        // self is a no-op after removal). Skip early so observers
+        // don't tick on a phantom drag.
+        if clampedDest == source || clampedDest == source + 1 { return }
+        documents.move(fromOffsets: IndexSet(integer: source),
+                       toOffset: clampedDest)
+    }
+
     func newDocument() {
         let untitledIndex = documents.filter { $0.url == nil }.count
         // Localised "Untitled" / "Untitled 2" — keys match
@@ -291,6 +379,13 @@ final class Workspace: ObservableObject {
                            url: normalized)
         doc.isLoading = true
         if let line { doc.pendingScrollLine = line }
+        // Phase 46b — re-apply the user's pin for this URL so the
+        // tab opens already pinned + gets slotted into the pinned
+        // section. Cheap — Set membership check + bool flip. The
+        // append + resortByPin() below finish the positioning.
+        if prefs.pinnedFilePaths.contains(normalized.path) {
+            doc.isPinned = true
+        }
 
         // Phase 34b — fast file-size probe to decide which load path
         // owns this document. Cheap (one stat() in URL.resourceValues);
@@ -308,6 +403,12 @@ final class Workspace: ObservableObject {
         }
 
         documents.append(doc)
+        // Phase 46b — if this doc was pinned, slide it into the
+        // pinned block so the tab strip reflects the invariant
+        // (pinned first) from the moment the tab appears.
+        if doc.isPinned {
+            resortByPin()
+        }
         selectedID = doc.id
         prefs.addRecent(normalized)
 
@@ -731,6 +832,14 @@ final class Workspace: ObservableObject {
         }
 
         stopWatching(doc)
+        // Phase 46c — push the closed URL onto the reopen stack so
+        // ⌘⇧T can restore it. Only URLs (tracked files) enter; the
+        // Untitled scratch path has nothing to re-read from disk.
+        // Dedupe the entry if it's already in the stack so repeated
+        // open→close cycles don't blow past the cap with duplicates.
+        if let url = doc.url?.standardizedFileURL {
+            rememberClosed(url: url)
+        }
         documents.remove(at: idx)
         if selectedID == documentID {
             selectedID = documents.last?.id
@@ -738,5 +847,44 @@ final class Workspace: ObservableObject {
         if documents.isEmpty {
             newDocument()
         }
+    }
+
+    /// Phase 46c — push `url` onto the recently-closed stack, moving
+    /// it to the top if it was already present and enforcing the
+    /// size cap. Extracted from `close(documentID:)` so
+    /// `reopenLastClosed` and any future mass-close path (close all,
+    /// close folder) have a single-entry helper to call.
+    private func rememberClosed(url: URL) {
+        // Move-to-top semantics: if the user closes the same file
+        // twice in a row we only want one slot on the stack.
+        if let existing = recentlyClosedURLs.firstIndex(where: { $0 == url }) {
+            recentlyClosedURLs.remove(at: existing)
+        }
+        recentlyClosedURLs.append(url)
+        // Trim from the front (oldest) when the cap is exceeded so
+        // the freshest entries always survive.
+        while recentlyClosedURLs.count > Self.recentlyClosedCap {
+            recentlyClosedURLs.removeFirst()
+        }
+    }
+
+    /// Phase 46c — pop the most-recently-closed URL and open it as
+    /// a new tab. No-op if the stack is empty or if the file has
+    /// since been deleted off disk (Finder can race us). Returns
+    /// the reopened URL on success so the caller can surface
+    /// feedback (e.g. `⌘⇧T` toast) if it chooses to.
+    @discardableResult
+    func reopenLastClosed() -> URL? {
+        while let url = recentlyClosedURLs.popLast() {
+            // File-existence check: don't rehydrate a phantom tab if
+            // the user closed the file and then deleted it from
+            // Finder. Walk the stack until we find a valid entry or
+            // exhaust it.
+            if FileManager.default.fileExists(atPath: url.path) {
+                openFile(at: url)
+                return url
+            }
+        }
+        return nil
     }
 }

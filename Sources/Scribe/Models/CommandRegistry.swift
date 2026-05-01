@@ -18,17 +18,27 @@ struct ScribeCommand: Identifiable {
     let title: String
     let subtitle: String?
     let keywords: [String]
+    /// Phase 46e — pre-rendered shortcut string (e.g. "⌘S", "⌘⇧T").
+    /// The Command Palette row surfaces this as a chip on the
+    /// trailing edge so the user can rehearse the key binding
+    /// without leaving the palette. `nil` ⇒ no chip drawn (command
+    /// has no menu binding, or the binding lives elsewhere in the
+    /// responder chain and we don't want to imply the palette
+    /// shortcut triggers it).
+    let shortcutLabel: String?
     let perform: @MainActor () -> Void
 
     init(id: String,
          title: String,
          subtitle: String? = nil,
          keywords: [String] = [],
+         shortcutLabel: String? = nil,
          perform: @escaping @MainActor () -> Void) {
         self.id = id
         self.title = title
         self.subtitle = subtitle
         self.keywords = keywords
+        self.shortcutLabel = shortcutLabel
         self.perform = perform
     }
 }
@@ -43,6 +53,21 @@ struct CommandMatch: Identifiable {
     let highlightedRanges: [Range<String.Index>]?
 
     var id: String { command.id }
+}
+
+/// Phase 46d — one visually separated block of palette matches.
+/// `grouped(for:)` returns these; empty-query mode splits into one
+/// section per category (File / View / Text / …), non-empty queries
+/// collapse into a single anonymous section so the flat fuzzy-
+/// ranked output isn't broken up by surprise headers.
+struct CommandSection: Identifiable {
+    /// Stable id — used both as the ForEach identity and as the
+    /// caption key ("" ⇒ no header rendered).
+    let id: String
+    /// Localised title shown above the section. Empty string ⇒
+    /// section renders without a header (non-empty query mode).
+    let title: String
+    let matches: [CommandMatch]
 }
 
 /// Routes a query starting with `prefix` to a different command source.
@@ -206,6 +231,85 @@ final class CommandRegistry: ObservableObject {
 
     private func mruIndex(of id: String) -> Int? {
         mru.firstIndex(of: id)
+    }
+
+    // MARK: - Grouped search (Phase 46d)
+
+    /// Phase 46d — Command Palette–facing search variant that keeps
+    /// results flat for non-empty queries (so fuzzy ranking is
+    /// preserved) but splits an empty query into category sections
+    /// (File / View / Text / …). Each section's matches are MRU-
+    /// sorted internally; the section order itself is fixed so the
+    /// palette reads consistently regardless of the user's history.
+    /// Prefix routes (`@`, `:`, `>`) skip sectioning since their
+    /// result list is already scoped.
+    func grouped(for query: String) -> [CommandSection] {
+        let flatMatches = search(query)
+
+        // Prefix route or non-empty query ⇒ single section, no
+        // header. Keeps the flat visual behaviour for any mode
+        // where sectioning would just clutter the list.
+        if activeRoute(for: query) != nil
+            || !query.trimmingCharacters(in: .whitespaces).isEmpty {
+            return [CommandSection(id: "all", title: "", matches: flatMatches)]
+        }
+
+        // Empty query: group by category. We key off the command's
+        // `id` prefix (same contract `CommandPresentation` uses for
+        // the category badge) so the grouping is resilient to
+        // locale changes in `subtitle`.
+        struct Bucket {
+            var section: CategorySection
+            var matches: [CommandMatch]
+        }
+        var buckets: [CategorySection: [CommandMatch]] = [:]
+        for match in flatMatches {
+            let section = Self.categorySection(for: match.command)
+            buckets[section, default: []].append(match)
+        }
+        return CategorySection.allCases.compactMap { section -> CommandSection? in
+            guard let matches = buckets[section], !matches.isEmpty else { return nil }
+            return CommandSection(
+                id: section.rawValue,
+                title: L10n.t(section.titleKey),
+                matches: matches
+            )
+        }
+    }
+
+    /// Phase 46d — fixed section roster shown above command rows
+    /// when the palette opens without a query. Order here is the
+    /// final render order; sections with no matches drop out.
+    enum CategorySection: String, CaseIterable {
+        case file, view, text, tabs, encoding, lineEnding, syntax, other
+
+        var titleKey: String {
+            switch self {
+            case .file:       "palette.section.file"
+            case .view:       "palette.section.view"
+            case .text:       "palette.section.text"
+            case .tabs:       "palette.section.tabs"
+            case .encoding:   "palette.section.encoding"
+            case .lineEnding: "palette.section.lineEnding"
+            case .syntax:     "palette.section.syntax"
+            case .other:      "palette.section.other"
+            }
+        }
+    }
+
+    /// Mapping `ScribeCommand.id → CategorySection`. Mirrors the
+    /// routing in `CommandPresentation.categoryBadgeKey` so the
+    /// badge and section header always agree.
+    private static func categorySection(for command: ScribeCommand) -> CategorySection {
+        let id = command.id
+        if id.hasPrefix("file.") { return .file }
+        if id.hasPrefix("view.") { return .view }
+        if id.hasPrefix("text.") { return .text }
+        if id.hasPrefix("tab.")  { return .tabs }
+        if id.hasPrefix("enc.")  { return .encoding }
+        if id.hasPrefix("eol.")  { return .lineEnding }
+        if id.hasPrefix("lexer.") { return .syntax }
+        return .other
     }
 
     // MARK: - Fuzzy matcher
