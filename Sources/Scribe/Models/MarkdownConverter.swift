@@ -564,6 +564,31 @@ private func matchOrderedListItem(_ line: String) -> String? {
 
 // MARK: - Inline rendering
 
+// Phase 45-B perf — pre-compile every inline regex exactly once at
+// load time. Before this, `replace(...)` re-compiled the same nine
+// patterns for every line of every paragraph, which dominated the
+// 5 MB MarkdownConverter.render baseline (~4.5 s, perf_audit.md
+// § 1.2). NSRegularExpression is documented thread-safe, so a
+// shared instance is fine across calls.
+private let mdInlineCodeRegex = try! NSRegularExpression(
+    pattern: "`([^`\n]+)`")
+private let mdInlineImageRegex = try! NSRegularExpression(
+    pattern: "!\\[([^\\]]*)\\]\\(([^)\\s]+)(?:\\s+\"[^\"]*\")?\\)")
+private let mdInlineFootnoteRefRegex = try! NSRegularExpression(
+    pattern: "\\[\\^([^\\]\\s]+)\\]")
+private let mdInlineLinkRegex = try! NSRegularExpression(
+    pattern: "\\[([^\\]]+)\\]\\(([^)\\s]+)(?:\\s+\"[^\"]*\")?\\)")
+private let mdInlineBoldStarRegex = try! NSRegularExpression(
+    pattern: "\\*\\*([^*\n]+)\\*\\*")
+private let mdInlineBoldUnderscoreRegex = try! NSRegularExpression(
+    pattern: "__([^_\n]+)__")
+private let mdInlineEmStarRegex = try! NSRegularExpression(
+    pattern: "\\*([^*\n]+)\\*")
+private let mdInlineEmUnderscoreRegex = try! NSRegularExpression(
+    pattern: "(?<![A-Za-z0-9])_([^_\n]+)_(?![A-Za-z0-9])")
+private let mdInlineStrikeRegex = try! NSRegularExpression(
+    pattern: "~~([^~\n]+)~~")
+
 /// Run inline transforms on `text` and return the resulting HTML.
 /// The order matters: code spans go first so backtick-protected
 /// content isn't disturbed by emphasis or link parsers; emphasis
@@ -585,11 +610,11 @@ func renderInline(_ text: String,
     }
 
     var s = text
-    s = replace(s, regex: "`([^`\n]+)`") { m in
+    s = replace(s, regex: mdInlineCodeRegex) { m in
         let inner = m[1]
         return park("<code>\(htmlEscape(inner))</code>")
     }
-    s = replace(s, regex: "!\\[([^\\]]*)\\]\\(([^)\\s]+)(?:\\s+\"[^\"]*\")?\\)") { m in
+    s = replace(s, regex: mdInlineImageRegex) { m in
         let alt = htmlEscape(m[1])
         let src = htmlEscape(m[2])
         return park("<img src=\"\(src)\" alt=\"\(alt)\"/>")
@@ -601,7 +626,7 @@ func renderInline(_ text: String,
     // unknown ids fall through to literal text via the link / escape
     // chain below.
     if !footnoteRefs.isEmpty {
-        s = replace(s, regex: "\\[\\^([^\\]\\s]+)\\]") { m in
+        s = replace(s, regex: mdInlineFootnoteRefRegex) { m in
             let id = m[1]
             guard let num = footnoteRefs[id] else { return m[0] }
             let safeId = htmlEscape(id)
@@ -611,7 +636,7 @@ func renderInline(_ text: String,
             )
         }
     }
-    s = replace(s, regex: "\\[([^\\]]+)\\]\\(([^)\\s]+)(?:\\s+\"[^\"]*\")?\\)") { m in
+    s = replace(s, regex: mdInlineLinkRegex) { m in
         let label = m[1]
         let url = htmlEscape(m[2])
         // Recurse on the label so nested **bold** inside link
@@ -628,19 +653,19 @@ func renderInline(_ text: String,
     // stage-C HTML escape pass doesn't smother them. The inner
     // text stays inline so subsequent passes can keep parsing it
     // (that's how `***both***` ends up nested correctly).
-    s = replace(s, regex: "\\*\\*([^*\n]+)\\*\\*") { m in
+    s = replace(s, regex: mdInlineBoldStarRegex) { m in
         park("<strong>") + m[1] + park("</strong>")
     }
-    s = replace(s, regex: "__([^_\n]+)__") { m in
+    s = replace(s, regex: mdInlineBoldUnderscoreRegex) { m in
         park("<strong>") + m[1] + park("</strong>")
     }
-    s = replace(s, regex: "\\*([^*\n]+)\\*") { m in
+    s = replace(s, regex: mdInlineEmStarRegex) { m in
         park("<em>") + m[1] + park("</em>")
     }
-    s = replace(s, regex: "(?<![A-Za-z0-9])_([^_\n]+)_(?![A-Za-z0-9])") { m in
+    s = replace(s, regex: mdInlineEmUnderscoreRegex) { m in
         park("<em>") + m[1] + park("</em>")
     }
-    s = replace(s, regex: "~~([^~\n]+)~~") { m in
+    s = replace(s, regex: mdInlineStrikeRegex) { m in
         park("<del>") + m[1] + park("</del>")
     }
 
@@ -665,11 +690,14 @@ func renderInline(_ text: String,
 /// Apply `regex` over `s`, calling `transform` with the captured
 /// groups (groups[0] is the whole match) for each match. Matches
 /// are replaced left-to-right; non-overlapping by definition.
+///
+/// Phase 45-B — takes a pre-compiled `NSRegularExpression` so the
+/// hot inline pass can amortise pattern compilation across all
+/// calls. The shared instances live at file scope above the
+/// inline pass.
 private func replace(_ s: String,
-                     regex pattern: String,
+                     regex re: NSRegularExpression,
                      transform: ([String]) -> String) -> String {
-    // swiftlint:disable:next force_try
-    let re = try! NSRegularExpression(pattern: pattern)
     let ns = s as NSString
     var out = ""
     var cursor = 0

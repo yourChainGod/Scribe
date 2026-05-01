@@ -12,7 +12,7 @@
 | Find-in-files 20MB 扫描 | 114ms，单次完成 |
 | 端到端开 5MB（含 decode + applyLoadResult） | **117ms**（perf-A 实测） |
 | ColorScanner.scan 5MB | **11ms**（perf-A 实测，原以为重点，实际极轻） |
-| MarkdownConverter.render 5MB | **4 482ms**（perf-A 实测，**真热点**，单次 4.5 秒） |
+| MarkdownConverter.render 5MB | **4 482ms → 2 321ms**（perf-B 后，-48%；regex 编译单次化） |
 | GitClient.parseBlamePorcelain ~7 700 行 / ~1MB | **191ms**（perf-A 实测） |
 | 嫌疑热点（综合两路侦察 + perf-A 实测修订） | 4 处明确，1 处需进一步 profile |
 
@@ -42,16 +42,17 @@
 | `test_openFile_20mb_under_50ms` | 0.002s | 50ms | 同上 |
 | `test_findInFiles_20mb_scanCompletes` | 0.112s | 完成性 | 走 detached Task，不阻塞主线程 |
 
-### 1.2 perf-A 新增 baseline（2026-05-01 17:51 入仓）
+### 1.2 perf-A baseline + perf-B 落地后
 
-| 用例 | 实测 | 备注 |
-|---|---|---|
-| `test_colorScanner_scan_5mb_baseline` | **11ms** | 5MB lorem ipsum（零命中），单次 O(n) 字节扫，远低于原嫌疑 |
-| `test_gitBlame_parsePorcelain_synthetic_baseline` | **191ms** | 7 700 行 / ~1MB porcelain，每行独 sha 强制 metadata cache miss（worst-case） |
-| `test_markdownConverter_render_5mb_baseline` | **4 482ms** | 5MB 文本走 BlockContext 行扫，每行触发 paragraph flush。**单次最重的实测点** |
-| `test_workspace_openFile_endToEnd_5mb_baseline` | **117ms** | openFile → decode → applyLoadResult → isLoading=false 全程，含 git blame request 调度但不含 blame 完成 |
+| 用例 | perf-A 基线 | perf-B 后 | 变化 |
+|---|---|---|---|
+| `test_colorScanner_scan_5mb_baseline` | 11ms | — | unchanged |
+| `test_gitBlame_parsePorcelain_synthetic_baseline` | 191ms | — | unchanged |
+| `test_markdownConverter_render_5mb_baseline` | **4 482ms** | **2 321ms** | **-48% (-2 161ms)** |
+| `test_workspace_openFile_endToEnd_5mb_baseline` | 117ms | 111ms | noise |
 
-> 这 4 条 baseline **不设紧预算**（5_000–30_000ms 宽松上限作 paranoia stop），用途是把当前数值钉进 CI 日志，未来改动若回归即报警。
+> perf-A baseline 入仓时间 2026-05-01 17:51；perf-B 手术入仓 2026-05-01 18:13。
+> perf-B 单点改动：`MarkdownConverter.swift` 把 `replace()` 内的 `try! NSRegularExpression(pattern:)` 由"每次调用编译"改为 9 个 file-level `private let` 共享实例。lorem fixture 每行 6 次 inline replace × 65 536 行 = ~400 000 次正则编译消除。
 
 ### 1.3 仍未覆盖（需后续基线）
 
@@ -112,7 +113,7 @@
 
 | 优先 | 候选 | 影响卷轴 | 实测/估计收益 | 工作量 | 风险 |
 |---|---|---|---|---|---|
-| **P0** | MarkdownConverter render 增量化（按段缓存 + dirty-range 重渲），或 preview pane 打开期对超阈值文档限速/分块 | 加载 + 输入 | **4 482ms → 目标 < 500ms（5MB）** | 高 | 中（BlockContext 状态机较深、需保持输出一致） |
+| **P0** | MarkdownConverter render 增量化（按段缓存 + dirty-range 重渲），或 preview pane 打开期对超阈值文档限速/分块 | 加载 + 输入 | **4 482ms → 2 321ms（perf-B 落地，-48%）；剩余 1.8s 待二次手术（String 累加 / NSString 桥接）** | 高 | 中（BlockContext 状态机较深、需保持输出一致） |
 | **P0** | InlineBlame 改 visible-range 装饰（首屏 + UPDATEUI 都仅装饰可视行） | 加载 + 输入间接 | 大文件首屏 -100~500ms；save 后冻结消失 | 中 | 中（需正确处理 viewport 变化、滚动事件订阅） |
 | **P0** | flushDocSync 用 Scintilla **dirty range / SCN.MODIFIED 的 length+position 增量**取代 `view.string()` 全文复制 | 输入 | 中档文件每按键 -1~10ms 主线程 | 中 | 高（diff 路径稍复杂、要兼容 undo / external change） |
 | **P1** | FindState `query` 加 100–150ms debounce + 取消上一次扫 | 输入 | 实时搜索每键省 50–200ms | 低 | 低 |
@@ -175,17 +176,11 @@
 
 ## 7. 推进进度
 
-- ✅ **A — perf-A baseline**（4 条用例 + 实测数值）— 2026-05-01 落仓
-- ⏳ **B — P0 候选 TDD**（MarkdownConverter / InlineBlame visible-range / flushDocSync 增量，三选一开始）
-- ⏳ **C — Instrument 手测**（Time Profiler / System Trace）— 仍待人工执行
-
-吾建议 **B 中先打 MarkdownConverter（P0 #1）**：
-- baseline 已锁（4 482ms），不必等 profile
-- 解析器是纯算法，可不依赖 NSView，单元测试就能验证收益
-- 收益最显著（4.5s 单点）
-- 风险只在"输出一致性"，可用现有 `MarkdownConverterTests` 套件锁定
-
-如要先打 InlineBlame 或 flushDocSync，需先补 Scintilla NSView 测试 harness（中风险）。
+- ✅ **A — perf-A baseline**（4 条用例 + 实测数值）— 2026-05-01 17:51 入仓
+- ✅ **B — perf-B：MarkdownConverter regex 编译单次化** — 2026-05-01 18:13 入仓，**4 482ms → 2 321ms（-48%）**
+- ⏳ **B 续 — MarkdownConverter 进一步优化**：String 累加（`+=` in `replace()`）/ NSString 桥接 / pieces.joined() 等。现 baseline 2 321ms，距 < 500ms 目标仍有 1.8s 空间。
+- ⏳ **B → P0 #2 / #3**：InlineBlame visible-range 或 flushDocSync 增量。需先建 Scintilla NSView 测试 harness。
+- ⏳ **C — Instrument 手测**（Time Profiler / System Trace）— 仍待人工执行。
 
 
 ---
