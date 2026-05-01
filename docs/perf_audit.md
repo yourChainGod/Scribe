@@ -12,7 +12,7 @@
 | Find-in-files 20MB 扫描 | 114ms，单次完成 |
 | 端到端开 5MB（含 decode + applyLoadResult） | **117ms**（perf-A 实测） |
 | ColorScanner.scan 5MB | **11ms**（perf-A 实测，原以为重点，实际极轻） |
-| MarkdownConverter.render 5MB | **4 482ms → 2 321ms**（perf-B 后，-48%；regex 编译单次化） |
+| MarkdownConverter.render 5MB | **4 482ms → 562ms**（perf-A → perf-C，**-87%**；regex 单次编译 + 4 处 fast-path） |
 | GitClient.parseBlamePorcelain ~7 700 行 / ~1MB | **191ms**（perf-A 实测） |
 | 嫌疑热点（综合两路侦察 + perf-A 实测修订） | 4 处明确，1 处需进一步 profile |
 
@@ -42,17 +42,26 @@
 | `test_openFile_20mb_under_50ms` | 0.002s | 50ms | 同上 |
 | `test_findInFiles_20mb_scanCompletes` | 0.112s | 完成性 | 走 detached Task，不阻塞主线程 |
 
-### 1.2 perf-A baseline + perf-B 落地后
+### 1.2 perf-A baseline + perf-B / perf-C 落地后
 
-| 用例 | perf-A 基线 | perf-B 后 | 变化 |
-|---|---|---|---|
-| `test_colorScanner_scan_5mb_baseline` | 11ms | — | unchanged |
-| `test_gitBlame_parsePorcelain_synthetic_baseline` | 191ms | — | unchanged |
-| `test_markdownConverter_render_5mb_baseline` | **4 482ms** | **2 321ms** | **-48% (-2 161ms)** |
-| `test_workspace_openFile_endToEnd_5mb_baseline` | 117ms | 111ms | noise |
+| 用例 | perf-A 基线 | perf-B 后 | **perf-C 后** | 累计变化 |
+|---|---|---|---|---|
+| `test_colorScanner_scan_5mb_baseline` | 11ms | — | — | unchanged |
+| `test_gitBlame_parsePorcelain_synthetic_baseline` | 191ms | — | — | unchanged |
+| `test_markdownConverter_render_5mb_baseline` | **4 482ms** | 2 321ms | **562ms** | **-87% (-3 920ms)** |
+| `test_workspace_openFile_endToEnd_5mb_baseline` | 117ms | 111ms | ≈111ms | noise |
 
-> perf-A baseline 入仓时间 2026-05-01 17:51；perf-B 手术入仓 2026-05-01 18:13。
-> perf-B 单点改动：`MarkdownConverter.swift` 把 `replace()` 内的 `try! NSRegularExpression(pattern:)` 由"每次调用编译"改为 9 个 file-level `private let` 共享实例。lorem fixture 每行 6 次 inline replace × 65 536 行 = ~400 000 次正则编译消除。
+> perf-A baseline 入仓 2026-05-01 17:51；perf-B 入仓 18:13；**perf-C 入仓 19:30**。
+>
+> **perf-B 单刀**：`MarkdownConverter.swift` 把 `replace()` 内的 `try! NSRegularExpression(pattern:)` 由"每次调用编译"改为 9 个 file-level `private let` 共享实例（4 482 → 2 321ms）。
+>
+> **perf-C 四刀**（同文件）：
+> - **B-2** `replace()` 加 `hasMatch` 短路：0 命中场景直接返回原 s，避免一次 NSString.substring 整行复制。
+> - **B-3** `htmlEscape` / `htmlEscapePreservingPlaceholders` 加 UTF-8 字节扫 fast-path：行内无 entity-trigger / placeholder 字符即直返原 s。
+> - **B-4** `renderInline` 入口加同样 fast-path（trigger 集合：`` ` ! [ * _ ~ ``）：lorem-prose 行直走 htmlEscape，跳过 9 次 enumerateMatches。
+> - **B-5** `isThematicBreak` 重写为单 pass char scan，消除原来每行 3 次 `trimmed.filter { ... }`（lorem 65 k 行 × 3 ≈ 16 MB allocation 全免）。**单刀贡献 -1 302ms**。
+>
+> 累计 5 刀，4 482 → 562 ms，**-87%**，已落 < 1 s 目标，距 < 500 ms 目标剩 62 ms。
 
 ### 1.3 仍未覆盖（需后续基线）
 
@@ -113,7 +122,7 @@
 
 | 优先 | 候选 | 影响卷轴 | 实测/估计收益 | 工作量 | 风险 |
 |---|---|---|---|---|---|
-| **P0** | MarkdownConverter render 增量化（按段缓存 + dirty-range 重渲），或 preview pane 打开期对超阈值文档限速/分块 | 加载 + 输入 | **4 482ms → 2 321ms（perf-B 落地，-48%）；剩余 1.8s 待二次手术（String 累加 / NSString 桥接）** | 高 | 中（BlockContext 状态机较深、需保持输出一致） |
+| **P0** | MarkdownConverter render 增量化（按段缓存 + dirty-range 重渲），或 preview pane 打开期对超阈值文档限速/分块 | 加载 + 输入 | **4 482ms → 562ms（perf-B + perf-C 共 5 刀，-87%）；剩 62ms 可达 < 500ms 目标，但边际收益低，建议收手** | 已落 | 无 |
 | **P0** | InlineBlame 改 visible-range 装饰（首屏 + UPDATEUI 都仅装饰可视行） | 加载 + 输入间接 | 大文件首屏 -100~500ms；save 后冻结消失 | 中 | 中（需正确处理 viewport 变化、滚动事件订阅） |
 | **P0** | flushDocSync 用 Scintilla **dirty range / SCN.MODIFIED 的 length+position 增量**取代 `view.string()` 全文复制 | 输入 | 中档文件每按键 -1~10ms 主线程 | 中 | 高（diff 路径稍复杂、要兼容 undo / external change） |
 | **P1** | FindState `query` 加 100–150ms debounce + 取消上一次扫 | 输入 | 实时搜索每键省 50–200ms | 低 | 低 |
@@ -177,10 +186,18 @@
 ## 7. 推进进度
 
 - ✅ **A — perf-A baseline**（4 条用例 + 实测数值）— 2026-05-01 17:51 入仓
-- ✅ **B — perf-B：MarkdownConverter regex 编译单次化** — 2026-05-01 18:13 入仓，**4 482ms → 2 321ms（-48%）**
-- ⏳ **B 续 — MarkdownConverter 进一步优化**：String 累加（`+=` in `replace()`）/ NSString 桥接 / pieces.joined() 等。现 baseline 2 321ms，距 < 500ms 目标仍有 1.8s 空间。
-- ⏳ **B → P0 #2 / #3**：InlineBlame visible-range 或 flushDocSync 增量。需先建 Scintilla NSView 测试 harness。
-- ⏳ **C — Instrument 手测**（Time Profiler / System Trace）— 仍待人工执行。
+- ✅ **B — perf-B：MarkdownConverter regex 编译单次化** — 2026-05-01 18:13 入仓，4 482 → 2 321ms（-48%）
+- ✅ **C — perf-C：MarkdownConverter 4 处 fast-path** — 2026-05-01 19:30 入仓，2 321 → **562ms（累计 -87%）**
+  - B-2 `replace()` hasMatch 短路
+  - B-3 `htmlEscape` / `htmlEscapePreservingPlaceholders` UTF-8 字节扫 fast-path
+  - B-4 `renderInline` 入口同样 fast-path
+  - B-5 `isThematicBreak` 单 pass 重写（**单刀 -1 302ms**）
+- ⏳ **下一战 — 等魔尊钦定**：
+  - 转 P0 #2：InlineBlame visible-range 装饰（需先建 Scintilla NSView 测试 harness）
+  - 转 P0 #3：flushDocSync 增量同步（同上）
+  - 转 P1 #1：FindState query debounce（低风险快赢）
+  - 转 P1 #2：GitBlame parsePorcelain 后台线程化
+- ⏳ **C — Instrument 手测**（Time Profiler / System Trace）— 仍待人工执行（agent 内不可跑）。
 
 
 ---

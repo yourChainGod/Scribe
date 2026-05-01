@@ -473,14 +473,28 @@ private func detectFence(_ trimmed: String) -> (mark: String, lang: String)? {
 
 /// `<hr/>` test: three or more of the same marker (-, *, _) with
 /// only whitespace between them. CommonMark spec.
+///
+/// Phase 45-B-5 — single-pass scan replaces `trimmed.filter {...}`
+/// run three times. The lorem-prose hot path now bails on the
+/// first non-whitespace character (typically 'L'), avoiding three
+/// per-row 80-byte String copies × 65 k rows.
 private func isThematicBreak(_ trimmed: String) -> Bool {
-    for char in ["-", "*", "_"] as [Character] {
-        let stripped = trimmed.filter { !$0.isWhitespace }
-        if stripped.count >= 3, stripped.allSatisfy({ $0 == char }) {
-            return true
+    var marker: Character? = nil
+    var count = 0
+    for ch in trimmed {
+        if ch.isWhitespace { continue }
+        if ch == "-" || ch == "*" || ch == "_" {
+            if let m = marker {
+                if m != ch { return false }
+            } else {
+                marker = ch
+            }
+            count += 1
+        } else {
+            return false
         }
     }
-    return false
+    return marker != nil && count >= 3
 }
 
 /// Match an ATX heading. Returns (level, content) or nil. Up to 6
@@ -562,7 +576,7 @@ private func matchOrderedListItem(_ line: String) -> String? {
     return String(line[idx...])
 }
 
-// MARK: - Inline rendering
+// MARK: - Inline regex cache
 
 // Phase 45-B perf — pre-compile every inline regex exactly once at
 // load time. Before this, `replace(...)` re-compiled the same nine
@@ -589,7 +603,31 @@ private let mdInlineEmUnderscoreRegex = try! NSRegularExpression(
 private let mdInlineStrikeRegex = try! NSRegularExpression(
     pattern: "~~([^~\n]+)~~")
 
-/// Run inline transforms on `text` and return the resulting HTML.
+/// Phase 45-B-4 — single-pass byte sweep that decides whether a
+/// line could possibly hit any inline-pattern regex. The trigger
+/// set is the union of opener bytes for all nine patterns:
+/// backtick (code), `!` (image), `[` (footnote ref + link),
+/// `*` `_` (bold + emphasis), `~` (strikethrough). Lines with
+/// none of these can never match and are routed straight to the
+/// HTML escaper.
+private func inlineNeedsRewrite(_ s: String) -> Bool {
+    for byte in s.utf8 {
+        switch byte {
+        case 0x60,  // `
+             0x21,  // !
+             0x5B,  // [
+             0x2A,  // *
+             0x5F,  // _
+             0x7E:  // ~
+            return true
+        default:
+            continue
+        }
+    }
+    return false
+}
+
+// MARK: - Inline rendering
 /// The order matters: code spans go first so backtick-protected
 /// content isn't disturbed by emphasis or link parsers; emphasis
 /// runs after links so URLs containing `_` aren't broken up.
@@ -598,8 +636,19 @@ private let mdInlineStrikeRegex = try! NSRegularExpression(
 /// the pre-pass for ids that have both a definition *and* at least
 /// one inline reference. Defaults to empty so v1 callers (and the
 /// recursive call inside link labels) keep working unchanged.
+///
+/// Phase 45-B-4 — fast-path: a single UTF-8 byte sweep checks
+/// whether the line contains *any* character that could trigger
+/// the inline regex chain. If not (the lorem-prose hot path), we
+/// skip the nine `enumerateMatches` calls entirely and feed the
+/// line straight to the HTML escaper. This is the difference
+/// between scanning 80 ASCII bytes once vs. nine times per
+/// paragraph row.
 func renderInline(_ text: String,
                   footnoteRefs: [String: Int] = [:]) -> String {
+    if !inlineNeedsRewrite(text) {
+        return htmlEscape(text)
+    }
     // Stage A: protect inline code spans by replacing them with
     // unique placeholders. Same trick for images and links so
     // the regexes downstream can't touch attribute contents.
@@ -695,15 +744,24 @@ func renderInline(_ text: String,
 /// hot inline pass can amortise pattern compilation across all
 /// calls. The shared instances live at file scope above the
 /// inline pass.
+///
+/// Phase 45-B-2 — fast-path zero-match lines. If `enumerateMatches`
+/// never fires the callback we return the original `s` untouched —
+/// no `out` String allocation, no NSString.substring copy of the
+/// whole line. Lorem-prose paragraphs exercise this on every one
+/// of the nine inline patterns × every paragraph row, which is
+/// the hot loop revealed by the 5 MB MarkdownConverter baseline.
 private func replace(_ s: String,
                      regex re: NSRegularExpression,
                      transform: ([String]) -> String) -> String {
     let ns = s as NSString
     var out = ""
     var cursor = 0
+    var hasMatch = false
     let full = NSRange(location: 0, length: ns.length)
     re.enumerateMatches(in: s, options: [], range: full) { m, _, _ in
         guard let m else { return }
+        hasMatch = true
         let r = m.range
         if r.location > cursor {
             out += ns.substring(with: NSRange(location: cursor,
@@ -719,6 +777,7 @@ private func replace(_ s: String,
         out += transform(groups)
         cursor = r.location + r.length
     }
+    guard hasMatch else { return s }
     if cursor < ns.length {
         out += ns.substring(with: NSRange(location: cursor,
                                           length: ns.length - cursor))
@@ -730,7 +789,15 @@ private func replace(_ s: String,
 
 /// Replace `<`, `>`, `&`, `"`, `'` with their HTML entities so
 /// raw content can sit safely inside an HTML document.
+///
+/// Phase 45-B-3 — fast-path: if the input contains zero of the
+/// five entity-trigger characters, return it as-is. Lorem-prose
+/// paragraphs hit this path on every one of their 65 k flush
+/// rows, eliminating one full char-level rebuild per row.
 func htmlEscape(_ s: String) -> String {
+    if !htmlEscapeNeedsRewrite(s) {
+        return s
+    }
     var out = ""
     out.reserveCapacity(s.count)
     for ch in s {
@@ -744,6 +811,26 @@ func htmlEscape(_ s: String) -> String {
         }
     }
     return out
+}
+
+/// Cheap prefix check shared by both escape paths. UTF-8 byte scan
+/// avoids the per-Character overhead of `for ch in s` when the
+/// answer is "nothing to do" — the lorem-prose flush hot path.
+private func htmlEscapeNeedsRewrite(_ s: String) -> Bool {
+    for byte in s.utf8 {
+        switch byte {
+        case 0x26, 0x3C, 0x3E, 0x22, 0x27, 0x01:
+            // & < > " '   — entity triggers
+            // \u{0001}    — placeholder marker (only meaningful for
+            //               htmlEscapePreservingPlaceholders, but
+            //               adding it here costs nothing and lets
+            //               both paths share one scan)
+            return true
+        default:
+            continue
+        }
+    }
+    return false
 }
 
 // MARK: - Phase 32 · GFM tables
@@ -949,7 +1036,14 @@ fileprivate func renderFootnoteSection(
 /// HTML-escape, but pass through `\u{0001}N\u{0001}` placeholders
 /// untouched so the slot substitution at the end of renderInline
 /// finds the same delimiters it inserted.
+///
+/// Phase 45-B-3 — fast-path: if there are no entity-trigger chars
+/// and no placeholder markers, return the input unchanged. The
+/// lorem-prose hot path takes this branch.
 private func htmlEscapePreservingPlaceholders(_ s: String) -> String {
+    if !htmlEscapeNeedsRewrite(s) {
+        return s
+    }
     var out = ""
     out.reserveCapacity(s.count)
     var i = s.startIndex
