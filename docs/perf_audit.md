@@ -113,7 +113,7 @@
 ### 输入响应 Top 3 嫌疑
 
 1. **#I2 flushDocSync 的 view.string() 全文复制**：中档文件（如 100KB 配置、1MB 日志）打字时每 50ms 复制 + 比对一次整段字符串。
-2. **#I4 FindState query 无 debounce**：实时搜索时每改一个字符都触发一次 `highlightAllMatches` 全文扫。
+2. ~~**#I4 FindState query 无 debounce**~~ — **phase 45-D 已落地**（150ms RunLoop.main debounce）；连打 N 字符 → `highlightAllMatches` + `.findCurrent` 命令各 1 次。
 3. **#I5/I6 GitBlame save → applyAllInlineBlames 全文重画**：与卷轴 1 #L4 同源，save 后会同步触发一次首屏级别的装饰层重排。
 
 ---
@@ -125,8 +125,8 @@
 | **P0** | MarkdownConverter render 增量化（按段缓存 + dirty-range 重渲），或 preview pane 打开期对超阈值文档限速/分块 | 加载 + 输入 | **4 482ms → 562ms（perf-B + perf-C 共 5 刀，-87%）；剩 62ms 可达 < 500ms 目标，但边际收益低，建议收手** | 已落 | 无 |
 | **P0** | InlineBlame 改 visible-range 装饰（首屏 + UPDATEUI 都仅装饰可视行） | 加载 + 输入间接 | 大文件首屏 -100~500ms；save 后冻结消失 | 中 | 中（需正确处理 viewport 变化、滚动事件订阅） |
 | **P0** | flushDocSync 用 Scintilla **dirty range / SCN.MODIFIED 的 length+position 增量**取代 `view.string()` 全文复制 | 输入 | 中档文件每按键 -1~10ms 主线程 | 中 | 高（diff 路径稍复杂、要兼容 undo / external change） |
-| **P1** | FindState `query` 加 100–150ms debounce + 取消上一次扫 | 输入 | 实时搜索每键省 50–200ms | 低 | 低 |
-| **P1** | GitBlame parsePorcelain 后台线程化（核对 callsite 是否已切线程） | 加载 | 实测 1MB 191ms 不阻塞主线程；大文件外推 ~1–2s | 低-中 | 低（解析器已 nonisolated） |
+| **P1** ✅ | FindState `query` 加 100–150ms debounce + 取消上一次扫 | 输入 | **phase 45-D 落地（150ms RunLoop.main）**：连打 N 字符 → `highlightAllMatches` + `.findCurrent` 命令各 N → 各 1 次 | 已落地 | 低 |
+| **P1** ✅ | GitBlame parsePorcelain 后台线程化（核对 callsite 是否已切线程） | 加载 | **核对结论：已落地。** `GitClient.blame` / `parseBlamePorcelain` / `currentUserName` 全部 `nonisolated static`；唯一生产 callsite `GitBlameEngine.request:91-92` 已在 `Task.detached(.userInitiated)` 内；解析全程 off-main，仅 dictionary fill 回 main actor。phase 45-E 入仓 3 例 actor-isolation 回归测试。 | 已落地（仅补回归测试） | 低 |
 | **P2** | applyAllInlineBlames 改批量 Scintilla API（一次 message 设多行 indicator） | 加载 | -30~50%（需 profile 确认 Scintilla 是否提供批量 API） | 中 | 中（依赖 Scintilla 实现，可能要扩 Vendor） |
 | **P2** | Workspace `objectWillChange.send()` 路径审计（确保非编辑路径不污染 Document 流） | 输入 | 减少不必要 SwiftUI redraw | 低 | 低 |
 | ~~P*~~ | ~~ColorScanner / ColorSwatch viewport-only~~ | — | ~~已平反，11ms @ 5MB~~ | — | — |
@@ -192,11 +192,21 @@
   - B-3 `htmlEscape` / `htmlEscapePreservingPlaceholders` UTF-8 字节扫 fast-path
   - B-4 `renderInline` 入口同样 fast-path
   - B-5 `isThematicBreak` 单 pass 重写（**单刀 -1 302ms**）
+- ✅ **D — phase 45-D：FindState query debounce（P1 #1）** — 2026-05-01 22:33 入仓
+  - 加 `@Published debouncedQuery`，由 `query` 经 150ms RunLoop.main debounce 派生
+  - `Coordinator+Find.refreshHighlightsIfNeeded` 改用 `debouncedQuery` 决定是否扫；`query.isEmpty` 仍立即清高亮
+  - `FindBar onChange(of: state.debouncedQuery)`（toggle 路径不动）
+  - 新增 `FindStateDebounceTests` 4 例
+  - 收益：连打 N 字符 → `highlightAllMatches` + `.findCurrent` 命令各 N 次 → 各 1 次
+- ✅ **E — phase 45-E：GitBlame 后台线程化勘验（P1 #2）** — 2026-05-02 入仓
+  - **核对结论**：生产代码早就把 `git blame` shell-out + porcelain 解析 + `currentUserName` 全部包在 `Task.detached(.userInitiated)` 内（`GitBlameEngine.request:83-97`）；仅 `handleResult` 的 dictionary fill 回 main actor。无 main-actor 阻塞瓶颈。
+  - 新增 `GitBlameEngineActorTests` 3 例 actor-isolation 回归保护：
+    - `test_request_doesNotSynchronouslyFillCache` — 同步窗口内 cache 必空
+    - `test_refresh_dropsCacheSyncAndReFetchesAsync` — refresh 同步清缓存 + 异步 re-fetch
+    - `test_request_inFlightCollapsesDuplicateCalls` — 5 次连发只 land 一次
 - ⏳ **下一战 — 等魔尊钦定**：
   - 转 P0 #2：InlineBlame visible-range 装饰（需先建 Scintilla NSView 测试 harness）
   - 转 P0 #3：flushDocSync 增量同步（同上）
-  - 转 P1 #1：FindState query debounce（低风险快赢）
-  - 转 P1 #2：GitBlame parsePorcelain 后台线程化
 - ⏳ **C — Instrument 手测**（Time Profiler / System Trace）— 仍待人工执行（agent 内不可跑）。
 
 
