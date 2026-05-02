@@ -31,6 +31,8 @@
 "sidebar.outline.parsing"     = "Parsing…";
 "sidebar.outline.empty"       = "No symbols in this file";
 "sidebar.outline.noDocument"  = "No document open";
+"sidebar.outline.filter.placeholder" = "Filter symbols";
+"sidebar.outline.filter.empty" = "No symbols match “%@”";
 
 // Source Control sidebar (Phase 35b-1)
 "sourceControl.empty.noFolder"   = "Open a folder to see Git changes.";
@@ -862,6 +864,7 @@
 "regex.status.matchCount" = "%lld match(es)";
 "button.close"          = "Close";
 "button.cancel"         = "Cancel";
+"button.clear"          = "Clear";
 
 // Palette — Regex
 "palette.command.regex.playground" = "Open Regex Playground…";

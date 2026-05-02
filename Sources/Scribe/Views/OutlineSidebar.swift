@@ -12,6 +12,14 @@ struct OutlineSidebar: View {
     @ObservedObject var outline: SymbolOutline
     @Environment(\.appTheme) private var appTheme
 
+    /// Phase 50a — substring filter for the visible symbol list. Lives
+    /// on the view (not on `SymbolOutline`) because it's a per-sidebar
+    /// UI state, not part of the parsed outline model — switching
+    /// documents shouldn't clobber a query the user typed elsewhere,
+    /// but it shouldn't survive a sidebar tab switch either, which is
+    /// exactly what `@State` gives us.
+    @State private var filterQuery: String = ""
+
     /// Symbol whose line range contains the editor caret. Drives the
     /// "you are here" highlight in OutlineRow. Cheapest sufficient
     /// algorithm: linear scan; symbol counts in real files top out
@@ -28,10 +36,25 @@ struct OutlineSidebar: View {
             .id
     }
 
+    /// Symbols rendered after the filter. The active-highlight still
+    /// reads from the unfiltered list so a row that scrolled out of
+    /// the filtered view doesn't fight with the caret indicator.
+    private var visibleSymbols: [SymbolEntry] {
+        Self.filterSymbols(outline.symbols, by: filterQuery)
+    }
+
+    private var trimmedQuery: String {
+        filterQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Divider()
+            if shouldShowFilterField {
+                filterRow
+                Divider()
+            }
             content
         }
         .background(appTheme.sidebarBackground)
@@ -54,7 +77,7 @@ struct OutlineSidebar: View {
             }
             Spacer()
             if !outline.symbols.isEmpty {
-                Text("\(outline.symbols.count)")
+                Text(symbolCountLabel)
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 7)
@@ -69,16 +92,60 @@ struct OutlineSidebar: View {
         .padding(.vertical, 8)
     }
 
+    /// Capsule shows the live "matched / total" pair while a filter
+    /// is active so the user can tell at a glance how aggressive the
+    /// filter is. Falls back to a plain count when no query is set.
+    private var symbolCountLabel: String {
+        if trimmedQuery.isEmpty {
+            return "\(outline.symbols.count)"
+        }
+        return "\(visibleSymbols.count)/\(outline.symbols.count)"
+    }
+
+    private var shouldShowFilterField: Bool {
+        // Only render the field when there's something to filter; an
+        // empty outline doesn't need the visual chrome.
+        !outline.symbols.isEmpty
+    }
+
+    private var filterRow: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .font(.system(size: 10))
+            TextField(L10n.t("sidebar.outline.filter.placeholder"),
+                      text: $filterQuery)
+                .textFieldStyle(.plain)
+                .font(.system(size: 11))
+            if !filterQuery.isEmpty {
+                Button {
+                    filterQuery = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                        .font(.system(size: 10))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("button.clear", bundle: .module))
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+    }
+
     @ViewBuilder
     private var content: some View {
         if workspace.current == nil {
             placeholder(L10n.t("sidebar.outline.noDocument"))
         } else if outline.symbols.isEmpty && !outline.isParsing {
             placeholder(L10n.t("sidebar.outline.empty"))
+        } else if visibleSymbols.isEmpty && !trimmedQuery.isEmpty {
+            placeholder(Self.format("sidebar.outline.filter.empty",
+                                    trimmedQuery))
         } else {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(outline.symbols) { sym in
+                    ForEach(visibleSymbols) { sym in
                         OutlineRow(symbol: sym, isActive: sym.id == activeSymbolID)
                             .onTapGesture { jump(to: sym) }
                     }
@@ -94,7 +161,9 @@ struct OutlineSidebar: View {
             Text(text)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
+                .padding(.horizontal, 16)
             Spacer()
         }
     }
@@ -107,6 +176,27 @@ struct OutlineSidebar: View {
     private func jump(to symbol: SymbolEntry) {
         guard let doc = workspace.current else { return }
         doc.pendingScroll = PendingScrollTarget(line: symbol.lineNumber)
+    }
+
+    // MARK: - Pure helpers
+
+    /// Phase 50a — substring + case-insensitive filter. Empty /
+    /// whitespace-only queries pass everything through; otherwise we
+    /// match against `symbol.name` only. Kind labels and line numbers
+    /// aren't searchable on purpose — tossing them into the haystack
+    /// would surface noise like "method" matching every Swift
+    /// function. Exposed as a `static` so XCTest can assert the
+    /// filter contract without standing up a SwiftUI body.
+    static func filterSymbols(_ symbols: [SymbolEntry],
+                              by query: String) -> [SymbolEntry] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return symbols }
+        let needle = trimmed.lowercased()
+        return symbols.filter { $0.name.lowercased().contains(needle) }
+    }
+
+    private static func format(_ key: String, _ args: CVarArg...) -> String {
+        String(format: L10n.t(key), arguments: args)
     }
 }
 

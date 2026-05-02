@@ -29,6 +29,8 @@
 "sidebar.outline.parsing"     = "正在解析…";
 "sidebar.outline.empty"       = "此文件没有符号";
 "sidebar.outline.noDocument"  = "未打开文档";
+"sidebar.outline.filter.placeholder" = "筛选符号";
+"sidebar.outline.filter.empty" = "没有匹配 “%@” 的符号";
 
 // 源代码管理侧栏 (Phase 35b-1)
 "sourceControl.empty.noFolder"   = "打开一个文件夹后可在此查看 Git 改动。";
@@ -859,6 +861,7 @@
 "regex.status.matchCount" = "%lld 处匹配";
 "button.close"          = "关闭";
 "button.cancel"         = "取消";
+"button.clear"          = "清空";
 
 // Palette — Regex
 "palette.command.regex.playground" = "打开正则演练场…";
