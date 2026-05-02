@@ -126,6 +126,16 @@ struct ScribeApp: App {
     /// enough to upset SwiftUI's view-builder type-checker.
     @MainActor
     private func bootstrap() {
+        // Phase 50b — seed the Command Palette MRU from disk before
+        // any palette opens so yesterday's "most recent" ordering
+        // shows up on the very first ⌘⇧P press. The write-back
+        // closure captures `prefs` weakly so a process exit during
+        // an in-flight invoke doesn't keep the StateObject alive.
+        commands.seedMRU(prefs.commandPaletteMRU)
+        commands.onMRUChange = { [weak prefs] mru in
+            prefs?.commandPaletteMRU = mru
+        }
+
         CommandRegistration.refresh(registry: commands,
                                     workspace: workspace,
                                     prefs: prefs,

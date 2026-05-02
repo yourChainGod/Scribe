@@ -121,12 +121,40 @@ final class CommandRegistry: ObservableObject {
     /// registry (every Phase < 11 caller).
     @Published var prefixRoutes: [PrefixRoute] = []
 
-    /// MRU stack of command IDs. Capped at 50; in-memory only for now —
-    /// persistence can come later if it proves useful.
-    private var mru: [String] = []
-    private let mruCap = 50
+    /// MRU stack of command IDs. Capped at `mruCap`. Phase 50b made
+    /// the contents persistable — the registry itself stays in
+    /// memory, but a host can seed via `seedMRU(_:)` on launch and
+    /// observe `onMRUChange` to write the array back to disk so a
+    /// fresh process keeps yesterday's ordering. The cap is exposed
+    /// publicly so persistence layers can defensively trim before
+    /// writing.
+    private(set) var mru: [String] = []
+    static let mruCap = 50
+
+    /// Phase 50b — fired after `bump()` mutates `mru`. Receives the
+    /// full new array so the host can persist verbatim. Default no-op
+    /// keeps tests + standalone usage trivial; production wires it
+    /// to `EditorPreferences.commandPaletteMRU`.
+    var onMRUChange: (([String]) -> Void)?
 
     // MARK: - Mutation
+
+    /// Phase 50b — replace the MRU stack from a persisted snapshot.
+    /// De-duplicates while preserving the first-seen position (the
+    /// stored array is already de-duped, but be defensive against
+    /// a manually-edited defaults blob) and clamps to `mruCap` so a
+    /// tampered store can't grow the in-memory cap. Does NOT trigger
+    /// `onMRUChange` — seeding from persisted state shouldn't echo
+    /// the same array back to disk.
+    func seedMRU(_ ids: [String]) {
+        var seen: Set<String> = []
+        var unique: [String] = []
+        for id in ids where seen.insert(id).inserted {
+            unique.append(id)
+            if unique.count >= Self.mruCap { break }
+        }
+        mru = unique
+    }
 
     func register(_ command: ScribeCommand) {
         commands.removeAll { $0.id == command.id }
@@ -160,7 +188,13 @@ final class CommandRegistry: ObservableObject {
     private func bump(_ id: String) {
         mru.removeAll { $0 == id }
         mru.insert(id, at: 0)
-        if mru.count > mruCap { mru = Array(mru.prefix(mruCap)) }
+        if mru.count > Self.mruCap { mru = Array(mru.prefix(Self.mruCap)) }
+        // Phase 50b — let the host (EditorPreferences) write the
+        // refreshed stack back to disk. Synchronous because callers
+        // expect the persisted value to be in lockstep with the
+        // in-memory one, and the work (an array<String> defaults
+        // write) is microseconds.
+        onMRUChange?(mru)
     }
 
     // MARK: - Search

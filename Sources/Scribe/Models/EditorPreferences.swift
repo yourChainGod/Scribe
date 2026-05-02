@@ -64,6 +64,12 @@ final class EditorPreferences: ObservableObject {
         // rather than scattered entries. Standardized-file-URL path
         // is the stable identity; Untitled docs never make it in.
         static let pinnedFilePaths = "editor.pinnedFilePaths"
+        // Phase 50b — Command Palette MRU stack. `CommandRegistry`
+        // seeds from this on launch and writes back after every
+        // invoke; stale IDs (commands that no longer exist on the
+        // next launch) sit harmlessly in the array since the
+        // ranking lookup returns `nil` for missing IDs.
+        static let commandPaletteMRU = "palette.commandMRU"
     }
 
     /// Phase 39a — translates raw values from the pre-39 theme
@@ -180,6 +186,18 @@ final class EditorPreferences: ObservableObject {
         }
     }
 
+    /// Phase 50b — persisted MRU stack of Command Palette command IDs.
+    /// `CommandRegistry` seeds from this on launch (via `seedMRU`)
+    /// and writes back after every `invoke()` so a fresh process
+    /// keeps yesterday's "most recent" ordering in the empty-query
+    /// list and the fuzzy-search bonus. The array is small (capped
+    /// at `CommandRegistry.mruCap`) and writes are infrequent —
+    /// human-rate `invoke` calls — so a `didSet` write per change
+    /// is cheaper than batching.
+    @Published var commandPaletteMRU: [String] {
+        didSet { defaults.set(commandPaletteMRU, forKey: Key.commandPaletteMRU) }
+    }
+
     /// Phase 39b — per-theme custom slot overrides. Sparse map: a
     /// missing `ThemeID` key means "no overrides for that preset",
     /// and an empty `ThemeOverrides.slots` should be cleaned up by
@@ -266,6 +284,13 @@ final class EditorPreferences: ObservableObject {
         // a corrupted defaults blob can't crash the Set init.
         let pinnedArray = defaults.stringArray(forKey: Key.pinnedFilePaths) ?? []
         self.pinnedFilePaths = Set(pinnedArray)
+
+        // Phase 50b — load persisted Command Palette MRU. Missing
+        // key ⇒ empty stack (first launch). Order is preserved
+        // exactly — index 0 is the most recently invoked command.
+        // CommandRegistry caps + de-duplicates on seed, so a
+        // tampered defaults blob can't grow the in-memory cap.
+        self.commandPaletteMRU = defaults.stringArray(forKey: Key.commandPaletteMRU) ?? []
 
         // Phase 39b — load per-theme override map. Silent fall-back
         // to empty map on decode failure (corrupted blob, future
