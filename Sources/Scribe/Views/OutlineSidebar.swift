@@ -143,15 +143,46 @@ struct OutlineSidebar: View {
             placeholder(Self.format("sidebar.outline.filter.empty",
                                     trimmedQuery))
         } else {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(visibleSymbols) { sym in
-                        OutlineRow(symbol: sym, isActive: sym.id == activeSymbolID)
-                            .onTapGesture { jump(to: sym) }
+            // Phase 50c — auto-reveal the active symbol whenever the
+            // caret crosses into a new row. Wrapping the ScrollView in
+            // a ScrollViewReader gives us `.scrollTo` for free, and
+            // ForEach's `Identifiable` rows act as the anchor targets
+            // — no extra `.id(_:)` modifier needed.
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(visibleSymbols) { sym in
+                            OutlineRow(symbol: sym, isActive: sym.id == activeSymbolID)
+                                .onTapGesture { jump(to: sym) }
+                        }
                     }
+                    .padding(.bottom, 12)
                 }
-                .padding(.bottom, 12)
+                .onChange(of: activeSymbolID) { _, newID in
+                    revealActive(newID, using: proxy)
+                }
+                // Outline gets re-parsed on every text edit; use this
+                // to also reveal the active row right after a fresh
+                // parse so a newly-loaded document doesn't open with
+                // the active row scrolled off-screen.
+                .onChange(of: outline.symbols.count) { _, _ in
+                    revealActive(activeSymbolID, using: proxy)
+                }
             }
+        }
+    }
+
+    /// Scrolls the outline so the active row sits in a sensible
+    /// anchor position. Pulled out of the `.onChange` body so the
+    /// callback stays one-liner short and the animation stays
+    /// consistent across both triggers.
+    private func revealActive(_ id: SymbolEntry.ID?,
+                              using proxy: ScrollViewProxy) {
+        guard let id else { return }
+        let anchor = Self.scrollAnchor(forActive: id,
+                                       in: outline.symbols)
+        withAnimation(.easeInOut(duration: 0.18)) {
+            proxy.scrollTo(id, anchor: anchor)
         }
     }
 
@@ -193,6 +224,22 @@ struct OutlineSidebar: View {
         guard !trimmed.isEmpty else { return symbols }
         let needle = trimmed.lowercased()
         return symbols.filter { $0.name.lowercased().contains(needle) }
+    }
+
+    /// Phase 50c — choose a scroll anchor for the active row. Edge
+    /// rows pin to the matching edge so the row doesn't slam into a
+    /// half-cropped position; everything else centres so the user
+    /// gets equal context above and below the symbol they're in.
+    /// Pure helper so the contract is exercised by XCTest without
+    /// instantiating SwiftUI scroll views.
+    static func scrollAnchor(forActive id: SymbolEntry.ID,
+                             in symbols: [SymbolEntry]) -> UnitPoint {
+        guard let idx = symbols.firstIndex(where: { $0.id == id }) else {
+            return .center
+        }
+        if idx == 0 { return .top }
+        if idx == symbols.count - 1 { return .bottom }
+        return .center
     }
 
     private static func format(_ key: String, _ args: CVarArg...) -> String {
