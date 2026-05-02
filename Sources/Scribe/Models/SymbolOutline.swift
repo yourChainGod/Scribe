@@ -62,7 +62,19 @@ final class SymbolOutline: ObservableObject {
             await MainActor.run {
                 guard let self else { return }
                 // Bail if a newer update has already overtaken us.
-                guard self.debounceTask?.isCancelled == false else { return }
+                //
+                // Note: we read `Task.isCancelled` of the enclosing
+                // task (the one that just woke up after `MainActor.run`
+                // scheduled this closure) rather than
+                // `self.debounceTask?.isCancelled`. The stored
+                // `debounceTask` has already been reassigned by the
+                // newer `update()` call by the time we land here, so
+                // checking its cancellation always reads a fresh
+                // uncancelled task and lets the stale result through —
+                // a bug that produced a one-frame flicker where the
+                // outline briefly showed the *old* document's symbols
+                // before settling on the current one.
+                guard !Task.isCancelled else { return }
                 self.symbols = result
                 self.lastDocID = docID
                 self.isParsing = false
