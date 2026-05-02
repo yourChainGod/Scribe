@@ -14,11 +14,21 @@ struct OutlineSidebar: View {
 
     /// Phase 50a — substring filter for the visible symbol list. Lives
     /// on the view (not on `SymbolOutline`) because it's a per-sidebar
-    /// UI state, not part of the parsed outline model — switching
-    /// documents shouldn't clobber a query the user typed elsewhere,
-    /// but it shouldn't survive a sidebar tab switch either, which is
-    /// exactly what `@State` gives us.
+    /// UI state, not part of the parsed outline model.
+    ///
+    /// Bug 3 fix — earlier the field deliberately survived document
+    /// switches; in practice a query like "load" typed against doc A
+    /// would carry over to doc B, where matching nothing made the
+    /// outline look empty even when doc B was full of symbols. Users
+    /// read this as "the new file has no outline" rather than
+    /// "I'm still filtering". Clearing on doc-switch matches what
+    /// VS Code, Xcode, and JetBrains all do.
     @State private var filterQuery: String = ""
+
+    /// Last document id this view rendered against. Drives the
+    /// "clear filter on doc switch" rule below. `@State` so SwiftUI
+    /// keeps it across body recompositions.
+    @State private var filterDocID: UUID?
 
     /// Symbol whose line range contains the editor caret. Drives the
     /// "you are here" highlight in OutlineRow. Cheapest sufficient
@@ -58,6 +68,18 @@ struct OutlineSidebar: View {
             content
         }
         .background(appTheme.sidebarBackground)
+        .onChange(of: workspace.current?.id) { _, newID in
+            // Bug 3 fix — clear the filter when the user moves to a
+            // different document. First-render and "doc closed → nil"
+            // intentionally don't clear (helper returns false) so a
+            // freshly-opened sidebar with no doc bound doesn't drop
+            // anything that wasn't there.
+            if Self.shouldClearFilter(currentDocID: newID,
+                                      lastDocID: filterDocID) {
+                filterQuery = ""
+            }
+            filterDocID = newID
+        }
     }
 
     // MARK: - Subviews
@@ -224,6 +246,21 @@ struct OutlineSidebar: View {
         guard !trimmed.isEmpty else { return symbols }
         let needle = trimmed.lowercased()
         return symbols.filter { $0.name.lowercased().contains(needle) }
+    }
+
+    /// Bug 3 — decide whether a document-switch should wipe the
+    /// outline filter query. Same id (re-render) ⇒ keep the query.
+    /// First binding (`lastDocID == nil`) ⇒ keep, since there's
+    /// nothing to "switch from". Doc closed (`currentDocID == nil`
+    /// while we had one) ⇒ keep — the filter field hides anyway in
+    /// the no-doc placeholder, and the user's text is still there
+    /// when they reopen something. Only a true A→B move clears.
+    /// Pure helper so XCTest can lock in the rule without standing
+    /// up the full sidebar view.
+    static func shouldClearFilter(currentDocID: UUID?,
+                                  lastDocID: UUID?) -> Bool {
+        guard let lastDocID, let currentDocID else { return false }
+        return currentDocID != lastDocID
     }
 
     /// Phase 50c — choose a scroll anchor for the active row. Edge
