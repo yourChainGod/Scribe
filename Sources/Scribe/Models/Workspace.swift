@@ -876,8 +876,8 @@ final class Workspace: ObservableObject {
     }
 
     func close(documentID: UUID) {
-        guard let idx = documents.firstIndex(where: { $0.id == documentID }) else { return }
-        let doc = documents[idx]
+        guard let initialIdx = documents.firstIndex(where: { $0.id == documentID }) else { return }
+        let doc = documents[initialIdx]
 
         if doc.isDirty {
             let alert = NSAlert()
@@ -891,8 +891,8 @@ final class Workspace: ObservableObject {
             switch alert.runModal() {
             case .alertFirstButtonReturn:
                 let didStartSave: Bool
-                if doc.url != nil {
-                    didStartSave = write(doc: doc, to: doc.url!)
+                if let url = doc.url {
+                    didStartSave = write(doc: doc, to: url)
                 } else {
                     didStartSave = saveAs(doc: doc)
                 }
@@ -913,7 +913,24 @@ final class Workspace: ObservableObject {
         if let url = doc.url?.standardizedFileURL {
             rememberClosed(url: url)
         }
-        documents.remove(at: idx)
+        // Bug 2 fix — `initialIdx` was captured before `runModal()`
+        // and before any background `openFile`/`applyLoadResult`
+        // could mutate the documents array. NSAlert's modal session
+        // pumps the main runloop, so a `Task.detached` that lands
+        // mid-modal (or any code path the user reaches via
+        // `application(_:open:)`) can append, remove, or reorder
+        // documents — leaving `initialIdx` pointing at the wrong
+        // tab or out of bounds. Re-locate by id right before the
+        // remove so we always strike the doc the user actually
+        // asked to close, never a neighbour that happened to slide
+        // into that index.
+        guard let liveIdx = documents.firstIndex(where: { $0.id == documentID }) else {
+            // Already gone (closed by another path while we were
+            // modal). Treat as a successful close — no re-removal.
+            if documents.isEmpty { newDocument() }
+            return
+        }
+        documents.remove(at: liveIdx)
         if selectedID == documentID {
             selectedID = documents.last?.id
         }
