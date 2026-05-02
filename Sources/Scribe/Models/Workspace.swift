@@ -904,4 +904,33 @@ final class Workspace: ObservableObject {
         }
         return nil
     }
+
+    /// Phase 48a — reopen a specific closed URL (as picked from the
+    /// "Recently Closed" submenu) instead of the stack top. Removes
+    /// the entry from `recentlyClosedURLs` so the menu stays in sync
+    /// with what's currently open. Missing files are silently dropped
+    /// rather than opened so the user isn't punished for Finder
+    /// racing us.
+    @discardableResult
+    func reopenClosed(url: URL) -> Bool {
+        let normalized = url.standardizedFileURL
+        guard let idx = recentlyClosedURLs.firstIndex(where: { $0 == normalized }) else {
+            return false
+        }
+        recentlyClosedURLs.remove(at: idx)
+        guard FileManager.default.fileExists(atPath: normalized.path) else {
+            return false
+        }
+        openFile(at: normalized)
+        return true
+    }
+
+    /// Phase 48a — empty the "Recently Closed" stack. Invoked from
+    /// the submenu's Clear action when the user wants a fresh slate
+    /// (e.g. after closing a stash of sensitive files they don't
+    /// want lingering in the menu surface).
+    func clearRecentlyClosed() {
+        guard !recentlyClosedURLs.isEmpty else { return }
+        recentlyClosedURLs.removeAll()
+    }
 }

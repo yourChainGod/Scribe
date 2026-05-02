@@ -259,6 +259,9 @@
 "menu.file.open"          = "打开…";
 "menu.file.openFolder"    = "打开文件夹…";
 "menu.file.reopenClosed"  = "重新打开已关闭的标签";
+"menu.file.recentlyClosed"      = "最近关闭";
+"menu.file.noRecentlyClosed"    = "暂无最近关闭的标签";
+"menu.file.clearRecentlyClosed" = "清空菜单";
 "menu.file.openRecent"        = "打开最近使用";
 "menu.file.openRecentFolder"  = "打开最近文件夹";
 "menu.file.openRecentClear"   = "清空菜单";

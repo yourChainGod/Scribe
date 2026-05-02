@@ -261,6 +261,9 @@
 "menu.file.open"          = "Open…";
 "menu.file.openFolder"    = "Open Folder…";
 "menu.file.reopenClosed"  = "Reopen Closed Tab";
+"menu.file.recentlyClosed"      = "Recently Closed";
+"menu.file.noRecentlyClosed"    = "No Recently Closed Tabs";
+"menu.file.clearRecentlyClosed" = "Clear Menu";
 "menu.file.openRecent"        = "Open Recent";
 "menu.file.openRecentFolder"  = "Open Recent Folder";
 "menu.file.openRecentClear"   = "Clear Menu";

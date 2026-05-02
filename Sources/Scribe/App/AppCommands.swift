@@ -50,6 +50,12 @@ struct ScribeCommands: Commands {
             }
             .keyboardShortcut("t", modifiers: [.command, .shift])
             .disabled(workspace.recentlyClosedURLs.isEmpty)
+            // Phase 48a — browse the full 10-slot reopen stack as a
+            // submenu. The keyboard shortcut above still targets the
+            // top of the stack for one-shot undo; the submenu is the
+            // pickable list when the user closed several tabs and
+            // wants a specific one back.
+            RecentlyClosedMenu(workspace: workspace)
             RecentFilesMenu(prefs: prefs, workspace: workspace)
             RecentFoldersMenu(prefs: prefs, workspace: workspace)
         }
@@ -487,6 +493,43 @@ struct RecentFilesMenu: View {
             }
         } label: {
             Text("menu.file.openRecent", bundle: .module)
+        }
+    }
+}
+
+/// Phase 48a — "Recently Closed" submenu. Walks the live
+/// `Workspace.recentlyClosedURLs` stack in newest-first order so the
+/// top entry in the visible list matches what ⌘⇧T would pop. Each
+/// row calls `reopenClosed(url:)` so it stays in sync with the
+/// stack (picking an entry removes it rather than duplicating the
+/// close-state). Clear action is gated on non-emptiness to match the
+/// pattern from the other recent submenus above.
+struct RecentlyClosedMenu: View {
+    @ObservedObject var workspace: Workspace
+
+    var body: some View {
+        Menu {
+            if workspace.recentlyClosedURLs.isEmpty {
+                Text("menu.file.noRecentlyClosed", bundle: .module)
+                    .foregroundStyle(.secondary)
+            } else {
+                // `recentlyClosedURLs` is maintained FIFO-ish with the
+                // newest entry at the tail (append + cap-trim-front),
+                // so reversing gives the user the freshest close at
+                // the top of the menu — same layout they expect from
+                // Chrome / Safari's "Recently Closed".
+                ForEach(Array(workspace.recentlyClosedURLs.reversed()), id: \.self) { url in
+                    Button(url.lastPathComponent) {
+                        workspace.reopenClosed(url: url)
+                    }
+                }
+                Divider()
+                Button {
+                    workspace.clearRecentlyClosed()
+                } label: { Text("menu.file.clearRecentlyClosed", bundle: .module) }
+            }
+        } label: {
+            Text("menu.file.recentlyClosed", bundle: .module)
         }
     }
 }
