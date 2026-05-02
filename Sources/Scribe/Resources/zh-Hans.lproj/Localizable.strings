@@ -407,6 +407,8 @@
 "tabContext.revealInFinder" = "在访达中显示";
 "tabContext.copyPath"       = "拷贝路径";
 
+"tabbar.pinDivider.tooltip" = "固定的标签";
+
 // MARK: - File tree context
 
 "fileTree.context.open"            = "打开";

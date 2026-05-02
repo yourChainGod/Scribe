@@ -12,11 +12,25 @@ struct TabBarView: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 2) {
-                ForEach(workspace.documents) { doc in
+                // Phase 48c — index-aware enumeration so the loop can
+                // drop a hairline separator between the trailing
+                // pinned tab and the leading unpinned tab. Without
+                // the cue the strip reads as one continuous run; the
+                // line gives the eye an anchor for the "pinned float
+                // to the front" invariant we established in Phase 46b.
+                // Boundary detection lives in `Workspace.pinBoundaryIndex`
+                // so the rule is unit-testable without a headless view
+                // harness.
+                let boundary = workspace.pinBoundaryIndex
+                ForEach(Array(workspace.documents.enumerated()), id: \.element.id) { idx, doc in
                     TabItem(doc: doc, isSelected: workspace.selectedID == doc.id)
                         .onTapGesture {
                             workspace.selectedID = doc.id
                         }
+                    if boundary == idx,
+                       idx + 1 < workspace.documents.count {
+                        TabBarPinSeparator()
+                    }
                 }
                 Spacer(minLength: 0)
             }
@@ -25,6 +39,23 @@ struct TabBarView: View {
         }
         .frame(height: 34)
         .background(appTheme.windowBackground)
+    }
+}
+
+/// Phase 48c — slim vertical bar that appears between the last
+/// pinned tab and the first unpinned tab. Mirrors the
+/// `StatusBarSeparator` styling used in the bottom strip so the
+/// chrome reads as one cohesive system.
+private struct TabBarPinSeparator: View {
+    @Environment(\.appTheme) private var appTheme
+
+    var body: some View {
+        Rectangle()
+            .fill(appTheme.separator.opacity(0.55))
+            .frame(width: 1, height: 22)
+            .padding(.horizontal, 4)
+            .help(L10n.t("tabbar.pinDivider.tooltip"))
+            .accessibilityLabel(L10n.t("tabbar.pinDivider.tooltip"))
     }
 }
 

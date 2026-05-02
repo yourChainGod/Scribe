@@ -108,6 +108,23 @@ final class Workspace: ObservableObject {
     /// bigger catalog).
     static let recentlyClosedCap: Int = 10
 
+    /// Phase 48c — index of the last pinned tab in `documents`, or
+    /// `nil` if nothing is pinned (or the document list is empty).
+    /// `TabBarView` reads this to know where to drop its pin/unpin
+    /// hairline separator; pulling the computation into the model
+    /// keeps the boundary rule in one place and makes it testable
+    /// without spinning up a headless NSView harness.
+    ///
+    /// Precondition: `resortByPin()` is the gatekeeper that keeps
+    /// pinned docs clustered at the head of the array, so
+    /// "last pinned" is equivalent to "boundary between pinned and
+    /// unpinned". If that invariant is ever violated the separator
+    /// still renders correctly next to the trailing pinned tab; it
+    /// just won't capture every pinned row.
+    var pinBoundaryIndex: Int? {
+        documents.lastIndex(where: { $0.isPinned })
+    }
+
     /// Phase 35b-4-d — open the Project Diff multibuffer, optionally
     /// anchored to a specific repo-relative path. Centralised so
     /// future entry points (command palette, menu bar, keyboard

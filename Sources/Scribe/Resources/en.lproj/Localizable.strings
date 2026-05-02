@@ -409,6 +409,8 @@
 "tabContext.revealInFinder" = "Reveal in Finder";
 "tabContext.copyPath"       = "Copy Path";
 
+"tabbar.pinDivider.tooltip" = "Pinned tabs";
+
 // MARK: - File tree context
 
 "fileTree.context.open"            = "Open";
