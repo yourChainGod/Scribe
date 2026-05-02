@@ -62,6 +62,10 @@
 - [x] Extend screenshot/smoke hooks to the Transform workbench mode.
 - [x] Run full gates after each phase: `swift test`, Swift 6 build, release build, localization check, `git diff --check`.
 
+## Scintilla bridge stability
+
+- [ ] **[crash]** `-[ScintillaView applicationDidBecomeActive:]` dereferences a freed delegate when `NSApplication` re-activates while an `NSOpenPanel` modal loop is winding down. Repro: osascript `tell app "Scribe" to open POSIX file "…"` while Scribe is presenting `Open Folder…`. Signal: `EXC_BAD_ACCESS` at 0x10 (typical "msgSend to dealloc'd object"). Stack: `NotifyParent → NotifyFocus → ActiveStateChanged`. Fix direction: guard the notification center handler with a `weak` check on the coordinator / delegate, or unregister for `NSApplicationDidBecomeActiveNotification` during teardown. **Pre-dates Phase 46; surfaced by UI automation during manual QA 2026-05-02.**
+
 ## Visual QA Queue
 
 - [ ] Rebuild `.app` only when no old `build/Scribe.app` session has unsaved state.
