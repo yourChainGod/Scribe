@@ -98,6 +98,68 @@ enum MarkdownConverter {
         return ctx.output.joined()
     }
 
+    /// Phase 51c — GitHub-flavoured heading slug. Lowercases the
+    /// title, replaces every run of "non slug-friendly" characters
+    /// with a single `-`, trims leading / trailing dashes, and
+    /// preserves Unicode letters / digits so a heading like
+    /// "## 安装步骤" still gets a meaningful id (Safari's URL
+    /// fragment resolver handles UTF-8 ids fine; the inline link
+    /// `[跳转](#安装步骤)` works without further encoding).
+    ///
+    /// Inline markdown markup inside the title (`**bold**`, `*em*`,
+    /// `` `code` ``) is stripped before slugging so a heading
+    /// `## **Setup** notes` and `## Setup notes` produce the same
+    /// `setup-notes` slug.
+    ///
+    /// Empty input returns the empty string; the per-render call
+    /// site `uniqueSlug(for:)` swaps that for `"section"` so the
+    /// emitted `id` attribute is always non-empty. Exposed as a
+    /// `static` so the test suite can pin the slug shape without
+    /// driving a full render.
+    static func headingSlug(_ title: String) -> String {
+        // Strip the most common inline markup so the slug isn't
+        // contaminated by the asterisks / backticks / link brackets
+        // the user wrote for emphasis. Underscores are NOT stripped
+        // here because they're legal slug characters (GitHub keeps
+        // them; `api_v2` should slug to `api_v2`, not `apiv2`).
+        var stripped = ""
+        stripped.reserveCapacity(title.count)
+        for ch in title where ch != "*" && ch != "`"
+            && ch != "[" && ch != "]" && ch != "(" && ch != ")" {
+            stripped.append(ch)
+        }
+        let lower = stripped.lowercased()
+        var out = ""
+        var lastWasDash = false
+        for ch in lower {
+            // Keep ASCII alnum, `-`, `_`, and any non-ASCII letter
+            // / digit (covers CJK, Cyrillic, Greek, accented
+            // Latin). Whitespace and ASCII punctuation collapse
+            // into a single dash separator.
+            let keep: Bool = {
+                if ch.isASCII {
+                    return ch.isLetter || ch.isNumber
+                        || ch == "-" || ch == "_"
+                }
+                return ch.isLetter || ch.isNumber
+            }()
+            if keep {
+                out.append(ch)
+                lastWasDash = false
+            } else if !lastWasDash, !out.isEmpty {
+                out.append("-")
+                lastWasDash = true
+            }
+        }
+        // Trim dashes at both ends. Leading dashes come from inputs
+        // like `---only---` where every leading character was a
+        // literal dash the user typed; trailing dashes come from
+        // the collapse above running off the end.
+        while out.hasPrefix("-") { out.removeFirst() }
+        while out.hasSuffix("-") { out.removeLast() }
+        return out
+    }
+
     // MARK: - Block-level state machine
 
     /// Carries the ongoing block while we scan line by line.
@@ -143,6 +205,13 @@ enum MarkdownConverter {
         /// load `rel/path.png` with a nil baseURL). nil = legacy
         /// behaviour, src kept verbatim.
         var baseDirectory: URL? = nil
+
+        /// Phase 51c — slugs used so far in this render. A repeat
+        /// heading title gets `-1`, `-2`, … appended to the slug so
+        /// every `id` in the document is unique and `[link](#title)`
+        /// always lands on the *first* occurrence (mirroring how
+        /// GitHub renders READMEs).
+        var usedSlugs: Set<String> = []
 
         mutating func process(line: String) {
             // Fenced-code mode short-circuits everything else: the
@@ -279,11 +348,15 @@ enum MarkdownConverter {
 
             // ATX heading: 1–6 leading #, then a space, then content.
             // Trailing # and whitespace are stripped per CommonMark.
+            // Phase 51c — also emit a unique `id` so anchor links
+            // (`[link](#title)`) and the in-app TOC work without
+            // a JS pass.
             if let (level, content) = matchHeading(trimmed) {
                 flushParagraph()
                 flushList()
                 flushBlockquote()
-                output.append("<h\(level)>")
+                let slug = uniqueSlug(for: content)
+                output.append("<h\(level) id=\"\(htmlEscape(slug))\">")
                 output.append(renderInline(content,
                                            footnoteRefs: footnoteRefs,
                                            baseDirectory: baseDirectory))
@@ -369,6 +442,25 @@ enum MarkdownConverter {
             flushList()
             flushBlockquote()
             paragraph.append(line)
+        }
+
+        /// Phase 51c — turn a heading title into a unique slug for
+        /// the `id` attribute. Delegates the slug shape to the
+        /// static helper (so tests can lock that contract in
+        /// isolation) and adds `-1`, `-2`, … if a doc has duplicate
+        /// titles. Empty / punctuation-only titles fall back to
+        /// "section" so the id attribute is always non-empty.
+        mutating func uniqueSlug(for title: String) -> String {
+            let base = MarkdownConverter.headingSlug(title)
+            let root = base.isEmpty ? "section" : base
+            if usedSlugs.insert(root).inserted {
+                return root
+            }
+            var n = 1
+            while !usedSlugs.insert("\(root)-\(n)").inserted {
+                n += 1
+            }
+            return "\(root)-\(n)"
         }
 
         mutating func flushAll() {

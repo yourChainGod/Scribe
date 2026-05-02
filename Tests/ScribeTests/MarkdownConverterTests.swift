@@ -16,10 +16,12 @@ final class MarkdownConverterTests: XCTestCase {
     // MARK: Headings
 
     func testHeadingsByLevel() {
+        // Phase 51c — every heading now carries a slug-based id
+        // attribute so anchor links work in the preview.
         for n in 1...6 {
             let prefix = String(repeating: "#", count: n)
             let html = MarkdownConverter.render("\(prefix) Title")
-            XCTAssertEqual(html, "<h\(n)>Title</h\(n)>\n")
+            XCTAssertEqual(html, "<h\(n) id=\"title\">Title</h\(n)>\n")
         }
     }
 
@@ -31,7 +33,7 @@ final class MarkdownConverterTests: XCTestCase {
 
     func testHeadingTrailingHashesStripped() {
         let html = MarkdownConverter.render("## Heading ##")
-        XCTAssertEqual(html, "<h2>Heading</h2>\n")
+        XCTAssertEqual(html, "<h2 id=\"heading\">Heading</h2>\n")
     }
 
     // MARK: Paragraphs + soft / hard breaks
@@ -254,8 +256,8 @@ final class MarkdownConverterTests: XCTestCase {
         ```
         """
         let html = MarkdownConverter.render(md)
-        XCTAssertTrue(html.contains("<h1>Title</h1>"))
-        XCTAssertTrue(html.contains("<h2>Sub</h2>"))
+        XCTAssertTrue(html.contains("<h1 id=\"title\">Title</h1>"))
+        XCTAssertTrue(html.contains("<h2 id=\"sub\">Sub</h2>"))
         XCTAssertTrue(html.contains("<strong>bold</strong>"))
         XCTAssertTrue(html.contains("<code>code</code>"))
         XCTAssertTrue(html.contains("<ul>"))
@@ -280,7 +282,7 @@ final class MarkdownConverterTests: XCTestCase {
         // Windows-saved README: same output as LF source.
         let md = "# Title\r\n\r\nbody"
         let html = MarkdownConverter.render(md)
-        XCTAssertEqual(html, "<h1>Title</h1>\n<p>body</p>\n")
+        XCTAssertEqual(html, "<h1 id=\"title\">Title</h1>\n<p>body</p>\n")
     }
 
     func testUnclosedFenceStillCloses() {
