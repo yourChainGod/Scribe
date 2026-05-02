@@ -89,9 +89,24 @@ struct FindBar: View {
                     return .handled
                 }
 
-            optionToggle("Aa", help: L10n.t("find.option.matchCase"), binding: $state.matchCase)
-            optionToggle("ab\u{2009}|", help: L10n.t("find.option.wholeWord"), binding: $state.wholeWord)
-            optionToggle(".*", help: L10n.t("find.option.regex"), binding: $state.regex)
+            optionToggle(
+                "Aa",
+                help: L10n.t("find.option.matchCase") + FindOptionShortcuts.helpSuffix(for: .matchCase),
+                binding: $state.matchCase
+            )
+            .findOptionShortcut(for: .matchCase)
+            optionToggle(
+                "ab\u{2009}|",
+                help: L10n.t("find.option.wholeWord") + FindOptionShortcuts.helpSuffix(for: .wholeWord),
+                binding: $state.wholeWord
+            )
+            .findOptionShortcut(for: .wholeWord)
+            optionToggle(
+                ".*",
+                help: L10n.t("find.option.regex") + FindOptionShortcuts.helpSuffix(for: .regex),
+                binding: $state.regex
+            )
+            .findOptionShortcut(for: .regex)
 
             // Spacer first so the status sticks to the right next to
             // the navigation buttons, like Xcode / VSCode.

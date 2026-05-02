@@ -77,9 +77,24 @@ struct FindInFilesSidebar: View {
             // between the two so it reads as "in flight" without
             // making the layout reflow.
             HStack(spacing: 4) {
-                optionToggle("Aa", help: L10n.t("find.option.matchCase"), binding: $find.matchCase)
-                optionToggle("ab\u{2009}|", help: L10n.t("find.option.wholeWord"), binding: $find.wholeWord)
-                optionToggle(".*", help: L10n.t("find.option.regex"), binding: $find.regex)
+                optionToggle(
+                    "Aa",
+                    help: L10n.t("find.option.matchCase") + FindOptionShortcuts.helpSuffix(for: .matchCase),
+                    binding: $find.matchCase
+                )
+                .findOptionShortcut(for: .matchCase)
+                optionToggle(
+                    "ab\u{2009}|",
+                    help: L10n.t("find.option.wholeWord") + FindOptionShortcuts.helpSuffix(for: .wholeWord),
+                    binding: $find.wholeWord
+                )
+                .findOptionShortcut(for: .wholeWord)
+                optionToggle(
+                    ".*",
+                    help: L10n.t("find.option.regex") + FindOptionShortcuts.helpSuffix(for: .regex),
+                    binding: $find.regex
+                )
+                .findOptionShortcut(for: .regex)
                 Spacer()
                 if find.isSearching || find.isReplacing {
                     ProgressView()
