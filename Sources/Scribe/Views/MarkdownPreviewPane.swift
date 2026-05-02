@@ -95,6 +95,14 @@ struct MarkdownPreviewPane: NSViewRepresentable {
     /// path — but those buffers don't live on disk anyway, so there's
     /// nothing to resolve).
     let baseDirectory: URL?
+    /// Phase 51e — 1-based caret line, fed by `Document.cursorLine`.
+    /// When this changes between updateNSView ticks we run a small JS
+    /// helper inside the preview that picks the heading whose source
+    /// line is the largest one ≤ caret and scrolls it into view. Kept
+    /// optional so non-document contexts (preview tests, scratch
+    /// renders) can opt out by passing nil — the preview just won't
+    /// follow caret moves in that case.
+    var cursorLine: Int? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -128,19 +136,33 @@ struct MarkdownPreviewPane: NSViewRepresentable {
     }
 
     func updateNSView(_ view: WKWebView, context: Context) {
-        // Skip the reload when nothing changed — mostly a no-op since
-        // updateNSView already fires only on @State / @Environment
-        // changes, but cheap insurance against a future re-arrange.
-        if context.coordinator.cachedMarkdown == markdown,
-           context.coordinator.cachedIsDark == isDark {
+        let coord = context.coordinator
+        // Phase 51e — caret-only changes (markdown unchanged, theme
+        // unchanged) take a third, even cheaper path: just fire the
+        // reveal-line JS helper. No re-render, no innerHTML swap.
+        // Guarded behind hasInitialLoad so we don't try to call into
+        // a window that hasn't loaded the helper yet — the next full
+        // reload will publish it and the caret reveal will catch up
+        // on the subsequent tick.
+        if coord.cachedMarkdown == markdown,
+           coord.cachedIsDark == isDark {
+            if let line = cursorLine,
+               coord.hasInitialLoad,
+               coord.lastCursorLine != line {
+                coord.lastCursorLine = line
+                view.evaluateJavaScript("window.scribeRevealLine && scribeRevealLine(\(line));",
+                                        completionHandler: nil)
+            }
             return
         }
-        loadHTML(into: view, coordinator: context.coordinator)
+        loadHTML(into: view, coordinator: coord)
     }
 
     private func loadHTML(into view: WKWebView, coordinator: Coordinator) {
         let body = MarkdownConverter.render(markdown,
                                             baseDirectory: baseDirectory)
+        let headings = Self.extractHeadings(markdown)
+        let tocHTML = Self.renderTOC(headings)
         // Phase 51b — three distinct paths:
         //   1. first render OR theme flipped → full loadHTMLString
         //      (we need a fresh CSS generation and a clean shell)
@@ -150,14 +172,21 @@ struct MarkdownPreviewPane: NSViewRepresentable {
         //      earlier, but if we get here we still skip the work
         if coordinator.hasInitialLoad,
            coordinator.cachedIsDark == isDark {
-            injectBody(body, into: view, coordinator: coordinator)
+            injectBody(body,
+                       tocHTML: tocHTML,
+                       headings: headings,
+                       into: view,
+                       coordinator: coordinator)
             return
         }
         let html = Self.wrap(body: body, isDark: isDark,
-                             scrollY: coordinator.lastScrollY)
+                             scrollY: coordinator.lastScrollY,
+                             tocHTML: tocHTML,
+                             headings: headings)
         view.loadHTMLString(html, baseURL: nil)
         coordinator.cachedMarkdown = markdown
         coordinator.cachedIsDark = isDark
+        if let line = cursorLine { coordinator.lastCursorLine = line }
     }
 
     /// Phase 51b — incremental body swap. Builds a JS statement that
@@ -168,16 +197,29 @@ struct MarkdownPreviewPane: NSViewRepresentable {
     /// reload path via `loadHTMLString` so the preview can never
     /// end up stranded on stale content.
     private func injectBody(_ body: String,
+                            tocHTML: String,
+                            headings: [PreviewHeading],
                             into view: WKWebView,
                             coordinator: Coordinator) {
-        let jsBody = Self.jsStringLiteral(body)
+        // Phase 51e — the JS injection path also has to re-publish the
+        // heading line→id map, otherwise a freshly-typed heading
+        // wouldn't be reachable via `scribeRevealLine`. Easiest: pack
+        // the new map into `window.__scribeHeadings` *before* the
+        // innerHTML swap, so the ordering invariant the reveal helper
+        // relies on (sorted by `l`) holds even if the user hits a
+        // caret move on the same runloop tick.
+        let jsBody = Self.jsStringLiteral(tocHTML + body)
+        let headingsLiteral = headings.map { h in
+            "{l:\(h.line),i:\"\(Self.jsStringEscape(h.slug))\"}"
+        }.joined(separator: ",")
         // Phase 51d — after the innerHTML swap, re-run hljs against
         // every `<pre><code>` in the freshly-injected tree so newly
         // added code blocks pick up colour tokens. `try/catch` keeps
         // a hljs grammar-not-found from aborting the rest of the JS
         // (it shouldn't, but fenced blocks with unknown hints are
         // common enough that we're defensive).
-        let js = "var _r = document.getElementById('md-root'); "
+        let js = "window.__scribeHeadings = [\(headingsLiteral)]; "
+            + "var _r = document.getElementById('md-root'); "
             + "if (_r) { _r.innerHTML = \(jsBody); "
             + "if (window.hljs) { "
             + "_r.querySelectorAll('pre code').forEach(function (b) { "
@@ -188,7 +230,9 @@ struct MarkdownPreviewPane: NSViewRepresentable {
         // on the error path. The string cost is a one-off copy and
         // it's only materialised if we take the fallback.
         let fallbackHTML = Self.wrap(body: body, isDark: isDark,
-                                     scrollY: coordinator.lastScrollY)
+                                     scrollY: coordinator.lastScrollY,
+                                     tocHTML: tocHTML,
+                                     headings: headings)
         // Optimistically cache the source *before* the JS round-trip:
         // the injection is synchronous on the WebKit side and we want
         // the next updateNSView tick (which may fire in the same run
@@ -265,12 +309,214 @@ struct MarkdownPreviewPane: NSViewRepresentable {
         return String(array.dropFirst().dropLast())
     }
 
+    // MARK: - Phase 51e · heading scan / TOC / scroll sync
+
+    /// One ATX heading discovered in the markdown source. The
+    /// converter generates the body HTML; we generate the heading
+    /// list independently so we don't have to widen the converter's
+    /// return type. Both walks agree on the same slug rules
+    /// (`MarkdownConverter.headingSlug` + the dedup pass) so the
+    /// `id` we point at always exists in the rendered DOM.
+    struct PreviewHeading: Equatable {
+        /// 1-based source line — matches `Document.cursorLine`.
+        let line: Int
+        /// 1…6, mirrors the H1–H6 level the converter emits.
+        let level: Int
+        /// GitHub-style slug; first occurrence has no suffix, then
+        /// `-1`, `-2`… per Phase 51c rules.
+        let slug: String
+        /// Plain-text heading title (with markup stripped) — the
+        /// label we show inside the inline TOC.
+        let title: String
+    }
+
+    /// Walk the markdown source and surface every ATX heading
+    /// (`#…######` prefix, leading-space tolerant) outside fenced
+    /// code blocks. Setext headings (`==== / ----`) are out of scope —
+    /// the converter doesn't recognise them either, so we'd be
+    /// pointing at slugs that don't exist in the DOM if we did.
+    ///
+    /// Fence handling matches what `MarkdownConverter` does: a line
+    /// whose trimmed prefix is ```` ``` ```` or `~~~` toggles us in/out
+    /// of a code block, and inside a code block any leading `#` is
+    /// data, not a heading.
+    static func extractHeadings(_ markdown: String) -> [PreviewHeading] {
+        var out: [PreviewHeading] = []
+        var seen: [String: Int] = [:]
+        var inFence = false
+        var fenceMarker: Character = "`"
+        // Walk by line index so we don't lose blank lines (which
+        // Substring.split(omittingEmptySubsequences: false) preserves).
+        // Normalise CRLF / CR to LF first so a Windows-line-ended file
+        // doesn't produce ghost empty lines that throw off our 1-based
+        // source-line numbering vs `Document.cursorLine`.
+        let normalized = markdown
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+        let lines = normalized.split(separator: "\n",
+                                     omittingEmptySubsequences: false)
+        for (idx, raw) in lines.enumerated() {
+            let line = String(raw)
+            // Trim leading whitespace for fence + heading detection.
+            // CommonMark allows up to 3 leading spaces before either
+            // construct; we accept any leading whitespace because
+            // the converter is permissive there too.
+            let trimmed = line.drop(while: { $0 == " " || $0 == "\t" })
+            // Fence toggle: any run of 3+ backticks or tildes opens
+            // or closes a code block. We track the marker so a `~~~`
+            // open isn't accidentally closed by a later ```` ``` ````.
+            if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
+                let marker = trimmed.first!
+                if inFence {
+                    if marker == fenceMarker { inFence = false }
+                } else {
+                    inFence = true
+                    fenceMarker = marker
+                }
+                continue
+            }
+            if inFence { continue }
+            // ATX heading: 1–6 hashes, then required whitespace,
+            // then content. Optional trailing `###` is stripped.
+            guard trimmed.hasPrefix("#") else { continue }
+            var hashCount = 0
+            for ch in trimmed {
+                if ch == "#" {
+                    hashCount += 1
+                    if hashCount > 6 { break }
+                } else { break }
+            }
+            guard hashCount >= 1, hashCount <= 6 else { continue }
+            let afterHashes = trimmed.dropFirst(hashCount)
+            // Need at least one whitespace separator. `# foo` is a
+            // heading; `#foo` is just a paragraph that starts with
+            // a hash sign (per CommonMark).
+            guard let first = afterHashes.first,
+                  first == " " || first == "\t" else { continue }
+            // Strip leading/trailing whitespace + trailing closing
+            // hashes (`# foo #` form).
+            var title = String(afterHashes.drop(while: { $0 == " " || $0 == "\t" }))
+            while let last = title.last,
+                  last == " " || last == "\t" || last == "#" {
+                title.removeLast()
+            }
+            title = title.trimmingCharacters(in: .whitespaces)
+            guard !title.isEmpty else { continue }
+            // Slug + dedup mirrors MarkdownConverter.uniqueSlug.
+            let baseSlug = MarkdownConverter.headingSlug(title)
+            let n = seen[baseSlug, default: 0]
+            seen[baseSlug] = n + 1
+            let slug = n == 0 ? baseSlug : "\(baseSlug)-\(n)"
+            out.append(PreviewHeading(line: idx + 1,
+                                      level: hashCount,
+                                      slug: slug,
+                                      title: title))
+        }
+        return out
+    }
+
+    /// Build the inline `<nav class="md-toc">` block. Only emitted
+    /// when there are at least 3 headings (a doc with one or two
+    /// headings doesn't benefit from a TOC and the chrome would be
+    /// noise). H4–H6 are dropped from the TOC even if they appear
+    /// in the body — past three indent levels it gets unreadable.
+    /// Returns an empty string when no TOC should ship; `wrap`
+    /// then prepends nothing.
+    static func renderTOC(_ headings: [PreviewHeading]) -> String {
+        let visible = headings.filter { $0.level <= 3 }
+        guard visible.count >= 3 else { return "" }
+        var out = #"<nav class="md-toc"><div class="md-toc-title">"#
+        out += L10n.t("preview.toc.title")
+        out += "</div><ul>"
+        for h in visible {
+            // Bump the raw-string delimiter to `##"…"##` because the
+            // anchor `href="#…"` contains a literal `"#` sequence that
+            // would otherwise close a single-`#` raw string early.
+            out += ##"<li class="md-toc-l\##(h.level)"><a href="#\##(h.slug)">"##
+            out += htmlEscape(h.title)
+            out += "</a></li>"
+        }
+        out += "</ul></nav>"
+        return out
+    }
+
+    /// Inline `<script>` that publishes the heading line→id map and
+    /// defines the `scribeRevealLine` helper the caret-sync path
+    /// fires on every cursor move. The map is regenerated on every
+    /// shell rebuild (full reload) and re-published on every JS
+    /// injection (so headings added / removed mid-edit stay accurate).
+    static func revealLineScript(headings: [PreviewHeading]) -> String {
+        let pairs = headings.map { h in
+            "{l:\(h.line),i:\"\(jsStringEscape(h.slug))\"}"
+        }.joined(separator: ",")
+        return """
+        <script>
+          window.__scribeHeadings = [\(pairs)];
+          window.scribeRevealLine = function (line) {
+            var hs = window.__scribeHeadings || [];
+            var best = null;
+            for (var i = 0; i < hs.length; i++) {
+              if (hs[i].l <= line) { best = hs[i]; } else { break; }
+            }
+            if (!best) return false;
+            var el = document.getElementById(best.i);
+            if (!el) return false;
+            el.scrollIntoView({block: 'start', behavior: 'auto'});
+            return true;
+          };
+        </script>
+        """
+    }
+
+    /// Same input/output contract as `jsStringLiteral` but without
+    /// the surrounding quotes — for embedding inside a JS object
+    /// literal we emit ourselves. Limited to the characters that
+    /// appear inside slugs (ASCII alnum, dashes, occasional CJK)
+    /// so the simple replacement table is sufficient.
+    private static func jsStringEscape(_ s: String) -> String {
+        var out = ""
+        out.reserveCapacity(s.count)
+        for ch in s {
+            switch ch {
+            case "\\": out += "\\\\"
+            case "\"": out += "\\\""
+            case "\n": out += "\\n"
+            case "\r": out += "\\r"
+            case "\u{2028}": out += "\\u2028"
+            case "\u{2029}": out += "\\u2029"
+            default:   out.append(ch)
+            }
+        }
+        return out
+    }
+
+    /// Minimal HTML escape for TOC link text. The converter has its
+    /// own (richer) escaper; we don't want to pull a private helper
+    /// across the module boundary, and TOC titles only need the
+    /// big four substitutions.
+    private static func htmlEscape(_ s: String) -> String {
+        var out = ""
+        out.reserveCapacity(s.count)
+        for ch in s {
+            switch ch {
+            case "&": out += "&amp;"
+            case "<": out += "&lt;"
+            case ">": out += "&gt;"
+            case "\"": out += "&quot;"
+            default:  out.append(ch)
+            }
+        }
+        return out
+    }
+
     /// Build a complete `<html>` document around the converter's body
     /// fragment. CSS pulled in-line so the preview is fully self-
     /// contained — no network, no resource bundle, no FOUC.
     private static func wrap(body: String,
                              isDark: Bool,
-                             scrollY: CGFloat) -> String {
+                             scrollY: CGFloat,
+                             tocHTML: String = "",
+                             headings: [PreviewHeading] = []) -> String {
         // We hard-code the colour palette per scheme rather than
         // relying on prefers-color-scheme alone so the editor's theme
         // toggle controls the preview too.
@@ -435,12 +681,50 @@ struct MarkdownPreviewPane: NSViewRepresentable {
           ::selection {
             background: \(isDark ? "#264f78" : "#cce5ff");
           }
+          /* Phase 51e — inline TOC. Sits at the top of #md-root,
+             so JS injection (which replaces #md-root.innerHTML)
+             rebuilds it together with the body. The list is
+             indent-styled per heading level rather than nested
+             so the slug→`<li>` lookup stays trivial. */
+          nav.md-toc {
+            border: 1px solid \(border);
+            border-radius: 6px;
+            padding: 12px 16px;
+            margin: 0 0 24px 0;
+            background: \(codeBg);
+            font-size: 0.9em;
+          }
+          nav.md-toc .md-toc-title {
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: \(muted);
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            font-size: 0.85em;
+          }
+          nav.md-toc ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+          }
+          nav.md-toc li { margin: 2px 0; }
+          nav.md-toc a {
+            text-decoration: none;
+            color: \(fg);
+          }
+          nav.md-toc a:hover {
+            text-decoration: underline;
+            color: \(link);
+          }
+          nav.md-toc li.md-toc-l2 { padding-left: 16px; }
+          nav.md-toc li.md-toc-l3 { padding-left: 32px; font-size: 0.95em; }
         </style>
         <style>\(hlThemeCSS)</style>
         <script>\(highlightJSAsset)</script>
+        \(Self.revealLineScript(headings: headings))
         </head>
         <body>
-        <div id="md-root">\(body)</div>
+        <div id="md-root">\(tocHTML)\(body)</div>
         \(restore)
         </body>
         </html>
@@ -464,6 +748,11 @@ struct MarkdownPreviewPane: NSViewRepresentable {
         /// `didFinish` we MUST take the full-reload branch because
         /// `document.getElementById('md-root')` is null.
         var hasInitialLoad: Bool = false
+        /// Phase 51e — last 1-based source line we asked the preview to
+        /// reveal. Updated by `updateNSView` whenever the caret moves so
+        /// we don't fire a JS round-trip per re-render when the line is
+        /// the same as last tick.
+        var lastCursorLine: Int = -1
 
         // The user clicked an `<a href="…">`. We never want WKWebView
         // to actually navigate (then the preview would go blank); we

@@ -66,7 +66,13 @@ private struct DocumentEditorPane: View {
                     MarkdownPreviewPane(
                         markdown: doc.text,
                         isDark: colorScheme == .dark,
-                        baseDirectory: doc.url?.deletingLastPathComponent()
+                        baseDirectory: doc.url?.deletingLastPathComponent(),
+                        // Phase 51e — caret line drives the
+                        // preview's scroll-to-nearest-heading
+                        // behaviour. Document publishes 1-based
+                        // line numbers; preview agrees on that
+                        // convention with extractHeadings.
+                        cursorLine: doc.cursorLine
                     )
                     .frame(minWidth: 260)
                 }

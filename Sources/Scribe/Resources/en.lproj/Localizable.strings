@@ -34,6 +34,9 @@
 "sidebar.outline.filter.placeholder" = "Filter symbols";
 "sidebar.outline.filter.empty" = "No symbols match “%@”";
 
+// Markdown preview (Phase 51e)
+"preview.toc.title" = "On this page";
+
 // Source Control sidebar (Phase 35b-1)
 "sourceControl.empty.noFolder"   = "Open a folder to see Git changes.";
 "sourceControl.empty.notInRepo"  = "This folder isn’t inside a Git repository.";

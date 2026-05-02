@@ -32,6 +32,9 @@
 "sidebar.outline.filter.placeholder" = "筛选符号";
 "sidebar.outline.filter.empty" = "没有匹配 “%@” 的符号";
 
+// Markdown 预览 (Phase 51e)
+"preview.toc.title" = "本页目录";
+
 // 源代码管理侧栏 (Phase 35b-1)
 "sourceControl.empty.noFolder"   = "打开一个文件夹后可在此查看 Git 改动。";
 "sourceControl.empty.notInRepo"  = "此文件夹不在 Git 仓库里。";
