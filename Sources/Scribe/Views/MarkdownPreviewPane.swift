@@ -31,6 +31,15 @@ struct MarkdownPreviewPane: NSViewRepresentable {
     /// matches the editor theme even when `prefers-color-scheme` would
     /// disagree (e.g. user picked Solarized Light on a dark system).
     let isDark: Bool
+    /// Phase 51a — on-disk parent of the markdown file. Threaded into
+    /// `MarkdownConverter.render` so relative `![](rel/img.png)` and
+    /// `[other](./other.md)` references resolve to absolute `file:///`
+    /// URLs that WKWebView can actually load. Untitled / scratch
+    /// markdown buffers pass `nil` and keep the legacy raw-src
+    /// behaviour (broken-image icon if they reference a relative
+    /// path — but those buffers don't live on disk anyway, so there's
+    /// nothing to resolve).
+    let baseDirectory: URL?
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -59,7 +68,8 @@ struct MarkdownPreviewPane: NSViewRepresentable {
     }
 
     private func loadHTML(into view: WKWebView, coordinator: Coordinator) {
-        let body = MarkdownConverter.render(markdown)
+        let body = MarkdownConverter.render(markdown,
+                                            baseDirectory: baseDirectory)
         let html = Self.wrap(body: body, isDark: isDark,
                              scrollY: coordinator.lastScrollY)
         view.loadHTMLString(html, baseURL: nil)

@@ -59,9 +59,16 @@ private struct DocumentEditorPane: View {
                 // an unreadable strip.
                 HSplitView {
                     editor
-                    MarkdownPreviewPane(markdown: doc.text,
-                                        isDark: colorScheme == .dark)
-                        .frame(minWidth: 260)
+                    // Phase 51a — `doc.url?.deletingLastPathComponent()`
+                    // is the on-disk parent we resolve relative
+                    // image / link refs against. Untitled buffers
+                    // pass nil and keep the legacy raw-src path.
+                    MarkdownPreviewPane(
+                        markdown: doc.text,
+                        isDark: colorScheme == .dark,
+                        baseDirectory: doc.url?.deletingLastPathComponent()
+                    )
+                    .frame(minWidth: 260)
                 }
             } else {
                 editor

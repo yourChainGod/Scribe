@@ -54,7 +54,19 @@ enum MarkdownConverter {
     /// inner HTML of `<body>` — no `<html>` / `<body>` wrapper, no
     /// trailing newline. The caller (the WKWebView pane) wraps it
     /// in a styled HTML document.
-    static func render(_ markdown: String) -> String {
+    ///
+    /// Phase 51a — `baseDirectory` is the on-disk parent of the
+    /// markdown file; relative `![](rel/img.png)` sources are
+    /// rewritten to `file:///abs/rel/img.png` so WKWebView can
+    /// actually load them. nil ⇒ legacy behaviour (raw src kept
+    /// verbatim, broken-image icon if it's relative).
+    ///
+    /// Phase 51c — heading anchors. Each rendered `<hN>` gets a
+    /// GitHub-flavoured slug as its `id` so `[link](#title)` works.
+    /// Slug uniqueness is per-render: a doc with two identical
+    /// headings emits `id="title"` and `id="title-1"`.
+    static func render(_ markdown: String,
+                       baseDirectory: URL? = nil) -> String {
         // Normalise line endings so our linewise scan doesn't
         // blow up on Windows-saved CRLF or classic-Mac CR docs.
         let normalised = markdown
@@ -68,6 +80,7 @@ enum MarkdownConverter {
         let prep = extractFootnotes(from: normalised)
         var ctx = BlockContext()
         ctx.footnoteRefs = prep.refs
+        ctx.baseDirectory = baseDirectory
         for line in prep.body.split(separator: "\n",
                                     omittingEmptySubsequences: false) {
             ctx.process(line: String(line))
@@ -79,7 +92,8 @@ enum MarkdownConverter {
         // as literal text (the inline pass treats them as such).
         if !prep.orderedRefs.isEmpty {
             ctx.output.append(renderFootnoteSection(refs: prep.orderedRefs,
-                                                    defs: prep.defs))
+                                                    defs: prep.defs,
+                                                    baseDirectory: baseDirectory))
         }
         return ctx.output.joined()
     }
@@ -122,6 +136,13 @@ enum MarkdownConverter {
         // BlockContext doesn't need to mutate state from inside
         // `renderInline`.
         var footnoteRefs: [String: Int] = [:]
+
+        /// Phase 51a — on-disk parent of the markdown file. Threaded
+        /// through to `renderInline` so relative image sources can be
+        /// rewritten to absolute `file:///` URLs (WKWebView can't
+        /// load `rel/path.png` with a nil baseURL). nil = legacy
+        /// behaviour, src kept verbatim.
+        var baseDirectory: URL? = nil
 
         mutating func process(line: String) {
             // Fenced-code mode short-circuits everything else: the
@@ -263,7 +284,9 @@ enum MarkdownConverter {
                 flushList()
                 flushBlockquote()
                 output.append("<h\(level)>")
-                output.append(renderInline(content, footnoteRefs: footnoteRefs))
+                output.append(renderInline(content,
+                                           footnoteRefs: footnoteRefs,
+                                           baseDirectory: baseDirectory))
                 output.append("</h\(level)>\n")
                 return
             }
@@ -281,7 +304,9 @@ enum MarkdownConverter {
                     inBlockquote = true
                 }
                 output.append("<p>")
-                output.append(renderInline(inner, footnoteRefs: footnoteRefs))
+                output.append(renderInline(inner,
+                                           footnoteRefs: footnoteRefs,
+                                           baseDirectory: baseDirectory))
                 output.append("</p>\n")
                 return
             }
@@ -306,12 +331,14 @@ enum MarkdownConverter {
                         + "<input type=\"checkbox\" disabled\(checkedAttr)/> "
                     )
                     output.append(renderInline(task.content,
-                                               footnoteRefs: footnoteRefs))
+                                               footnoteRefs: footnoteRefs,
+                                               baseDirectory: baseDirectory))
                     output.append("</li>\n")
                 } else {
                     output.append("<li>")
                     output.append(renderInline(item,
-                                               footnoteRefs: footnoteRefs))
+                                               footnoteRefs: footnoteRefs,
+                                               baseDirectory: baseDirectory))
                     output.append("</li>\n")
                 }
                 return
@@ -327,7 +354,9 @@ enum MarkdownConverter {
                     list = "ol"
                 }
                 output.append("<li>")
-                output.append(renderInline(item, footnoteRefs: footnoteRefs))
+                output.append(renderInline(item,
+                                           footnoteRefs: footnoteRefs,
+                                           baseDirectory: baseDirectory))
                 output.append("</li>\n")
                 return
             }
@@ -379,7 +408,9 @@ enum MarkdownConverter {
                 let trimmed = hardBreak
                     ? String(raw.dropLast(2))
                     : raw
-                pieces.append(renderInline(trimmed, footnoteRefs: footnoteRefs))
+                pieces.append(renderInline(trimmed,
+                                           footnoteRefs: footnoteRefs,
+                                           baseDirectory: baseDirectory))
                 if i < paragraph.count - 1 {
                     pieces.append(hardBreak ? "<br/>" : " ")
                 }
@@ -416,7 +447,9 @@ enum MarkdownConverter {
             for (i, raw) in cells.enumerated() {
                 let align = i < alignments.count ? alignments[i] : .none
                 output.append("<th\(align.styleAttr)>")
-                output.append(renderInline(raw, footnoteRefs: footnoteRefs))
+                output.append(renderInline(raw,
+                                           footnoteRefs: footnoteRefs,
+                                           baseDirectory: baseDirectory))
                 output.append("</th>")
             }
             output.append("</tr>\n</thead>\n<tbody>\n")
@@ -433,7 +466,9 @@ enum MarkdownConverter {
             for col in 0..<aligns.count {
                 let raw = col < cells.count ? cells[col] : ""
                 output.append("<td\(aligns[col].styleAttr)>")
-                output.append(renderInline(raw, footnoteRefs: footnoteRefs))
+                output.append(renderInline(raw,
+                                           footnoteRefs: footnoteRefs,
+                                           baseDirectory: baseDirectory))
                 output.append("</td>")
             }
             output.append("</tr>\n")
@@ -588,6 +623,51 @@ private let mdInlineCodeRegex = try! NSRegularExpression(
     pattern: "`([^`\n]+)`")
 private let mdInlineImageRegex = try! NSRegularExpression(
     pattern: "!\\[([^\\]]*)\\]\\(([^)\\s]+)(?:\\s+\"[^\"]*\")?\\)")
+
+/// Phase 51a — image and link source resolver. WKWebView with a
+/// nil baseURL can't load relative paths, so the converter rewrites
+/// `./img.png` / `assets/x.png` / `../shared/y.png` into absolute
+/// `file:///abs/path` URLs the moment we know the markdown file's
+/// on-disk parent. Already-absolute references (`https://`, `data:`,
+/// `mailto:`, `file://`, `/abs/`, `#anchor`) pass through untouched
+/// so we don't damage anything that already works.
+///
+/// Static so the unit test can pin the contract without spinning
+/// up a full render.
+func resolveResourceURL(_ raw: String, baseDirectory: URL?) -> String {
+    // Empty or anchor-only — let the browser deal with it.
+    guard !raw.isEmpty else { return raw }
+    if raw.hasPrefix("#") { return raw }
+    // No baseDirectory ⇒ legacy behaviour: keep raw as-is. Test
+    // suites that don't care about path resolution still get the
+    // exact string they used to.
+    guard let base = baseDirectory else { return raw }
+    // Anything with a scheme (https:, http:, mailto:, file:, data:,
+    // tel:, etc.) is already absolute by definition. We detect a
+    // scheme as `[A-Za-z][A-Za-z0-9+.\-]*:` so the heuristic
+    // doesn't get fooled by a Windows-style `C:` either — but that
+    // pattern is rare enough we accept the false-positive cost
+    // (`C:/foo.png` would stay raw, which is what the user wrote).
+    if let colon = raw.firstIndex(of: ":") {
+        let scheme = raw[..<colon]
+        if !scheme.isEmpty, scheme.allSatisfy({ ch in
+            ch.isLetter || ch.isNumber || ch == "+" || ch == "-" || ch == "."
+        }) {
+            return raw
+        }
+    }
+    // Already an absolute POSIX path — wrap as file://.
+    if raw.hasPrefix("/") {
+        return URL(fileURLWithPath: raw).absoluteString
+    }
+    // Relative — resolve against base. URL(string:relativeTo:) is
+    // the wrong tool here (it percent-decodes / re-encodes); we
+    // want byte-faithful path appending so the user's filename
+    // ends up at the same on-disk path they typed.
+    let resolved = base.appendingPathComponent(raw)
+        .standardizedFileURL
+    return resolved.absoluteString
+}
 private let mdInlineFootnoteRefRegex = try! NSRegularExpression(
     pattern: "\\[\\^([^\\]\\s]+)\\]")
 private let mdInlineLinkRegex = try! NSRegularExpression(
@@ -645,7 +725,8 @@ private func inlineNeedsRewrite(_ s: String) -> Bool {
 /// between scanning 80 ASCII bytes once vs. nine times per
 /// paragraph row.
 func renderInline(_ text: String,
-                  footnoteRefs: [String: Int] = [:]) -> String {
+                  footnoteRefs: [String: Int] = [:],
+                  baseDirectory: URL? = nil) -> String {
     if !inlineNeedsRewrite(text) {
         return htmlEscape(text)
     }
@@ -665,7 +746,8 @@ func renderInline(_ text: String,
     }
     s = replace(s, regex: mdInlineImageRegex) { m in
         let alt = htmlEscape(m[1])
-        let src = htmlEscape(m[2])
+        let resolved = resolveResourceURL(m[2], baseDirectory: baseDirectory)
+        let src = htmlEscape(resolved)
         return park("<img src=\"\(src)\" alt=\"\(alt)\"/>")
     }
     // Phase 32 — footnote reference pass *before* the link parser:
@@ -687,11 +769,17 @@ func renderInline(_ text: String,
     }
     s = replace(s, regex: mdInlineLinkRegex) { m in
         let label = m[1]
-        let url = htmlEscape(m[2])
+        // Phase 51a — same resolver as image src. Anchor links
+        // (`#section`) and absolute URLs (`https://`, `mailto:`)
+        // pass through untouched; relative `./other.md` becomes
+        // `file:///abs/other.md` so a click in the preview opens
+        // the right file in the user's default app.
+        let resolved = resolveResourceURL(m[2], baseDirectory: baseDirectory)
+        let url = htmlEscape(resolved)
         // Recurse on the label so nested **bold** inside link
         // text still renders correctly. Forward the footnote map so
         // a `[link with ^[ref]](url)` inside a label still works.
-        return park("<a href=\"\(url)\">\(renderInline(label, footnoteRefs: footnoteRefs))</a>")
+        return park("<a href=\"\(url)\">\(renderInline(label, footnoteRefs: footnoteRefs, baseDirectory: baseDirectory))</a>")
     }
 
     // Stage B: bold / italic / strikethrough on the remaining text.
@@ -1013,7 +1101,8 @@ fileprivate func extractFootnotes(from text: String) -> FootnoteExtraction {
 /// modern markdown engine handles them.
 fileprivate func renderFootnoteSection(
     refs orderedRefs: [(id: String, num: Int)],
-    defs: [String: String]
+    defs: [String: String],
+    baseDirectory: URL? = nil
 ) -> String {
     var out = "<section class=\"footnotes\">\n<hr/>\n<ol>\n"
     for entry in orderedRefs {
@@ -1023,7 +1112,10 @@ fileprivate func renderFootnoteSection(
         // code work inside footnote bodies. We deliberately don't
         // forward `footnoteRefs` here — nested footnote references
         // inside footnote definitions aren't supported in v1.
-        let bodyHTML = renderInline(body)
+        // Phase 51a — forward baseDirectory so a footnote pointing
+        // at `[caption](./fig.png)` resolves the same way an inline
+        // image would.
+        let bodyHTML = renderInline(body, baseDirectory: baseDirectory)
         out += "<li id=\"fn-\(safeId)\">\(bodyHTML) "
         out += "<a href=\"#fnref-\(safeId)\" class=\"footnote-back\" "
         out += "aria-label=\"Back to reference\">↩</a></li>\n"
