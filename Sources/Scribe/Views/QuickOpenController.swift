@@ -103,8 +103,12 @@ final class QuickOpenController {
 
         // Already-open documents first; these are the most likely
         // re-targets and shouldn't disappear into a 50k-entry list.
+        // Phase 49b — sort by `lastActivatedAt` (descending) so the
+        // most-recently-touched tab leads, mirroring VS Code ⌘P.
+        // Tab strip ordering is independent — pinning still floats
+        // pins to the front of the strip; here we want recency.
         let openURLs = Set(workspace.documents.compactMap { $0.url?.standardizedFileURL })
-        for doc in workspace.documents {
+        for doc in Self.sortedOpenDocuments(workspace.documents) {
             guard let url = doc.url?.standardizedFileURL else { continue }
             commands.append(makeCommand(for: url,
                                         rootURL: fileIndex.rootURL,
@@ -249,6 +253,26 @@ final class QuickOpenController {
         let title: String
         let subtitle: String
         let keywords: [String]
+    }
+
+    /// Phase 49b — pure ordering helper exposed so XCTest can assert
+    /// the MRU sort without spinning up a Workspace + FileIndex pair.
+    /// Primary key: `lastActivatedAt` descending. Secondary key: the
+    /// document's original index in `documents`, ascending. The
+    /// secondary key is required because `Array.sorted` is not
+    /// guaranteed to be stable in Swift, and we want documents that
+    /// share a timestamp (most importantly: never-activated tabs at
+    /// `.distantPast`) to fall back to the visible tab-strip order.
+    static func sortedOpenDocuments(_ documents: [Document]) -> [Document] {
+        documents
+            .enumerated()
+            .sorted { lhs, rhs in
+                if lhs.element.lastActivatedAt != rhs.element.lastActivatedAt {
+                    return lhs.element.lastActivatedAt > rhs.element.lastActivatedAt
+                }
+                return lhs.offset < rhs.offset
+            }
+            .map(\.element)
     }
 
     static func commandMetadata(for url: URL,

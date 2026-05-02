@@ -116,6 +116,17 @@ final class Document: ObservableObject, Identifiable {
     /// pin via the Workspace.openFile recovery path.
     @Published var isPinned: Bool = false
 
+    /// Phase 49b — last time this tab became the active selection.
+    /// `Workspace.selectedID.didSet` stamps `Date()` here whenever the
+    /// user actually switches to the tab; Quick Open (⌘P) sorts open
+    /// documents by this so the most-recently-touched files float to
+    /// the top of the list, mirroring VS Code's MRU. Not @Published
+    /// because no SwiftUI surface needs to react to the value — it's
+    /// purely an ordering key consumed by `QuickOpenController`.
+    /// Defaults to `.distantPast` so a brand-new Document that has
+    /// never been activated sorts after every doc that has.
+    var lastActivatedAt: Date = .distantPast
+
     init(title: String = L10n.t("tab.untitled"), text: String = "", url: URL? = nil) {
         self.title = title
         self.text = text

@@ -32,7 +32,18 @@ struct ExternalChangePrompt: Identifiable {
 @MainActor
 final class Workspace: ObservableObject {
     @Published var documents: [Document] = []
-    @Published var selectedID: UUID?
+    /// Phase 49b — `didSet` stamps the newly-active Document's
+    /// `lastActivatedAt` so Quick Open can sort open files by MRU.
+    /// Re-assigning the same id deliberately re-stamps; it costs
+    /// nothing and keeps the "last touched wins" rule simple.
+    @Published var selectedID: UUID? {
+        didSet {
+            guard let id = selectedID,
+                  let doc = documents.first(where: { $0.id == id })
+            else { return }
+            doc.lastActivatedAt = Date()
+        }
+    }
     @Published var sidebarVisible: Bool = true
     @Published var sidebarMode: SidebarMode = .files
     @Published var folderRoot: FileNode?
