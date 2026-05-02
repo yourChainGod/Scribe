@@ -495,6 +495,7 @@
 "palette.command.text.decimalToHex" = "将十进制选区转为十六进制";
 "palette.command.text.shuffleLines" = "打乱选中行顺序";
 "palette.command.gotoLine"      = "跳转到第 %d 行";
+"palette.command.gotoLineColumn" = "跳转到第 %1$d 行第 %2$d 列";
 "palette.command.gotoLine.detail" = "在 %@ 中";
 "palette.symbol.detail"         = "%@ · 第 %d 行";
 "palette.symbol.empty"          = "“%@”中没有符号";

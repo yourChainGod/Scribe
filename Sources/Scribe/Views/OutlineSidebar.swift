@@ -101,12 +101,12 @@ struct OutlineSidebar: View {
 
     // MARK: - Actions
 
-    /// Re-uses Document.pendingScrollLine — the hook
+    /// Re-uses Document.pendingScroll — the hook
     /// ScintillaCodeEditor reads inside makeNSView/updateNSView to
     /// reposition the caret + scroll. No bespoke wiring needed.
     private func jump(to symbol: SymbolEntry) {
         guard let doc = workspace.current else { return }
-        doc.pendingScrollLine = symbol.lineNumber
+        doc.pendingScroll = PendingScrollTarget(line: symbol.lineNumber)
     }
 }
 

@@ -20,10 +20,15 @@ final class Document: ObservableObject, Identifiable {
     /// User-chosen Lexilla lexer name. When set, takes precedence over the
     /// extension-based detection in `LexerCatalog`. `nil` ⇒ auto.
     @Published var lexerOverride: String?
-    /// 1-based line the editor should scroll/select on next presentation.
-    /// Set by Workspace.openFile(at:line:) — read by ScintillaCodeEditor
+    /// Pending caret destination the editor should jump to on its
+    /// next presentation. Set by Workspace.openFile(at:line:) and the
+    /// palette / outline jump paths; read by ScintillaCodeEditor
     /// during makeNSView / updateNSView and cleared after consumption.
-    @Published var pendingScrollLine: Int? = nil
+    /// Phase 49c — line + optional column ride together so a Quick
+    /// Open `:42:7` lands the caret on column 7 atomically; pre-49c
+    /// surfaces only carried the line and we want them to stay
+    /// source-compatible via `PendingScrollTarget`'s default column.
+    @Published var pendingScroll: PendingScrollTarget? = nil
 
     /// Phase 28b — `true` while Workspace is still reading + decoding
     /// the file's bytes off the main thread. The Scintilla wrapper

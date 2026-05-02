@@ -427,7 +427,7 @@ final class Workspace: ObservableObject {
         // Reuse if already open.
         if let existing = documents.first(where: { $0.url?.standardizedFileURL == normalized }) {
             selectedID = existing.id
-            if let line { existing.pendingScrollLine = line }
+            if let line { existing.pendingScroll = PendingScrollTarget(line: line) }
             prefs.addRecent(normalized)
             return
         }
@@ -442,7 +442,7 @@ final class Workspace: ObservableObject {
                            text: "",
                            url: normalized)
         doc.isLoading = true
-        if let line { doc.pendingScrollLine = line }
+        if let line { doc.pendingScroll = PendingScrollTarget(line: line) }
         // Phase 46b — re-apply the user's pin for this URL so the
         // tab opens already pinned + gets slotted into the pinned
         // section. Cheap — Set membership check + bool flip. The

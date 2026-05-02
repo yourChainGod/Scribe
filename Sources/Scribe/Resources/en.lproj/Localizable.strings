@@ -497,6 +497,7 @@
 "palette.command.text.decimalToHex" = "Convert Decimal Selection to Hex";
 "palette.command.text.shuffleLines" = "Shuffle Selected Lines";
 "palette.command.gotoLine"      = "Go to line %d";
+"palette.command.gotoLineColumn" = "Go to line %1$d, column %2$d";
 "palette.command.gotoLine.detail" = "in %@";
 "palette.symbol.detail"         = "%@ · line %d";
 "palette.symbol.empty"          = "No symbols in “%@”";

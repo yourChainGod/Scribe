@@ -499,19 +499,36 @@ struct ScintillaCodeEditor: NSViewRepresentable {
 
         // MARK: - Pending scroll (cross-file find jump)
 
-        /// If `doc.pendingScrollLine` is set, scroll there + select the
-        /// whole line, then clear the pending value. Idempotent.
+        /// If `doc.pendingScroll` is set, scroll there + position the
+        /// caret, then clear the pending value. Idempotent.
+        ///
+        /// `target.column == nil` ⇒ select the entire destination
+        /// line (cross-file find / symbol / cli jumps want the
+        /// high-visibility "you landed here" cue). A non-nil column
+        /// drops the caret precisely on that visual column via
+        /// `SCI_FINDCOLUMN`, which snaps to line-end if the line is
+        /// shorter than requested.
         func consumePendingScroll(in view: ScintillaView) {
-            guard let line = doc.pendingScrollLine else { return }
-            doc.pendingScrollLine = nil
+            guard let target = doc.pendingScroll else { return }
+            doc.pendingScroll = nil
             // Scintilla line index is 0-based; our pending value is 1-based.
-            let line0 = max(0, line - 1)
+            let line0 = max(0, target.line - 1)
             view.message(SCI.GOTOLINE, wParam: UInt(line0))
-            let lineStart = view.message(SCI.POSITIONFROMLINE, wParam: UInt(line0))
-            let lineEnd   = view.message(SCI.GETLINEENDPOSITION, wParam: UInt(line0))
-            view.message(SCI.SETSEL,
-                         wParam: UInt(bitPattern: Int(lineStart)),
-                         lParam: Int(lineEnd))
+            if let column = target.column, column >= 1 {
+                let col0 = column - 1
+                let pos = view.message(SCI.FINDCOLUMN,
+                                       wParam: UInt(bitPattern: line0),
+                                       lParam: col0)
+                view.message(SCI.SETSEL,
+                             wParam: UInt(bitPattern: Int(pos)),
+                             lParam: Int(pos))
+            } else {
+                let lineStart = view.message(SCI.POSITIONFROMLINE, wParam: UInt(line0))
+                let lineEnd   = view.message(SCI.GETLINEENDPOSITION, wParam: UInt(line0))
+                view.message(SCI.SETSEL,
+                             wParam: UInt(bitPattern: Int(lineStart)),
+                             lParam: Int(lineEnd))
+            }
             view.message(SCI.SCROLLCARET)
         }
 

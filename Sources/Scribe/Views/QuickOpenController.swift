@@ -212,37 +212,91 @@ final class QuickOpenController {
                 subtitle: subtitle,
                 keywords: [sym.kind.label],
                 perform: { [weak doc] in
-                    doc?.pendingScrollLine = sym.lineNumber
+                    doc?.pendingScroll = PendingScrollTarget(line: sym.lineNumber)
                 }
             )
         }
     }
 
-    /// Parse `:42` / `:42:7` / `:` (empty) into a single goto-line
-    /// command. Returns an empty list when the digits are missing or
-    /// out-of-range — a hint Text in the result list would be nicer
-    /// but the empty-state copy ("No matches for ':abc'") is good
-    /// enough today.
+    /// Result of `parseGotoLineQuery` — a 1-based line number plus
+    /// an optional 1-based column. The column is intentionally
+    /// `Optional` rather than defaulting to 1 so callers can tell
+    /// apart `:42` (no column requested → select the whole line for
+    /// a high-visibility cue) from `:42:1` (caret on column 1
+    /// without the line-select).
+    struct ParsedGotoLineQuery: Equatable {
+        let line: Int
+        let column: Int?
+    }
+
+    /// Parse the body of a `:`-prefixed Quick Open query. Recognises:
+    ///   - `42`       ⇒ `(42, nil)`
+    ///   - `42:7`     ⇒ `(42, 7)`
+    ///   - `42:`      ⇒ `(42, nil)` — trailing colon with no column
+    ///   - `42:7:9`   ⇒ `(42, 7)`  — extra segments are ignored
+    ///   - `   42  `  ⇒ `(42, nil)` — leading / trailing whitespace
+    ///   - `abc` / `0` / `-1` / empty ⇒ `nil`
+    /// Negative or zero line/column values reject because the editor
+    /// numbers from 1.
+    static func parseGotoLineQuery(_ stripped: String) -> ParsedGotoLineQuery? {
+        let parts = stripped.split(separator: ":",
+                                   maxSplits: Int.max,
+                                   omittingEmptySubsequences: false)
+
+        let lineSegment = parts.first.map(String.init) ?? stripped
+        let trimmedLine = lineSegment.trimmingCharacters(in: .whitespaces)
+        guard !trimmedLine.isEmpty,
+              let line = Int(trimmedLine),
+              line >= 1 else {
+            return nil
+        }
+
+        var column: Int? = nil
+        if parts.count >= 2 {
+            let trimmedCol = parts[1].trimmingCharacters(in: .whitespaces)
+            if !trimmedCol.isEmpty,
+               let col = Int(trimmedCol),
+               col >= 1 {
+                column = col
+            }
+        }
+        return ParsedGotoLineQuery(line: line, column: column)
+    }
+
+    /// Build the single goto command surfaced in the palette for a
+    /// `:`-prefixed query. Returns an empty list when the parser
+    /// rejects the input — the empty-state copy
+    /// ("No matches for ':abc'") is good enough as the only feedback
+    /// today.
     static func gotoLineCommands(stripped: String,
                                  doc: Document?,
                                  localize: (String) -> String = L10n.t) -> [ScribeCommand] {
         guard let doc else { return [] }
-        // Digits before the optional ":column" suffix.
-        let firstSegment = stripped.split(separator: ":").first.map(String.init) ?? stripped
-        let trimmed = firstSegment.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty,
-              let line = Int(trimmed),
-              line >= 1 else {
-            return []
+        guard let parsed = parseGotoLineQuery(stripped) else { return [] }
+        let line = parsed.line
+        let column = parsed.column
+
+        let title: String
+        let id: String
+        if let column {
+            title = Self.format("palette.command.gotoLineColumn",
+                                localize, line, column)
+            id = "gotoLine:\(doc.id):\(line):\(column)"
+        } else {
+            title = Self.format("palette.command.gotoLine",
+                                localize, line)
+            id = "gotoLine:\(doc.id):\(line)"
         }
+
         return [
             ScribeCommand(
-                id: "gotoLine:\(doc.id):\(line)",
-                title: Self.format("palette.command.gotoLine", localize, line),
-                subtitle: Self.format("palette.command.gotoLine.detail", localize, doc.title),
-                keywords: ["line", "goto"],
+                id: id,
+                title: title,
+                subtitle: Self.format("palette.command.gotoLine.detail",
+                                      localize, doc.title),
+                keywords: ["line", "goto", "column"],
                 perform: { [weak doc] in
-                    doc?.pendingScrollLine = line
+                    doc?.pendingScroll = PendingScrollTarget(line: line, column: column)
                 }
             )
         ]
