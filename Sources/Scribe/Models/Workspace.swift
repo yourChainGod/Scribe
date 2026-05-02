@@ -171,6 +171,14 @@ final class Workspace: ObservableObject {
     /// cover every mutation we care about).
     let gitStatusEngine = GitStatusEngine()
 
+    /// Phase 48b — single-file fallback for the status-bar branch
+    /// chip. Suspended (returns nil) whenever GitStatusEngine has
+    /// a repo bound; otherwise walks the active doc's parent chain
+    /// to find the enclosing repo and surface its branch + ahead/
+    /// behind. Lets the chip light up for ⌘O-opened files without
+    /// requiring the user to open a folder first.
+    let activeFileGitProbe = ActiveFileGitProbe()
+
     /// Phase 35c-ii-β — single shared engine that runs `git blame
     /// --porcelain` for the active document, keyed by absolute
     /// URL. Inline-blame UI reads from this on every caret tick;
@@ -209,6 +217,11 @@ final class Workspace: ObservableObject {
             .sink { [weak self] _ in
                 guard let self else { return }
                 self.gitGutterEngine.bind(to: self.current)
+                // Phase 48b — single-file branch chip follows
+                // selection changes too. Same sink keeps the two
+                // engines lockstep so a tab switch updates both
+                // gutter and chip in the same tick.
+                self.refreshActiveFileGitProbe()
             }
         // Phase 43-T — route GitStatusEngine write-action errors
         // (stage/unstage/commit/pull/push/…) through the toast
@@ -252,6 +265,11 @@ final class Workspace: ObservableObject {
         root.loadChildren()
         self.folderRoot = root
         prefs.addRecentFolder(normalized)
+        // Phase 48b — folder bind suspends the single-file probe
+        // since GitStatusEngine is now the canonical source. The
+        // refresh call clears any cached branch the probe may have
+        // accumulated while running in single-file mode.
+        refreshActiveFileGitProbe()
     }
 
     func closeFolder() {
@@ -261,6 +279,24 @@ final class Workspace: ObservableObject {
         gitStatusEngine.bind(repo: nil)
         // Phase 35c-ii-β — same reasoning for inline blame.
         gitBlameEngine.invalidateAll()
+        // Phase 48b — folder unbind un-suspends the probe; it can
+        // now light the chip from the active doc's repo if any.
+        refreshActiveFileGitProbe()
+    }
+
+    /// Phase 48b — single-source-of-truth refresh hook for
+    /// `ActiveFileGitProbe`. Suspends the probe whenever
+    /// `gitStatusEngine` already has a folder bound (then the
+    /// status bar reads the chip directly from the engine), and
+    /// otherwise hands the active doc's URL down so the probe can
+    /// resolve a repo root + branch. Cheap to call repeatedly: the
+    /// probe internally cancels any in-flight task and short-
+    /// circuits if the inputs match the last call.
+    private func refreshActiveFileGitProbe() {
+        let suspended = gitStatusEngine.repo != nil
+        let activeURL = current?.url
+        activeFileGitProbe.update(activeFileURL: activeURL,
+                                  suspended: suspended)
     }
 
     var current: Document? {
@@ -605,6 +641,10 @@ final class Workspace: ObservableObject {
         // sidebar; an external editor saving a file we have open
         // changes its git status (added → modified, etc).
         gitStatusEngine.refresh()
+        // Phase 48b — external write may also have included a
+        // checkout / commit-from-another-tool, so the chip's
+        // branch + ahead/behind needs to refresh too.
+        refreshActiveFileGitProbe()
         // Phase 35c-ii-β — external write moved the file's
         // bytes; blame for new lines now reads as uncommitted
         // (the all-zeros sentinel) and existing lines may have
@@ -762,6 +802,9 @@ final class Workspace: ObservableObject {
                     // chunked save just rewrote the on-disk bytes
                     // git compares against.
                     self?.gitStatusEngine.refresh()
+                    // Phase 48b — same trigger keeps the single-
+                    // file branch chip's ahead/behind fresh.
+                    self?.refreshActiveFileGitProbe()
                     // Phase 35c-ii-β — same trigger drives
                     // inline blame: the just-written file
                     // commits no new history (yet) but its
@@ -806,6 +849,8 @@ final class Workspace: ObservableObject {
             if doc.id == selectedID { gitGutterEngine.refresh() }
             // Phase 35b-1 — Source Control sidebar same trigger.
             gitStatusEngine.refresh()
+            // Phase 48b — single-file branch chip mirrors save.
+            refreshActiveFileGitProbe()
             // Phase 35c-ii-β — inline blame catches up to the
             // just-written bytes so newly-uncommitted lines pick
             // up the all-zeros sentinel SHA on the next caret tick.

@@ -11,11 +11,17 @@ import SwiftUI
 /// split the branch chip would only refresh when Workspace itself
 /// ticked (not when GitStatusEngine's own `@Published` properties
 /// did), leaving the status bar stale after a checkout / refresh.
+/// Phase 48b — also pipes `ActiveFileGitProbe` through so the chip
+/// can fall back to the active file's repo when the workspace has
+/// no folder bound.
 struct StatusBarView: View {
     @EnvironmentObject var workspace: Workspace
 
     var body: some View {
-        StatusBarContent(gitStatus: workspace.gitStatusEngine)
+        StatusBarContent(
+            gitStatus: workspace.gitStatusEngine,
+            fileProbe: workspace.activeFileGitProbe
+        )
     }
 }
 
@@ -23,6 +29,9 @@ private struct StatusBarContent: View {
     @EnvironmentObject var workspace: Workspace
     @EnvironmentObject var findState: FindState
     @ObservedObject var gitStatus: GitStatusEngine
+    /// Phase 48b — single-file branch source. Used only when
+    /// `gitStatus.branch == nil` (i.e. no folder is bound).
+    @ObservedObject var fileProbe: ActiveFileGitProbe
     @Environment(\.appTheme) private var appTheme
 
     var body: some View {
@@ -32,14 +41,24 @@ private struct StatusBarContent: View {
             } else {
                 Text("status.ready", bundle: .module)
             }
-            // Phase 46f — git branch chip. Shows the current branch
-            // + ahead/behind counts so the user doesn't have to open
-            // the Source Control sidebar just to confirm where they
-            // are. Taps here focus the sidebar on the Git tab.
+            // Phase 46f / 48b — git branch chip. Folder mode reads
+            // GitStatusEngine; single-file mode falls back to the
+            // ActiveFileGitProbe so a ⌘O-opened file inside a repo
+            // still lights the chip. Tap routes to the Source
+            // Control sidebar regardless of source.
             if let branch = gitStatus.branch {
                 GitBranchChip(
                     branch: branch,
                     aheadBehind: gitStatus.aheadBehind
+                )
+                .onTapGesture {
+                    workspace.sidebarVisible = true
+                    workspace.sidebarMode = .sourceControl
+                }
+            } else if let branch = fileProbe.branch {
+                GitBranchChip(
+                    branch: branch,
+                    aheadBehind: fileProbe.aheadBehind
                 )
                 .onTapGesture {
                     workspace.sidebarVisible = true
