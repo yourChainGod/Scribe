@@ -75,6 +75,31 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         return view
     }
 
+    /// Phase 47 — break ScintillaView's `unsafe_unretained` reference
+    /// to the Coordinator before SwiftUI releases the latter. Without
+    /// this clear, the Cocoa NSNotificationCenter can still dispatch
+    /// `applicationDid{Become,Resign}Active` (and a handful of other
+    /// notifications ScintillaView signs up for in `initWithFrame:`)
+    /// to a ScintillaView that lingers in its host window's responder
+    /// chain past dismantle. Each of those callbacks routes back
+    /// through `ScintillaCocoa::NotifyParent` → `-[ScintillaView
+    /// notification:]` → `[mDelegate notification: scn]`; on a
+    /// Coordinator that has just been freed this is an objc_msgSend
+    /// to a dangling pointer (the crash we logged in TODO.md after
+    /// the Phase 46 manual QA — `EXC_BAD_ACCESS at 0x10`). The
+    /// Vendor copy of Scintilla declares `delegate` as
+    /// `unsafe_unretained` (see `Vendor/scintilla/cocoa/ScintillaView.h`),
+    /// which deliberately does not nil-out under ARC, so the Scribe
+    /// side has to do the unhook itself. Patching that property to
+    /// `weak` would mean editing the third-party Cocoa binding —
+    /// out of scope per the project's "do not rewrite Scintilla"
+    /// rule. Setting `view.delegate = nil` in dismantle is the
+    /// least-invasive fix that holds for every future Scintilla
+    /// upgrade.
+    static func dismantleNSView(_ view: ScintillaView, coordinator: Coordinator) {
+        view.delegate = nil
+    }
+
     func updateNSView(_ view: ScintillaView, context: Context) {
         // Pick up SwiftUI-driven changes to doc/prefs. The coordinator's flag
         // is what stops the SCN_MODIFIED ↔ doc.text feedback loop.

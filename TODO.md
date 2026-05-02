@@ -64,7 +64,7 @@
 
 ## Scintilla bridge stability
 
-- [ ] **[crash]** `-[ScintillaView applicationDidBecomeActive:]` dereferences a freed delegate when `NSApplication` re-activates while an `NSOpenPanel` modal loop is winding down. Repro: osascript `tell app "Scribe" to open POSIX file "…"` while Scribe is presenting `Open Folder…`. Signal: `EXC_BAD_ACCESS` at 0x10 (typical "msgSend to dealloc'd object"). Stack: `NotifyParent → NotifyFocus → ActiveStateChanged`. Fix direction: guard the notification center handler with a `weak` check on the coordinator / delegate, or unregister for `NSApplicationDidBecomeActiveNotification` during teardown. **Pre-dates Phase 46; surfaced by UI automation during manual QA 2026-05-02.**
+- [x] **[crash, fixed in Phase 47]** `-[ScintillaView applicationDidBecomeActive:]` dereferenced a freed delegate when `NSApplication` re-activated while an `NSOpenPanel` modal loop was winding down. Root cause: `Vendor/scintilla/cocoa/ScintillaView.h` declares `delegate` as `unsafe_unretained` (raw pointer that does not nil out on deallocation). Fix: `ScintillaCodeEditor.dismantleNSView(_:coordinator:)` and `DiffEditorPane.dismantleNSView(_:coordinator:)` now set `view.delegate = nil` so SwiftUI's dismantle path unhooks the pointer before the Coordinator is released. Vendor untouched.
 
 ## Visual QA Queue
 

@@ -80,6 +80,17 @@ struct DiffEditorPane: NSViewRepresentable {
         scrollToHunk(in: view)
     }
 
+    /// Phase 47 — mirror the unhook from `ScintillaCodeEditor`. Same
+    /// `unsafe_unretained` delegate property in Vendor/scintilla means
+    /// the diff panes can also strand a freed Coordinator behind a
+    /// still-alive ScintillaView when the Compare-Files screen is
+    /// dismissed while NSApp is mid-activation. `DiffSession`'s
+    /// `leftView` / `rightView` are already `weak`, so nothing else
+    /// needs cleanup here.
+    static func dismantleNSView(_ view: ScintillaView, coordinator: Coordinator) {
+        view.delegate = nil
+    }
+
     // MARK: - Configuration
 
     private func configureMargins(in view: ScintillaView) {

@@ -120,7 +120,14 @@ let package = Package(
         ),
         .testTarget(
             name: "ScribeTests",
-            dependencies: ["Scribe"],
+            // Phase 47 — Scintilla dependency added so the
+            // delegate-lifetime regression suite can construct
+            // a real ScintillaView and assert dismantleNSView
+            // clears the unsafe_unretained delegate. Production
+            // code already pulls Scintilla via the Scribe target;
+            // surfacing it to the test target only widens the
+            // test sandbox, not the shipping binary.
+            dependencies: ["Scribe", "Scintilla"],
             path: "Tests/ScribeTests"
         )
     ],
