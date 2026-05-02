@@ -31,6 +31,51 @@
 import SwiftUI
 @preconcurrency import WebKit
 
+// MARK: - Phase 51d · highlight.js asset loading
+//
+// Code-block syntax colouring lives entirely in the WKWebView. We
+// ship highlight.js (v11.9.0, ~120 KB minified, ~30 common languages)
+// + the GitHub light and dark themes inside `Bundle.module` and
+// inline them into the preview shell at first-load time. The bundle
+// is read once per process via `lazy static let` so every additional
+// preview pane reuses the same string copies — the cost shows up as
+// one ~120 KB UTF-8 string on the heap, not three.
+//
+// Languages we don't list explicitly (CommonMark fenced code with no
+// hint, or a tag highlight.js doesn't recognise) fall back to the
+// pre-existing CSS-only chrome (border, padding, codeBg fill) so the
+// block still reads cleanly even without colour tokens.
+
+/// Cached highlight.js minified bundle. Loaded once via Bundle.module
+/// the first time anybody touches the property; the empty-string
+/// fallback means a missing-asset build still renders preview text,
+/// just without colour tokens.
+private let highlightJSAsset: String = {
+    guard let url = Bundle.module.url(forResource: "highlight.min",
+                                      withExtension: "js"),
+          let s = try? String(contentsOf: url, encoding: .utf8)
+    else { return "" }
+    return s
+}()
+
+/// Cached GitHub light theme CSS for highlight.js.
+private let githubLightCSS: String = {
+    guard let url = Bundle.module.url(forResource: "github-light.min",
+                                      withExtension: "css"),
+          let s = try? String(contentsOf: url, encoding: .utf8)
+    else { return "" }
+    return s
+}()
+
+/// Cached GitHub dark theme CSS for highlight.js.
+private let githubDarkCSS: String = {
+    guard let url = Bundle.module.url(forResource: "github-dark.min",
+                                      withExtension: "css"),
+          let s = try? String(contentsOf: url, encoding: .utf8)
+    else { return "" }
+    return s
+}()
+
 struct MarkdownPreviewPane: NSViewRepresentable {
     /// The raw markdown source. The pane re-renders when this changes;
     /// SymbolOutline-style debouncing happens upstream in WorkspaceView
@@ -52,6 +97,22 @@ struct MarkdownPreviewPane: NSViewRepresentable {
     let baseDirectory: URL?
 
     func makeCoordinator() -> Coordinator { Coordinator() }
+
+    // MARK: - Phase 51d · test seams
+    //
+    // The three cached asset constants live at file scope (outside
+    // the type) so the lazy-load pattern stays cheap for production
+    // code. XCTest needs to reach them to assert the resource bundle
+    // shipped them correctly; rather than promoting the globals to
+    // internal (which would leak two raw strings into code-complete
+    // on every `MarkdownPreviewPane` callsite), we expose narrow,
+    // explicitly-named computed accessors only the test target uses.
+    // They return the same cached strings the production shell
+    // inlines, so a test passing here means production sees the
+    // same bytes.
+    static var highlightJSAssetForTests: String { highlightJSAsset }
+    static var githubLightCSSForTests: String { githubLightCSS }
+    static var githubDarkCSSForTests: String { githubDarkCSS }
 
     func makeNSView(context: Context) -> WKWebView {
         let cfg = WKWebViewConfiguration()
@@ -110,8 +171,18 @@ struct MarkdownPreviewPane: NSViewRepresentable {
                             into view: WKWebView,
                             coordinator: Coordinator) {
         let jsBody = Self.jsStringLiteral(body)
+        // Phase 51d — after the innerHTML swap, re-run hljs against
+        // every `<pre><code>` in the freshly-injected tree so newly
+        // added code blocks pick up colour tokens. `try/catch` keeps
+        // a hljs grammar-not-found from aborting the rest of the JS
+        // (it shouldn't, but fenced blocks with unknown hints are
+        // common enough that we're defensive).
         let js = "var _r = document.getElementById('md-root'); "
-            + "if (_r) { _r.innerHTML = \(jsBody); true; } else { false; }"
+            + "if (_r) { _r.innerHTML = \(jsBody); "
+            + "if (window.hljs) { "
+            + "_r.querySelectorAll('pre code').forEach(function (b) { "
+            + "try { hljs.highlightElement(b); } catch (e) {} }); "
+            + "} true; } else { false; }"
         // Capture a pre-rendered fallback html NOW (not lazily) so the
         // retry branch below doesn't have to re-enter the converter
         // on the error path. The string cost is a one-off copy and
@@ -210,14 +281,29 @@ struct MarkdownPreviewPane: NSViewRepresentable {
         let codeBg = isDark ? "#262c33" : "#f6f8fa"
         let link   = isDark ? "#58a6ff" : "#0969da"
 
+        // Phase 51d — pick the theme CSS that matches the current
+        // colour scheme. Empty strings on a missing-asset build keep
+        // the page rendering (just without colour tokens).
+        let hlThemeCSS = isDark ? githubDarkCSS : githubLightCSS
+
         // The trailing <script> reads back the persisted scroll
         // position. window.scrollTo runs after layout, so the user
         // sees the page settle at the same offset the previous
         // render left it at — no jolt back to top on every keystroke.
+        //
+        // Phase 51d — the same load handler also fires highlight.js
+        // against every `<pre><code>` so the first paint already
+        // shows colour tokens. Subsequent JS-injection updates run
+        // their own highlightAll inside `injectBody`.
         let restore = """
         <script>
           window.addEventListener('load', function () {
             window.scrollTo(0, \(Int(scrollY)));
+            if (window.hljs) {
+              document.querySelectorAll('pre code').forEach(function (b) {
+                try { hljs.highlightElement(b); } catch (e) {}
+              });
+            }
           });
         </script>
         """
@@ -283,6 +369,15 @@ struct MarkdownPreviewPane: NSViewRepresentable {
             font-size: 12.5px;
             white-space: pre;
           }
+          /* Phase 51d — highlight.js's GitHub theme paints its own
+             background + padding via `pre code.hljs`. Strip both so
+             our outer `<pre>` chrome (border, codeBg fill) stays the
+             single source of truth. The hljs theme keeps the colour
+             tokens, which is the only piece we actually want from it. */
+          pre code.hljs {
+            background: transparent;
+            padding: 0;
+          }
           hr {
             border: none;
             border-top: 1px solid \(border);
@@ -341,6 +436,8 @@ struct MarkdownPreviewPane: NSViewRepresentable {
             background: \(isDark ? "#264f78" : "#cce5ff");
           }
         </style>
+        <style>\(hlThemeCSS)</style>
+        <script>\(highlightJSAsset)</script>
         </head>
         <body>
         <div id="md-root">\(body)</div>
