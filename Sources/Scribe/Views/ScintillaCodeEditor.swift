@@ -37,6 +37,12 @@ struct ScintillaCodeEditor: NSViewRepresentable {
 
     func makeNSView(context: Context) -> ScintillaView {
         let view = ScintillaView(frame: .zero)
+        // Phase 54 — start writable so the initial `applyText`
+        // can populate the buffer; we lock at the bottom of this
+        // function (after every state push has landed) when the
+        // doc requested read-only. Same dance DiffEditorPane uses,
+        // since `SCI_SETREADONLY` rejects every internal
+        // `SCI_INSERTTEXT` while it's set.
         view.setEditable(true)
         view.delegate = context.coordinator   // ScintillaNotificationProtocol
         context.coordinator.attach(view: view)
@@ -72,6 +78,15 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         // was tagged in Workspace.openFile. No-op for normal-sized
         // files — they keep the standard `applyText(doc.text)` path.
         context.coordinator.beginLargeFileLoadIfNeeded(in: view)
+        // Phase 54 — final read-only lock-down. Applied last so
+        // every `applyText` / `applyLexer` / `applyTheme` call
+        // above could mutate the buffer; flipping the bit now
+        // captures the doc.isReadOnly state the CLI / status-bar
+        // requested. Idempotent — Scintilla's GetReadOnly already
+        // matches the requested value when we arrive here for a
+        // writable doc, so this is a single Message::SetReadOnly
+        // dispatch even on the hot path.
+        view.setEditable(!doc.isReadOnly)
         return view
     }
 
@@ -145,7 +160,17 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                 let docLen = doc.text.utf8.count
                 let needsResync: Bool = (viewLen != docLen) || view.string() != doc.text
                 if needsResync {
+                    // Phase 54 — `applyText` calls `SCI_SETTEXT`
+                    // internally, which `SCI_SETREADONLY` rejects.
+                    // Temporarily unlock for the duration of the
+                    // external-change resync so an `git checkout`
+                    // mutation still propagates into a read-only
+                    // tab; we restore the lock at the end of this
+                    // function alongside the steady-state path.
+                    let wasReadOnly = !view.isEditable()
+                    if wasReadOnly { view.setEditable(true) }
                     context.coordinator.applyText(doc.text, to: view, isExternal: true)
+                    if wasReadOnly { view.setEditable(false) }
                 }
             }
         }
@@ -168,6 +193,16 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         // length / enabled / docID signature so the typical
         // caret-move tick is a no-op (one O(1) Scintilla query).
         context.coordinator.applyColorSwatches(in: view)
+        // Phase 54 — drain doc.isReadOnly into Scintilla's
+        // `Message::SetReadOnly` once per tick. Cheap (one Int
+        // round-trip + at most one message dispatch); placed at
+        // the end so every mutation above (`applyText`,
+        // `applyLexer`, `applyTheme`'s style writes) sees a
+        // writable buffer regardless of the requested final state.
+        let shouldBeEditable = !doc.isReadOnly
+        if view.isEditable() != shouldBeEditable {
+            view.setEditable(shouldBeEditable)
+        }
     }
 
     // MARK: - Coordinator (Scintilla delegate)

@@ -422,12 +422,28 @@ final class Workspace: ObservableObject {
         }
     }
 
-    func openFile(at url: URL, line: Int? = nil) {
+    func openFile(at url: URL,
+                  line: Int? = nil,
+                  column: Int? = nil,
+                  readOnly: Bool = false,
+                  lexerOverride: String? = nil) {
         let normalized = url.standardizedFileURL
         // Reuse if already open.
         if let existing = documents.first(where: { $0.url?.standardizedFileURL == normalized }) {
             selectedID = existing.id
-            if let line { existing.pendingScroll = PendingScrollTarget(line: line) }
+            if let line {
+                existing.pendingScroll = PendingScrollTarget(line: line, column: column)
+            }
+            // Phase 54 — re-opening an already-open file with new
+            // CLI flags is a niche path (the wrapper normally cold-
+            // starts), but we still propagate the requested state
+            // so `scribe -r already-open.md` stamps the existing
+            // tab read-only without forcing the user to close it
+            // first. Same applies to a fresh `-L` lexer override.
+            if readOnly { existing.isReadOnly = true }
+            if let lexerOverride, !lexerOverride.isEmpty {
+                existing.lexerOverride = lexerOverride
+            }
             prefs.addRecent(normalized)
             return
         }
@@ -442,7 +458,17 @@ final class Workspace: ObservableObject {
                            text: "",
                            url: normalized)
         doc.isLoading = true
-        if let line { doc.pendingScroll = PendingScrollTarget(line: line) }
+        if let line {
+            doc.pendingScroll = PendingScrollTarget(line: line, column: column)
+        }
+        // Phase 54 — stamp CLI-driven flags before the placeholder
+        // hits `documents.append`, so the very first `updateNSView`
+        // tick sees the correct state and the editor never paints
+        // a writable view first then locks it (visible flicker).
+        doc.isReadOnly = readOnly
+        if let lexerOverride, !lexerOverride.isEmpty {
+            doc.lexerOverride = lexerOverride
+        }
         // Phase 46b — re-apply the user's pin for this URL so the
         // tab opens already pinned + gets slotted into the pinned
         // section. Cheap — Set membership check + bool flip. The

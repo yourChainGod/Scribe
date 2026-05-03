@@ -46,6 +46,34 @@ struct StartupEnvironment {
     /// gets a clean Int? with valid values only.
     let autoOpenLine: Int?
 
+    /// Phase 54 — 1-based visual column number passed via
+    /// `SCRIBE_AUTO_OPEN_COLUMN`. Mirrors the CLI's `-c N` flag.
+    /// `nil` (or `autoOpenLine == nil`) ⇒ caret falls on column 1
+    /// of the requested line; the editor's pending-scroll consumer
+    /// already treats a nil column as "select the whole line"
+    /// (high-visibility cue), so dropping `-c` keeps that behaviour.
+    /// Negative / zero values are rejected at parse time.
+    let autoOpenColumn: Int?
+
+    /// Phase 54 — read-only flag passed via `SCRIBE_AUTO_READONLY`
+    /// (CLI: `-r` / `--readonly`). Any non-empty value (`"1"`, `"true"`,
+    /// `"yes"`) is treated as `true`; absent or empty ⇒ `false`. Every
+    /// auto-opened file in the same invocation gets the same flag,
+    /// matching `code --readonly` and `notepad++ -ro` semantics —
+    /// users who want mixed read-only / writable tabs invoke `scribe`
+    /// twice.
+    let autoReadOnly: Bool
+
+    /// Phase 54 — Lexilla lexer name passed via `SCRIBE_AUTO_LEXER`
+    /// (CLI: `-L LANG` / `--lang LANG`). When non-nil, Workspace
+    /// stamps `doc.lexerOverride` on each auto-opened file so the
+    /// status-bar language pill shows the override and syntax
+    /// highlighting matches even if the file extension wouldn't
+    /// normally resolve to that lexer. `nil` ⇒ extension-based
+    /// auto-detection. Unknown lexer names fall through harmlessly
+    /// to LexerCatalog's `plain` default at apply time.
+    let autoLexer: String?
+
     /// Resolve from the current process environment.
     static func current() -> StartupEnvironment {
         let env = ProcessInfo.processInfo.environment
@@ -70,11 +98,36 @@ struct StartupEnvironment {
         let line: Int? = (env["SCRIBE_AUTO_OPEN_LINE"]).flatMap(Int.init)
             .flatMap { $0 > 0 ? $0 : nil }
 
+        // Phase 54 — same fail-open contract as the line knob:
+        // garbage / zero / negative values silently degrade to nil.
+        let column: Int? = (env["SCRIBE_AUTO_OPEN_COLUMN"]).flatMap(Int.init)
+            .flatMap { $0 > 0 ? $0 : nil }
+
+        // Phase 54 — accept the common shell truthy spellings so
+        // `SCRIBE_AUTO_READONLY=1`, `=true`, `=yes`, and `=on` all
+        // work. Anything else (including the empty string) is
+        // treated as false — the wrapper only ever emits "1".
+        let readOnly: Bool
+        switch (env["SCRIBE_AUTO_READONLY"] ?? "").lowercased() {
+        case "1", "true", "yes", "on": readOnly = true
+        default: readOnly = false
+        }
+
+        // Phase 54 — Lexilla lexer name override; whitespace-only
+        // strings collapse to nil so `SCRIBE_AUTO_LEXER=""` from
+        // the wrapper doesn't pin every doc to an empty lexer.
+        let rawLexer = (env["SCRIBE_AUTO_LEXER"] ?? "")
+            .trimmingCharacters(in: .whitespaces)
+        let lexer: String? = rawLexer.isEmpty ? nil : rawLexer
+
         return StartupEnvironment(
             autoOpenURLs: urls,
             autoFolder: env["SCRIBE_AUTO_FOLDER"] ?? "",
             autoCompare: env["SCRIBE_AUTO_COMPARE"] ?? "",
-            autoOpenLine: line
+            autoOpenLine: line,
+            autoOpenColumn: column,
+            autoReadOnly: readOnly,
+            autoLexer: lexer
         )
     }
 }
@@ -113,8 +166,18 @@ enum StartupAutoOpen {
             // line targets each of them, which matches `code` and
             // `subl` semantics — users who want different lines per
             // file invoke the CLI multiple times.
+            //
+            // Phase 54 — `-c N` (column), `-r` (read-only), and
+            // `-L LANG` (lexer override) join the same all-files
+            // sharing contract so a single invocation behaves
+            // predictably; per-file granularity stays opt-in via
+            // multiple `scribe` calls.
             for url in env.autoOpenURLs {
-                workspace.openFile(at: url, line: env.autoOpenLine)
+                workspace.openFile(at: url,
+                                   line: env.autoOpenLine,
+                                   column: env.autoOpenColumn,
+                                   readOnly: env.autoReadOnly,
+                                   lexerOverride: env.autoLexer)
             }
             if !env.autoFolder.isEmpty {
                 let url = URL(fileURLWithPath: env.autoFolder)

@@ -147,6 +147,9 @@ ln -sf "$PWD/Scripts/scribe" /usr/local/bin/scribe
 ```bash
 scribe README.md                       # 打开
 scribe -l 42 src/main.swift            # 打开到第 42 行
+scribe -l 42 -c 7 src/main.swift       # 打开到第 42 行第 7 列
+scribe -r config.json                  # 只读模式打开
+scribe -L cpp legacy_code.txt          # 强制 C++ 语法高亮
 scribe --diff old.txt new.txt          # 直接进 diff 视图
 scribe --wait COMMIT_EDITMSG           # 阻塞返回（git core.editor）
 git config --global core.editor "scribe --wait"

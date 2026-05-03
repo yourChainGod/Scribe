@@ -31,7 +31,7 @@
 
 set -euo pipefail
 
-VERSION="0.35a"
+VERSION="0.54"
 APP_NAME="Scribe"
 APP_BUNDLE="${APP_NAME}.app"
 
@@ -54,6 +54,18 @@ OPTIONS
                             is already open.
     -l, --line N            Place the cursor on 1-based line N of
                             each file given. N must be > 0.
+    -c, --column N          Place the cursor on 1-based visual
+                            column N (must pair with --line). N must
+                            be > 0; lines shorter than N snap the
+                            caret to the line end.
+    -r, --readonly          Open every file in this invocation as a
+                            read-only buffer. Keystrokes / paste /
+                            drop are rejected by Scintilla, matching
+                            `code --readonly` / `notepad++ -ro`.
+    -L, --lang LANG         Force a Scintilla / Lexilla language
+                            override on each file (e.g. swift, cpp,
+                            python, json). Unknown values fall back
+                            to the plain lexer.
     -d, --diff A B          Open A and B in a side-by-side diff
                             view instead of as regular tabs.
         --                  Treat all subsequent arguments as files
@@ -62,7 +74,10 @@ OPTIONS
 EXAMPLES
     scribe README.md
     scribe -l 42 src/main.swift
-    scribe --wait COMMIT_EDITMSG          # for git core.editor
+    scribe -l 42 -c 7 src/main.swift
+    scribe -r config.json                  # open read-only
+    scribe -L cpp legacy_code.txt          # force C++ syntax
+    scribe --wait COMMIT_EDITMSG           # for git core.editor
     scribe --diff old.txt new.txt
     git config --global core.editor "scribe --wait"
 HELP
@@ -73,6 +88,9 @@ HELP
 WAIT=0
 NEW=0
 LINE=""
+COLUMN=""
+READONLY=0
+LANG=""
 DIFF_LEFT=""
 DIFF_RIGHT=""
 FILES=()
@@ -109,6 +127,34 @@ while [[ $# -gt 0 ]]; do
             LINE="$2"
             shift 2
             ;;
+        -c|--column)
+            if [[ $# -lt 2 ]]; then
+                echo "scribe: --column requires a positive integer" >&2
+                exit 2
+            fi
+            if ! [[ "$2" =~ ^[1-9][0-9]*$ ]]; then
+                echo "scribe: --column value must be a positive integer (got: $2)" >&2
+                exit 2
+            fi
+            COLUMN="$2"
+            shift 2
+            ;;
+        -r|--readonly)
+            READONLY=1
+            shift
+            ;;
+        -L|--lang)
+            if [[ $# -lt 2 ]]; then
+                echo "scribe: --lang requires a Lexilla language name" >&2
+                exit 2
+            fi
+            # No value validation here — Scribe's LexerCatalog
+            # silently falls back to the `plain` lexer for unknown
+            # names, so a typo just means "no syntax colour" rather
+            # than a hard failure.
+            LANG="$2"
+            shift 2
+            ;;
         -d|--diff)
             if [[ $# -lt 3 ]]; then
                 echo "scribe: --diff requires two file paths" >&2
@@ -136,6 +182,15 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Phase 54 — `--column` is meaningful only when paired with `--line`,
+# matching `code -g file:line:col` (col silently ignored without line)
+# and avoiding a confusing "I asked for column but the editor went to
+# line 1" UX. Reject early so the env knob downstream stays clean.
+if [[ -n "$COLUMN" && -z "$LINE" ]]; then
+    echo "scribe: --column requires --line" >&2
+    exit 2
+fi
 
 # --- Resolve paths to absolute --------------------------------------
 #
@@ -187,6 +242,18 @@ fi
 
 if [[ -n "$LINE" ]]; then
     ENV_PAIRS+=("SCRIBE_AUTO_OPEN_LINE=$LINE")
+fi
+
+if [[ -n "$COLUMN" ]]; then
+    ENV_PAIRS+=("SCRIBE_AUTO_OPEN_COLUMN=$COLUMN")
+fi
+
+if [[ $READONLY -eq 1 ]]; then
+    ENV_PAIRS+=("SCRIBE_AUTO_READONLY=1")
+fi
+
+if [[ -n "$LANG" ]]; then
+    ENV_PAIRS+=("SCRIBE_AUTO_LEXER=$LANG")
 fi
 
 if [[ -n "$ABS_DIFF_LEFT" ]]; then

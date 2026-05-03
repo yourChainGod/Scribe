@@ -62,9 +62,11 @@ final class ScribeCLITests: XCTestCase {
         XCTAssertEqual(result.exitCode, 0)
         XCTAssertTrue(result.stdout.contains("USAGE"))
         // Each documented flag should be present so a missing flag
-        // can't ship without its help line going with it.
-        for flag in ["-h", "-v", "-w", "-n", "-l", "-d", "--wait",
-                     "--new", "--line", "--diff", "--help", "--version"] {
+        // can't ship without its help line going with it. Phase 54
+        // adds -c/--column, -r/--readonly, -L/--lang.
+        for flag in ["-h", "-v", "-w", "-n", "-l", "-c", "-r", "-L", "-d",
+                     "--wait", "--new", "--line", "--column", "--readonly",
+                     "--lang", "--diff", "--help", "--version"] {
             XCTAssertTrue(
                 result.stdout.contains(flag),
                 "--help missing documentation for \(flag)"
@@ -116,6 +118,60 @@ final class ScribeCLITests: XCTestCase {
         XCTAssertEqual(result.exitCode, 2)
         XCTAssertTrue(result.stderr.contains("unknown option"))
         XCTAssertTrue(result.stderr.contains("--help"))
+    }
+
+    // MARK: - Phase 54 — column / readonly / lang
+
+    func test_columnFlag_requiresArgument() throws {
+        let result = try runWrapper(args: ["--column"])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--column"))
+    }
+
+    func test_columnFlag_rejectsNonNumeric() throws {
+        let result = try runWrapper(args: ["-l", "1", "-c", "abc", "README.md"])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("positive integer"))
+    }
+
+    func test_columnFlag_rejectsZero() throws {
+        let result = try runWrapper(args: ["-l", "1", "-c", "0", "README.md"])
+        XCTAssertEqual(result.exitCode, 2)
+    }
+
+    func test_columnFlag_rejectsNegative() throws {
+        let result = try runWrapper(args: ["-l", "1", "-c", "-3", "README.md"])
+        XCTAssertEqual(result.exitCode, 2)
+    }
+
+    func test_columnFlag_requiresLineFlag() throws {
+        // Phase 54 — `--column` without `--line` is rejected at the
+        // wrapper level. The downstream env knob falls back to nil
+        // either way, but the validation surfaces the user error
+        // immediately instead of silently ignoring the column.
+        let result = try runWrapper(args: ["-c", "5", "README.md"])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--column requires --line"))
+    }
+
+    func test_langFlag_requiresArgument() throws {
+        let result = try runWrapper(args: ["--lang"])
+        XCTAssertEqual(result.exitCode, 2)
+        XCTAssertTrue(result.stderr.contains("--lang"))
+    }
+
+    func test_readonlyFlag_acceptsBothShortAndLong() throws {
+        // The flag is boolean — both `-r` and `--readonly` should
+        // parse without consuming the next argument. We invoke
+        // with `--help` afterwards to keep the wrapper on the
+        // early-exit path (no `open` dispatch in CI).
+        let resultShort = try runWrapper(args: ["-r", "--help"])
+        XCTAssertEqual(resultShort.exitCode, 0)
+        XCTAssertTrue(resultShort.stdout.contains("USAGE"))
+
+        let resultLong = try runWrapper(args: ["--readonly", "--help"])
+        XCTAssertEqual(resultLong.exitCode, 0)
+        XCTAssertTrue(resultLong.stdout.contains("USAGE"))
     }
 
     // MARK: - Helpers

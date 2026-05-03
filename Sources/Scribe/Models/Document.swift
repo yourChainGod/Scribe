@@ -49,6 +49,17 @@ final class Document: ObservableObject, Identifiable {
     /// source-compatible via `PendingScrollTarget`'s default column.
     @Published var pendingScroll: PendingScrollTarget? = nil
 
+    /// Phase 54 — read-only buffer flag. When `true`, Scintilla's
+    /// `setEditable(false)` rejects every keystroke / paste / drop,
+    /// matching `scribe -r foo.md`. The flag is per-document so a
+    /// read-only `git show HEAD:file.md` tab doesn't poison sibling
+    /// tabs that were opened normally. Toggled at the status-bar
+    /// language menu (Phase 54 ships the CLI surface; UI toggle is
+    /// a follow-up). The Coordinator drains this on every
+    /// `updateNSView` so a SwiftUI flip propagates without needing
+    /// to re-attach the view.
+    @Published var isReadOnly: Bool = false
+
     /// Phase 28b — `true` while Workspace is still reading + decoding
     /// the file's bytes off the main thread. The Scintilla wrapper
     /// shows a placeholder during that window so a 20 MB open doesn't
