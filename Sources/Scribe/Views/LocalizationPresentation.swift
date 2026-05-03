@@ -50,6 +50,23 @@ enum FindBarPresentation {
                                     }) -> String {
         text(count)
     }
+
+    /// Phase 58 — Notepad++ IncrementalSearchBar muscle memory:
+    /// the find field paints a red 1pt border whenever the query
+    /// is non-empty *and* the engine reports zero hits, so users
+    /// register "no match" peripherally without having to read
+    /// the counter line. Returns false on:
+    ///   * empty query (no search yet — neutral state)
+    ///   * any positive `matchCount`
+    /// Centralised here so the view layer doesn't re-derive the
+    /// rule (and so a unit test can pin every transition without
+    /// spinning up a SwiftUI host).
+    static func shouldHighlightNoMatch(query: String,
+                                       matchCount: Int) -> Bool {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return false }
+        return matchCount == 0
+    }
 }
 
 enum FindInFilesPresentation {

@@ -60,6 +60,22 @@ struct FindBar: View {
                 .focused($queryFocused)
                 .font(.system(size: 12))
                 .frame(maxWidth: 280)
+                // Phase 58 — Notepad++ IncrementalSearchBar muscle
+                // memory: when the query is non-empty *and* zero
+                // hits are reported, paint a red 1pt overlay around
+                // the field. The status text already says so in
+                // words; the colour cue lets users register "no
+                // match" peripherally without having to read the
+                // counter. Only the query field gets it — the
+                // replace field is irrelevant for matching.
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(Color.red.opacity(0.85), lineWidth: 1)
+                        .opacity(FindBarPresentation.shouldHighlightNoMatch(
+                            query: state.query,
+                            matchCount: state.matchCount) ? 1 : 0)
+                        .allowsHitTesting(false)
+                )
                 .onSubmit {
                     state.commitQueryToHistory()
                     state.commands.send(.findNext)

@@ -59,6 +59,54 @@ final class LocalizationPresentationTests: XCTestCase {
         )
     }
 
+    // MARK: - Phase 58 — no-match red overlay rule
+
+    func test_shouldHighlightNoMatch_emptyQuery_returnsFalse() {
+        // Pre-search neutral state: nothing typed yet, the overlay
+        // would distract more than it helps. Status text also stays
+        // empty in this branch — the two presentations agree.
+        XCTAssertFalse(
+            FindBarPresentation.shouldHighlightNoMatch(query: "",
+                                                       matchCount: 0)
+        )
+    }
+
+    func test_shouldHighlightNoMatch_whitespaceOnlyQuery_returnsFalse() {
+        // Whitespace-only entries are common when the user hits
+        // space inside the field; treating them as "real query" would
+        // flash the field red until the next character arrives.
+        XCTAssertFalse(
+            FindBarPresentation.shouldHighlightNoMatch(query: "   ",
+                                                       matchCount: 0)
+        )
+        XCTAssertFalse(
+            FindBarPresentation.shouldHighlightNoMatch(query: "\t",
+                                                       matchCount: 0)
+        )
+    }
+
+    func test_shouldHighlightNoMatch_queryWithMatches_returnsFalse() {
+        // Anything > 0 matches ⇒ neutral border colour, even with a
+        // non-empty status (e.g. "Wrapped").
+        XCTAssertFalse(
+            FindBarPresentation.shouldHighlightNoMatch(query: "foo",
+                                                       matchCount: 1)
+        )
+        XCTAssertFalse(
+            FindBarPresentation.shouldHighlightNoMatch(query: "foo",
+                                                       matchCount: 42)
+        )
+    }
+
+    func test_shouldHighlightNoMatch_queryButZeroMatches_returnsTrue() {
+        // The signature case: user typed something, engine reports
+        // zero hits — paint the overlay red.
+        XCTAssertTrue(
+            FindBarPresentation.shouldHighlightNoMatch(query: "qwerty",
+                                                       matchCount: 0)
+        )
+    }
+
     func test_findInFilesReplaceSummaryUsesLocalizedFragments() {
         var summary = ReplaceSummary(filesScanned: 4,
                                      filesChanged: 2,
