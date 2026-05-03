@@ -343,6 +343,8 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                     case .transformSelection(let action): self.transformSelection(action, in: view)
                     case .replaceSelectionText(let text): self.replaceCurrentSelection(with: text, in: view)
                     case .hideInlineBlameTooltip: self.hideInlineBlameTooltip(in: view)
+                    case .toggleMarkdownTaskCheckbox: self.toggleMarkdownTaskCheckbox(in: view)
+                    case .toggleMarkdownTaskCheckboxAt(let line): self.toggleMarkdownTaskCheckbox(atLine: line, in: view)
                     case .insertAtCarets(let s): self.insertAtCarets(s, in: view)
                     case let .testRectSelectExtend(d, r):
                         self.testRectSelectExtend(linesDown: d, charsRight: r, in: view)

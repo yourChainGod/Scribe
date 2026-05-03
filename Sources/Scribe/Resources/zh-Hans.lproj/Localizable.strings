@@ -349,6 +349,7 @@
 "menu.view.editorTheme"   = "编辑器主题";
 "menu.view.markdownPreview" = "Markdown 预览";
 "menu.view.markdownPreviewUnavailable" = "Markdown 预览适用于 .md 和 .markdown 文件。";
+"menu.view.toggleTaskCheckbox" = "切换任务复选框";
 "menu.edit.useSelection"  = "用选区作为查找词";
 "menu.edit.insertSnippet" = "插入代码片段…";
 "menu.edit.hideFindBar"   = "隐藏查找栏";

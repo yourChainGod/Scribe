@@ -118,6 +118,11 @@ struct MarkdownPreviewPane: NSViewRepresentable {
     /// seen. Passing nil disables the reverse-sync leg entirely
     /// (e.g. when rendered outside of a document context).
     var onPreviewScroll: ((Int) -> Void)? = nil
+    /// Phase 53b — callback fired when the user clicks a task-list
+    /// checkbox in the preview. Receives the 1-based source line
+    /// of the containing `<li>`. Callers typically forward this
+    /// to FindState.commands.send(.toggleMarkdownTaskCheckboxAt).
+    var onToggleTask: ((Int) -> Void)? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -148,28 +153,35 @@ struct MarkdownPreviewPane: NSViewRepresentable {
         // one pane's userContentController so there's no collision
         // with any other WKWebView in the app.
         cfg.userContentController.add(context.coordinator, name: "scribeScroll")
+        // Phase 53b — second handler for task-checkbox clicks in
+        // the preview. Kept on a distinct name so the dispatcher
+        // can tell scroll reports and toggle clicks apart without
+        // inspecting payload shape.
+        cfg.userContentController.add(context.coordinator, name: "scribeToggleTask")
         let view = WKWebView(frame: .zero, configuration: cfg)
         view.navigationDelegate = context.coordinator
         // Translucent: lets the SwiftUI parent (which owns light/dark
         // theming) bleed through if our HTML is shorter than the pane.
         view.setValue(false, forKey: "drawsBackground")
         view.allowsBackForwardNavigationGestures = false
-        // Pick up the initial callback; updateNSView keeps it fresh
-        // on every subsequent tick so a reconnect (new Document,
-        // same pane) doesn't leave the handler pointing at the old
-        // Document's state.
+        // Pick up the initial callbacks; updateNSView keeps them
+        // fresh on every subsequent tick so a reconnect (new
+        // Document, same pane) doesn't leave the handlers pointing
+        // at the old Document's state.
         context.coordinator.onPreviewScroll = onPreviewScroll
+        context.coordinator.onToggleTask = onToggleTask
         loadHTML(into: view, coordinator: context.coordinator)
         return view
     }
 
     func updateNSView(_ view: WKWebView, context: Context) {
         let coord = context.coordinator
-        // Phase 52c — pane is a value type; every tick rebuilds it
-        // with a freshly-closed-over callback. Refresh the
-        // Coordinator's copy so a stale Document reference can't
-        // leak across document switches.
+        // Phase 52c / 53b — pane is a value type; every tick
+        // rebuilds it with freshly-closed-over callbacks. Refresh
+        // the Coordinator's copies so a stale Document reference
+        // can't leak across document switches.
         coord.onPreviewScroll = onPreviewScroll
+        coord.onToggleTask = onToggleTask
         // Phase 51e / 52b — caret- or scroll-only changes (markdown
         // unchanged, theme unchanged) take a third, even cheaper
         // path: just fire the reveal-line JS helper. No re-render,
@@ -672,6 +684,34 @@ struct MarkdownPreviewPane: NSViewRepresentable {
             window.__scribeScrollRAF =
               window.requestAnimationFrame(window.scribePostScroll);
           }, { passive: true });
+          // Phase 53b — click handler for task-list checkboxes.
+          // Uses event delegation on document so checkboxes added
+          // by the incremental innerHTML swap (Phase 51b) are
+          // covered without re-binding. `.scribe-task` is the
+          // class MarkdownConverter stamps on our rendered
+          // checkboxes; third-party checkboxes inside raw HTML
+          // blocks (if any) go through the default browser
+          // behaviour.
+          document.addEventListener('click', function (ev) {
+            var t = ev.target;
+            if (!t || !t.matches || !t.matches('input.scribe-task')) {
+              return;
+            }
+            // Prevent the browser from flipping the DOM state;
+            // markdown text is the single source of truth and
+            // Swift will re-render the preview with the new
+            // `checked` attribute after the edit lands.
+            ev.preventDefault();
+            var li = t.closest('li[data-source-line]');
+            if (!li) { return; }
+            var line = parseInt(li.getAttribute('data-source-line'), 10);
+            if (!(line > 0)) { return; }
+            if (!window.webkit || !window.webkit.messageHandlers
+                || !window.webkit.messageHandlers.scribeToggleTask) {
+              return;
+            }
+            window.webkit.messageHandlers.scribeToggleTask.postMessage(line);
+          }, true);
           // Initial build once the shell's DOM is ready. Subsequent
           // `#md-root.innerHTML = …` swaps have to call
           // `scribeBuildBlockIndex()` themselves (the injection
@@ -981,40 +1021,51 @@ struct MarkdownPreviewPane: NSViewRepresentable {
         /// previews rendered outside a document context silently
         /// drop the reverse-sync side.
         var onPreviewScroll: ((Int) -> Void)?
+        /// Phase 53b — callback for task-checkbox clicks in the
+        /// preview. Same lifecycle as `onPreviewScroll`.
+        var onToggleTask: ((Int) -> Void)?
         /// Phase 52c — last line we heard from the JS scroll
         /// reporter. Used purely for test introspection; the
         /// ping-pong guard is the JS-side timestamp
         /// (`__scribeProgrammaticScroll`), not this field.
         var lastReportedPreviewLine: Int = 0
+        /// Phase 53b — last source line we heard from the task-
+        /// checkbox click reporter. Test-only introspection.
+        var lastToggledTaskLine: Int = 0
 
-        /// Phase 52c — WKScriptMessageHandler entry point. Fires
-        /// whenever the preview's `scroll` listener decides it has
-        /// something worth telling Swift about (rAF-coalesced, and
-        /// only outside the 250 ms programmatic-scroll window).
-        /// The body is always an `NSNumber` carrying a 1-based
-        /// source line; anything else means a JS bug and we
-        /// silently drop it rather than crashing.
+        /// Phase 52c / 53b — WKScriptMessageHandler entry point.
+        /// Both the rAF-throttled scroll reporter and the task-
+        /// checkbox click handler post into here; the dispatch
+        /// happens by name in `handleScrollMessage`.
         @MainActor
         func userContentController(_ userContentController: WKUserContentController,
                                    didReceive message: WKScriptMessage) {
             handleScrollMessage(name: message.name, body: message.body)
         }
 
-        /// Phase 52c — decoupled body of `userContentController`.
-        /// Extracted so XCTest can drive the handler without
-        /// synthesising a `WKScriptMessage` (which is sealed and
-        /// can't be instantiated outside WebKit). All filtering
-        /// rules — wrong name, non-NSNumber body, non-positive
-        /// line — reject silently so a misbehaving JS patch can't
-        /// crash the preview.
+        /// Phase 52c / 53b — decoupled body of
+        /// `userContentController`. Extracted so XCTest can drive
+        /// every handler without synthesising a `WKScriptMessage`
+        /// (sealed, uninstantiable).
+        ///
+        /// Filtering rules — unknown name, non-NSNumber body,
+        /// non-positive line — reject silently so a misbehaving JS
+        /// patch can't crash the preview.
         @MainActor
         func handleScrollMessage(name: String, body: Any) {
-            guard name == "scribeScroll" else { return }
             guard let n = body as? NSNumber else { return }
             let line = n.intValue
             guard line > 0 else { return }
-            lastReportedPreviewLine = line
-            onPreviewScroll?(line)
+            switch name {
+            case "scribeScroll":
+                lastReportedPreviewLine = line
+                onPreviewScroll?(line)
+            case "scribeToggleTask":
+                lastToggledTaskLine = line
+                onToggleTask?(line)
+            default:
+                return
+            }
         }
 
         // The user clicked an `<a href="…">`. We never want WKWebView

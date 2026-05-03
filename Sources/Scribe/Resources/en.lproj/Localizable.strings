@@ -351,6 +351,7 @@
 "menu.view.editorTheme"   = "Editor Theme";
 "menu.view.markdownPreview" = "Markdown Preview";
 "menu.view.markdownPreviewUnavailable" = "Markdown Preview is available for .md and .markdown files.";
+"menu.view.toggleTaskCheckbox" = "Toggle Task Checkbox";
 "menu.edit.useSelection"  = "Use Selection for Find";
 "menu.edit.insertSnippet" = "Insert Snippet…";
 "menu.edit.hideFindBar"   = "Hide Find Bar";

@@ -464,9 +464,23 @@ enum MarkdownConverter {
                 }
                 if let task = matchTaskMarker(item) {
                     let checkedAttr = task.checked ? " checked" : ""
+                    // Phase 53b — checkbox is *not* disabled: the
+                    // preview's click handler (see
+                    // `revealLineScript`) calls `preventDefault()`
+                    // so the browser never actually flips the DOM
+                    // state, then posts the source line to Swift.
+                    // The editor performs the markdown edit; the
+                    // preview re-renders with the new `checked`
+                    // attribute, which keeps markdown text as the
+                    // single source of truth. The `scribe-task`
+                    // class lets the click handler match just our
+                    // checkboxes without snagging stray
+                    // `<input type="checkbox">` elements a
+                    // document might contain inside a raw HTML
+                    // block.
                     output.append(
                         "<li class=\"task-list-item\"\(dsl(currentSourceLine))>"
-                        + "<input type=\"checkbox\" disabled\(checkedAttr)/> "
+                        + "<input type=\"checkbox\" class=\"scribe-task\"\(checkedAttr)/> "
                     )
                     output.append(renderInline(task.content,
                                                footnoteRefs: footnoteRefs,

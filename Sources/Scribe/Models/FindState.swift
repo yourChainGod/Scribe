@@ -120,6 +120,19 @@ final class FindState: ObservableObject {
         /// Cocoa calltip window is above modal panels, so overlays must
         /// explicitly dismiss it.
         case hideInlineBlameTooltip
+        /// Phase 53b — toggle a markdown task-list checkbox on the
+        /// current caret line, or promote a plain list bullet to a
+        /// task. No-op when the line isn't a list item. Routed
+        /// through FindState.commands so the menu / shortcut driver
+        /// doesn't need to know the Coordinator's private API.
+        case toggleMarkdownTaskCheckbox
+        /// Phase 53b — same flip as `toggleMarkdownTaskCheckbox`
+        /// but at an explicit 1-based source line, not the caret.
+        /// Fired by the preview-side JS click handler when the
+        /// user taps a rendered checkbox. The Scintilla coordinator
+        /// finds the line, runs the parser, and applies the edit —
+        /// the preview re-renders on the resulting text change.
+        case toggleMarkdownTaskCheckboxAt(line: Int)
         /// Test-only: inserts the literal string at every caret via
         /// `SCI_REPLACESEL`. Used by the Phase 21 verification hook
         /// to render visible markers at the multi-caret positions —

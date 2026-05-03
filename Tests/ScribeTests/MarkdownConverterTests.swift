@@ -394,14 +394,14 @@ final class MarkdownConverterTests: XCTestCase {
         let md = "- [ ] todo"
         let html = MarkdownConverter.render(md)
         XCTAssertTrue(html.contains("<li class=\"task-list-item\" data-source-line=\"1\">"))
-        XCTAssertTrue(html.contains("<input type=\"checkbox\" disabled/> todo"))
+        XCTAssertTrue(html.contains("<input type=\"checkbox\" class=\"scribe-task\"/> todo"))
         XCTAssertFalse(html.contains("checked"))
     }
 
     func testTaskListChecked() {
         let md = "- [x] done"
         let html = MarkdownConverter.render(md)
-        XCTAssertTrue(html.contains("<input type=\"checkbox\" disabled checked/> done"))
+        XCTAssertTrue(html.contains("<input type=\"checkbox\" class=\"scribe-task\" checked/> done"))
     }
 
     func testTaskListUppercaseXAlsoChecked() {
@@ -425,7 +425,7 @@ final class MarkdownConverterTests: XCTestCase {
     func testTaskListInlineEmphasisInContent() {
         let md = "- [ ] **bold** task"
         let html = MarkdownConverter.render(md)
-        XCTAssertTrue(html.contains("<input type=\"checkbox\" disabled/> "
+        XCTAssertTrue(html.contains("<input type=\"checkbox\" class=\"scribe-task\"/> "
                                     + "<strong>bold</strong> task"))
     }
 

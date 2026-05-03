@@ -97,6 +97,15 @@ private struct DocumentEditorPane: View {
                             if doc.previewViewportTopLine != line {
                                 doc.previewViewportTopLine = line
                             }
+                        },
+                        // Phase 53b — preview checkbox click. The
+                        // JS handler posts the source line; we
+                        // forward it through FindState.commands so
+                        // the editor's Coordinator runs the same
+                        // toggle logic the ⇧⌘K shortcut uses.
+                        onToggleTask: { line in
+                            findState.commands.send(
+                                .toggleMarkdownTaskCheckboxAt(line: line))
                         }
                     )
                     .frame(minWidth: 260)

@@ -102,6 +102,113 @@ extension ScintillaCodeEditor.Coordinator {
         return out
     }
 
+    // MARK: - Phase 53b · task-checkbox toggle
+
+    /// Phase 53b — caret-driven entry point. Fired by the ⇧⌘K
+    /// menu / shortcut. Reads the line the caret is on and
+    /// dispatches to the shared apply path.
+    func toggleMarkdownTaskCheckbox(in view: ScintillaView) {
+        guard doc.isMarkdown else { return }
+        let pos = Int(view.message(SCI.GETCURRENTPOS))
+        let line = Int(view.message(SCI.LINEFROMPOSITION,
+                                    wParam: UInt(bitPattern: pos)))
+        applyTaskToggle(atLine: line, in: view)
+    }
+
+    /// Phase 53b — preview-driven entry point. Fired when the JS
+    /// click handler in MarkdownPreviewPane posts a line number
+    /// (1-based, matching MarkdownConverter's `data-source-line`
+    /// stamps). Translates to Scintilla's 0-based index and
+    /// dispatches.
+    ///
+    /// A stale `line1Based` (preview hasn't caught up with a doc
+    /// edit) would read whatever content lives at the translated
+    /// index and either flip a nearby task or no-op — never
+    /// corrupt unrelated content, because the pure parser refuses
+    /// every shape that isn't a list item.
+    func toggleMarkdownTaskCheckbox(atLine line1Based: Int,
+                                    in view: ScintillaView) {
+        guard doc.isMarkdown else { return }
+        guard line1Based >= 1 else { return }
+        let line0 = line1Based - 1
+        let total = Int(view.message(SCI.GETLINECOUNT))
+        guard line0 < total else { return }
+        applyTaskToggle(atLine: line0, in: view)
+    }
+
+    /// Shared body: read the line, run the pure parser, apply the
+    /// resulting edit. Wrapped on the caller side in
+    /// BEGIN/ENDUNDOACTION so the toggle is one ⌘Z step.
+    private func applyTaskToggle(atLine line: Int, in view: ScintillaView) {
+        guard let lineText = readLineText(line, in: view) else { return }
+        let content = stripTrailingNewline(lineText)
+
+        let action = markdownTaskToggle(line: content)
+        switch action {
+        case .none:
+            return
+        case .flip(let offset, let newCharacter):
+            flipByte(line: line,
+                     byteOffset: offset,
+                     newCharacter: newCharacter,
+                     in: view)
+        case .promote(let offset):
+            promoteToTask(line: line, byteOffset: offset, in: view)
+        }
+    }
+
+    /// Replace a single byte on `line` at `byteOffset` with the
+    /// ASCII representation of `newCharacter`. Used by the
+    /// unchecked ↔ checked flip: the parser has already proven
+    /// the target byte is an ASCII `' '` / `'x'` / `'X'`, so the
+    /// single-byte UTF-8 assumption holds.
+    private func flipByte(line: Int,
+                          byteOffset: Int,
+                          newCharacter: Character,
+                          in view: ScintillaView) {
+        let lineStart = Int(view.message(SCI.POSITIONFROMLINE,
+                                         wParam: UInt(bitPattern: line)))
+        let targetPos = lineStart + byteOffset
+        // Replacement is always a single ASCII byte.
+        let replacement = String(newCharacter)
+        let bytes = Array(replacement.utf8) + [0]
+        view.message(SCI.BEGINUNDOACTION)
+        // Select the single byte, then REPLACESEL: cheaper than a
+        // delete+insert dance and keeps the caret where the user
+        // expects (right after the flipped char).
+        view.message(SCI.SETSEL,
+                     wParam: UInt(bitPattern: targetPos),
+                     lParam: targetPos + 1)
+        bytes.withUnsafeBufferPointer { buf in
+            guard let base = buf.baseAddress else { return }
+            view.message(SCI.REPLACESEL,
+                         wParam: 0,
+                         lParam: Int(bitPattern: base))
+        }
+        view.message(SCI.ENDUNDOACTION)
+    }
+
+    /// Insert `"[ ] "` at `byteOffset` on `line`. Used by the
+    /// plain-bullet → task-list promotion path.
+    private func promoteToTask(line: Int,
+                               byteOffset: Int,
+                               in view: ScintillaView) {
+        let lineStart = Int(view.message(SCI.POSITIONFROMLINE,
+                                         wParam: UInt(bitPattern: line)))
+        let insertPos = lineStart + byteOffset
+        let bytes = Array("[ ] ".utf8) + [0]
+        view.message(SCI.BEGINUNDOACTION)
+        bytes.withUnsafeBufferPointer { buf in
+            guard let base = buf.baseAddress else { return }
+            view.message(SCI.INSERTTEXT,
+                         wParam: UInt(bitPattern: insertPos),
+                         lParam: Int(bitPattern: base))
+        }
+        view.message(SCI.ENDUNDOACTION)
+    }
+
+    // MARK: - SCI_REPLACESEL helpers
+
     /// SCI_REPLACESEL writes at the current caret with no
     /// selection. Mirrors the pattern used by
     /// `Coordinator+TextTransform.swift`. Wrapped in a single undo

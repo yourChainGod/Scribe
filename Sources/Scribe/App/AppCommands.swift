@@ -115,6 +115,18 @@ struct ScribeCommands: Commands {
             }
             .keyboardShortcut("v", modifiers: [.command, .shift])
             .disabled(!workspace.canToggleMarkdownPreview)
+
+            // Phase 53b — toggle a task-list checkbox on the caret
+            // line (or promote a plain bullet to a task). Disabled
+            // on non-markdown documents so the shortcut has no
+            // surprising effect in a .swift / .py buffer.
+            Button {
+                findState.commands.send(.toggleMarkdownTaskCheckbox)
+            } label: {
+                Text("menu.view.toggleTaskCheckbox", bundle: .module)
+            }
+            .keyboardShortcut("k", modifiers: [.command, .shift])
+            .disabled(workspace.current?.isMarkdown != true)
         }
 
         // — Go menu —
