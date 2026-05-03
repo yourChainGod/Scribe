@@ -173,6 +173,21 @@ struct MainWindow: View {
                 workspace.resolveExternalChange(prompt, reloadFromDisk: reloadFromDisk)
             }
         }
+        // Phase 69 — crash recovery sheet. Listed before every
+        // other sheet because, if a previous session left dirty
+        // buffers behind, the user should resolve them first
+        // before any other prompt fires.
+        .sheet(item: $workspace.crashRecoveryPrompt) { prompt in
+            CrashRecoverySheet(
+                prompt: prompt,
+                onRestore: { selectedIDs in
+                    workspace.applyCrashRecovery(prompt, selectedIDs: selectedIDs)
+                },
+                onDiscard: {
+                    workspace.discardCrashRecovery(prompt)
+                })
+                .environment(\.appTheme, appTheme)
+        }
         .sheet(isPresented: $workspace.isTextToolsPresented) {
             TextToolsWorkbench()
                 .environmentObject(workspace)

@@ -94,6 +94,15 @@ final class EditorPreferences: ObservableObject {
         // so a `rm` between sessions doesn't surface a broken tab.
         static let sessionOpenFilePaths     = "session.openFilePaths"
         static let sessionSelectedFilePath  = "session.selectedFilePath"
+        // Phase 69 — auto-save scratch & crash recovery. Paired with
+        // the on-disk store at `~/Library/Application Support/
+        // Scribe/scratch/`; flipping `enabled` off doesn't just stop
+        // future writes, it also triggers `ScratchBufferStore.clearAll`
+        // so the "off means off" contract matches the clipboard
+        // history precedent (Phase 67).
+        static let autoSaveScratchEnabled          = "autoSave.scratch.enabled"
+        static let autoSaveScratchDebounceSeconds  = "autoSave.scratch.debounceSeconds"
+        static let autoSaveScratchRetentionDays    = "autoSave.scratch.retentionDays"
     }
 
     /// Phase 39a — translates raw values from the pre-39 theme
@@ -306,6 +315,45 @@ final class EditorPreferences: ObservableObject {
         }
     }
 
+    // MARK: - Phase 69 — auto-save scratch & crash recovery
+
+    /// Phase 69 — master switch for dirty-buffer snapshots. Off ⇒
+    /// `Workspace.captureScratch` short-circuits to a drop, and
+    /// `ScribeApp.init` calls `ScratchBufferStore.clearAll` once
+    /// so the user's "off means off" expectation is honoured even
+    /// for blobs written during a previous "on" session.
+    @Published var autoSaveScratchEnabled: Bool {
+        didSet {
+            defaults.set(autoSaveScratchEnabled, forKey: Key.autoSaveScratchEnabled)
+        }
+    }
+
+    /// Phase 69 — debounce window (seconds) between the last
+    /// keystroke and a scratch-file flush. Workspace clamps at 0.5s
+    /// to protect the disk from a misconfigured `0`. Default 3s
+    /// matches the "perceptually pause" threshold — most users feel
+    /// they've finished a thought after ~2-3 seconds of stillness.
+    @Published var autoSaveScratchDebounceSeconds: Double {
+        didSet {
+            defaults.set(autoSaveScratchDebounceSeconds,
+                         forKey: Key.autoSaveScratchDebounceSeconds)
+        }
+    }
+
+    /// Phase 69 — how many days an orphaned scratch (user never
+    /// opened it again, never explicitly discarded) stays on disk
+    /// before `ScratchBufferStore.pruneExpired` drops it. `0`
+    /// disables the sweep ("keep forever"). Default 7 days lets the
+    /// user come back from vacation and still see the recovery
+    /// prompt but keeps abandoned Untitled scratches from
+    /// accumulating across years.
+    @Published var autoSaveScratchRetentionDays: Int {
+        didSet {
+            defaults.set(autoSaveScratchRetentionDays,
+                         forKey: Key.autoSaveScratchRetentionDays)
+        }
+    }
+
     /// Phase 39b — per-theme custom slot overrides. Sparse map: a
     /// missing `ThemeID` key means "no overrides for that preset",
     /// and an empty `ThemeOverrides.slots` should be cleaned up by
@@ -439,6 +487,22 @@ final class EditorPreferences: ObservableObject {
             defaults.stringArray(forKey: Key.sessionOpenFilePaths) ?? []
         self.sessionSelectedFilePath =
             defaults.string(forKey: Key.sessionSelectedFilePath)
+
+        // Phase 69 — auto-save scratch. Missing keys ⇒ defaults:
+        // enabled=true, debounce=3s, retention=7 days. Clamping
+        // guards against a hand-edited plist that tries to set a
+        // 0-second debounce (would flood the disk) or negative
+        // retention (would treat every entry as stale and wipe
+        // them all on next launch).
+        if defaults.object(forKey: Key.autoSaveScratchEnabled) == nil {
+            self.autoSaveScratchEnabled = true
+        } else {
+            self.autoSaveScratchEnabled = defaults.bool(forKey: Key.autoSaveScratchEnabled)
+        }
+        let storedDebounce = defaults.object(forKey: Key.autoSaveScratchDebounceSeconds) as? Double
+        self.autoSaveScratchDebounceSeconds = max(0.5, min(60.0, storedDebounce ?? 3.0))
+        let storedRetention = defaults.object(forKey: Key.autoSaveScratchRetentionDays) as? Int
+        self.autoSaveScratchRetentionDays = max(0, min(365, storedRetention ?? 7))
 
         // Phase 39b — load per-theme override map. Silent fall-back
         // to empty map on decode failure (corrupted blob, future

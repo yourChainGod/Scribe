@@ -407,6 +407,18 @@
 "alert.button.save"            = "保存";
 "alert.button.dontSave"        = "不保存";
 
+// Phase 69 — 崩溃恢复 sheet（自动保存暂存区）
+"crashRecovery.title"               = "恢复未保存的更改";
+"crashRecovery.body"                = "Scribe 检测到上次会话留下了未保存的编辑。请选择要恢复的内容。";
+"crashRecovery.untitled"            = "未命名（无文件路径）";
+"crashRecovery.selectAll"           = "全选";
+"crashRecovery.deselectAll"         = "全不选";
+"crashRecovery.selectionCount"      = "已选 %@ / %@";
+"crashRecovery.badge.externalChanged" = "文件已被外部修改";
+"crashRecovery.badge.fileMissing"   = "文件已删除";
+"crashRecovery.button.restore"      = "恢复所选";
+"crashRecovery.button.discard"      = "全部丢弃";
+
 "error.cannotDecode"           = "无法以 %@ 解码文件。";
 "error.cannotEncode"           = "无法以 %@ 编码文本。";
 "error.largeFileSaveNoEditor"  = "无法保存：当前没有编辑器与该大文件绑定。";
@@ -944,3 +956,16 @@
 "settings.clipboard.retention.help"       = "设为 0 表示永久保留；其它值会在每次剪贴板变更时清理超期条目。";
 "settings.clipboard.retention.forever"    = "永久";
 "settings.clipboard.retention.days"       = "%d 天";
+
+// Phase 69 — 自动保存暂存区 / 崩溃恢复
+"settings.tab.autoSave"                    = "自动保存";
+"settings.autoSave.section.scratch"        = "未保存内容快照";
+"settings.autoSave.enabled.title"          = "保留未保存的更改";
+"settings.autoSave.enabled.help"           = "定期把未保存的编辑写入 ~/Library/Application Support/Scribe/scratch/，以便崩溃或强退时不会丢失。⌘S 仍是落盘到原文件的唯一动作。";
+"settings.autoSave.section.retention"      = "计划";
+"settings.autoSave.debounce.label"         = "停止编辑后经过";
+"settings.autoSave.debounce.seconds"       = "%.1f 秒";
+"settings.autoSave.retention.label"        = "丢弃早于";
+"settings.autoSave.retention.forever"      = "永久";
+"settings.autoSave.retention.days"         = "%d 天";
+"settings.autoSave.retention.help"         = "上次会话遗留的快照会在启动时按此清理。设为 0 表示永久保留。";

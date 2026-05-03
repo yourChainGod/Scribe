@@ -73,6 +73,24 @@ struct ScribeApp: App {
                              to: ws,
                              skip: hasAutoOpen)
 
+        // Phase 69 — auto-save scratch lifecycle on launch:
+        //   1. If the user has flipped the master switch off,
+        //      wipe every scratch entry from a previous "on"
+        //      session so "off means off" is honoured.
+        //   2. Otherwise, prune expired entries first (so the
+        //      recovery sheet doesn't list weeks-old abandoned
+        //      Untitleds), then surface a recovery prompt for
+        //      whatever's left. The prompt is non-nil only when
+        //      there's something to restore — quiet first launch.
+        if !preferences.autoSaveScratchEnabled {
+            ws.scratchStore.clearAll()
+        } else {
+            ws.scratchStore.pruneExpired(
+                retentionDays: preferences.autoSaveScratchRetentionDays)
+            ws.crashRecoveryPrompt = CrashRecovery.detectPending(
+                store: ws.scratchStore)
+        }
+
         _prefs = StateObject(wrappedValue: preferences)
         _workspace = StateObject(wrappedValue: ws)
         // Phase 67 — pass the persisted policy in at construction
@@ -149,6 +167,15 @@ struct ScribeApp: App {
                 }
                 .onChange(of: prefs.clipboardHistoryRetentionDays) { _, _ in
                     clipboardHistory.updatePolicy(prefs.clipboardHistoryPolicy)
+                }
+                // Phase 69 — user flipped the master switch off from
+                // Settings. Match the launch-time "off means off"
+                // behaviour: wipe every existing scratch so the next
+                // launch doesn't prompt for restore.
+                .onChange(of: prefs.autoSaveScratchEnabled) { _, enabled in
+                    if !enabled {
+                        workspace.scratchStore.clearAll()
+                    }
                 }
                 .onChange(of: workspace.folderRoot?.url) { _, newRoot in
                     if let newRoot {

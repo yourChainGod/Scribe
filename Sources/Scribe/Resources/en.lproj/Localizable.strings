@@ -409,6 +409,18 @@
 "alert.button.save"            = "Save";
 "alert.button.dontSave"        = "Don’t Save";
 
+// Phase 69 — crash recovery sheet (auto-save scratch buffers)
+"crashRecovery.title"               = "Recover unsaved changes";
+"crashRecovery.body"                = "Scribe found unsaved edits from your previous session. Pick which buffers to restore.";
+"crashRecovery.untitled"            = "Untitled (no file path)";
+"crashRecovery.selectAll"           = "Select all";
+"crashRecovery.deselectAll"         = "Deselect all";
+"crashRecovery.selectionCount"      = "%@ of %@ selected";
+"crashRecovery.badge.externalChanged" = "File changed externally";
+"crashRecovery.badge.fileMissing"   = "File deleted";
+"crashRecovery.button.restore"      = "Restore Selected";
+"crashRecovery.button.discard"      = "Discard All";
+
 "error.cannotDecode"           = "Cannot decode file as %@.";
 "error.cannotEncode"           = "Cannot encode text as %@.";
 "error.largeFileSaveNoEditor"  = "Cannot save: no editor is currently attached to this large file.";
@@ -947,3 +959,16 @@
 "settings.clipboard.retention.help"       = "Set 0 to keep entries forever. Otherwise old entries are pruned on every clipboard change.";
 "settings.clipboard.retention.forever"    = "Forever";
 "settings.clipboard.retention.days"       = "%d days";
+
+// Phase 69 — auto-save scratch / crash recovery
+"settings.tab.autoSave"                    = "Auto-save";
+"settings.autoSave.section.scratch"        = "Dirty buffer snapshot";
+"settings.autoSave.enabled.title"          = "Snapshot unsaved changes";
+"settings.autoSave.enabled.help"           = "Periodically writes your unsaved edits to ~/Library/Application Support/Scribe/scratch/ so a crash or hard kill doesn't lose your work. ⌘S still controls when your files actually change.";
+"settings.autoSave.section.retention"      = "Schedule";
+"settings.autoSave.debounce.label"         = "Snapshot after pause of";
+"settings.autoSave.debounce.seconds"       = "%.1f s";
+"settings.autoSave.retention.label"        = "Drop snapshots older than";
+"settings.autoSave.retention.forever"      = "Forever";
+"settings.autoSave.retention.days"         = "%d days";
+"settings.autoSave.retention.help"         = "Snapshots from previous sessions are pruned on launch. Set 0 to keep them forever.";

@@ -44,6 +44,14 @@ struct SettingsView: View {
                         Image(systemName: "doc.on.clipboard")
                     }
                 }
+            AutoSaveSettingsPane(prefs: prefs)
+                .tabItem {
+                    Label {
+                        Text("settings.tab.autoSave", bundle: .module)
+                    } icon: {
+                        Image(systemName: "tray.and.arrow.down.fill")
+                    }
+                }
             AboutPane()
                 .tabItem {
                     Label {
@@ -899,6 +907,91 @@ private struct ClipboardSettingsPane: View {
                           bundle: .module)
         }
         let format = String(localized: "settings.clipboard.retention.days",
+                            bundle: .module)
+        return String(format: format, days)
+    }
+}
+
+/// Phase 69 — auto-save scratch / crash recovery pane. Three
+/// knobs that all share the same privacy story as the clipboard
+/// pane: nothing leaves memory unless the user explicitly opts
+/// in, and the on-disk catalogue is bounded by both a debounce
+/// window and a retention TTL. Each control writes straight
+/// through `EditorPreferences`; the live `Workspace` reads its
+/// debounce window on every per-doc sink construction so a Tab
+/// switch picks up the new value immediately.
+private struct AutoSaveSettingsPane: View {
+    @ObservedObject var prefs: EditorPreferences
+
+    private var debounceBounds: ClosedRange<Double> { 0.5...60 }
+    private var retentionBounds: ClosedRange<Int> { 0...365 }
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle(isOn: $prefs.autoSaveScratchEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("settings.autoSave.enabled.title", bundle: .module)
+                        Text("settings.autoSave.enabled.help", bundle: .module)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("settings.autoSave.section.scratch", bundle: .module)
+            }
+
+            Section {
+                HStack {
+                    Text("settings.autoSave.debounce.label", bundle: .module)
+                    Spacer()
+                    Stepper(value: $prefs.autoSaveScratchDebounceSeconds,
+                            in: debounceBounds,
+                            step: 0.5,
+                            label: {
+                                Text(debounceSummary(prefs.autoSaveScratchDebounceSeconds))
+                                    .monospacedDigit()
+                                    .frame(minWidth: 80, alignment: .trailing)
+                            })
+                }
+                .disabled(!prefs.autoSaveScratchEnabled)
+
+                HStack {
+                    Text("settings.autoSave.retention.label", bundle: .module)
+                    Spacer()
+                    Stepper(value: $prefs.autoSaveScratchRetentionDays,
+                            in: retentionBounds,
+                            step: 1,
+                            label: {
+                                Text(retentionSummary(prefs.autoSaveScratchRetentionDays))
+                                    .monospacedDigit()
+                                    .frame(minWidth: 96, alignment: .trailing)
+                            })
+                }
+                .disabled(!prefs.autoSaveScratchEnabled)
+
+                Text("settings.autoSave.retention.help", bundle: .module)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text("settings.autoSave.section.retention", bundle: .module)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func debounceSummary(_ seconds: Double) -> String {
+        let format = String(localized: "settings.autoSave.debounce.seconds",
+                            bundle: .module)
+        return String(format: format, seconds)
+    }
+
+    private func retentionSummary(_ days: Int) -> String {
+        if days <= 0 {
+            return String(localized: "settings.autoSave.retention.forever",
+                          bundle: .module)
+        }
+        let format = String(localized: "settings.autoSave.retention.days",
                             bundle: .module)
         return String(format: format, days)
     }

@@ -49,6 +49,13 @@ final class Workspace: ObservableObject {
     @Published var folderRoot: FileNode?
     @Published var externalChangePrompt: ExternalChangePrompt?
 
+    /// Phase 69 — non-nil ⇒ MainWindow shows the crash-recovery
+    /// sheet listing scratch entries the previous session left
+    /// behind. ScribeApp sets this once at launch via
+    /// `CrashRecovery.detectPending`; the sheet's buttons clear it
+    /// (and either apply or discard the entries).
+    @Published var crashRecoveryPrompt: CrashRecoveryPrompt?
+
     /// Non-nil ⇒ MainWindow renders the Compare-Files screen instead of
     /// the editor. ScribeApp keeps a single DiffSession for the app
     /// lifetime; toggling here just shows / hides the screen.
@@ -227,8 +234,41 @@ final class Workspace: ObservableObject {
     private var sessionTabsSink: AnyCancellable?
     private var sessionSelectionSink: AnyCancellable?
 
-    init(prefs: EditorPreferences, openInitialUntitled: Bool = true) {
+    /// Phase 69 — dirty-buffer snapshot store. Shared with
+    /// `CrashRecovery.apply` so the app can detect leftover
+    /// scratches on the next launch. Persistence is gated by
+    /// `EditorPreferences.autoSaveScratchEnabled`; when the user
+    /// turns the policy off we clear the catalogue to honour the
+    /// "off means off" contract.
+    let scratchStore: ScratchBufferStore
+
+    /// Phase 69 — per-document debounced text sinks. Each open
+    /// document gets a `$text.debounce(...).sink { captureScratch }`
+    /// entry; `reconcileScratchSinks` adds / removes entries as
+    /// documents are opened or closed, and is invoked from the
+    /// $documents sink below. Keyed by Document.id to survive the
+    /// resortByPin / move reorderings without losing its binding.
+    private var scratchSinks: [UUID: AnyCancellable] = [:]
+
+    /// Phase 69 — top-level sink that watches `documents` so we can
+    /// establish / tear down per-doc scratch sinks as tabs come
+    /// and go. Held separately from `sessionTabsSink` because the
+    /// session mirror only needs the new snapshot; the scratch
+    /// layer needs to diff old vs new to know which Documents
+    /// just arrived.
+    private var scratchReconcileSink: AnyCancellable?
+
+    init(prefs: EditorPreferences,
+         openInitialUntitled: Bool = true,
+         scratchStore: ScratchBufferStore? = nil) {
         self.prefs = prefs
+        // Swift 6 strict concurrency rejects `ScratchBufferStore()`
+        // as a default parameter value (default values are evaluated
+        // in a nonisolated context; the store's init is
+        // @MainActor). Fall back to constructing it here — this
+        // closure runs inside Workspace's @MainActor init so the
+        // actor hop is implicit.
+        self.scratchStore = scratchStore ?? ScratchBufferStore()
         // Open one empty doc by default so the editor isn't blank on first run.
         // Caller can suppress when it intends to seed `documents` itself
         // (e.g. command-line file arguments).
@@ -277,6 +317,116 @@ final class Workspace: ObservableObject {
             .sink { [weak self] _ in
                 self?.persistSessionSelection()
             }
+
+        // Phase 69 — per-doc scratch sinks. Reconcile on every
+        // `$documents` emit: new Documents get a debounced text
+        // sink, closed Documents have theirs torn down. RunLoop.main
+        // hop means we see the post-mutation array, same as the
+        // session restore sinks above.
+        scratchReconcileSink = $documents
+            .receive(on: RunLoop.main)
+            .sink { [weak self] docs in
+                self?.reconcileScratchSinks(with: docs)
+            }
+        // Seed once for the initial Untitled / externally-seeded
+        // documents list — the sink above only fires on subsequent
+        // changes, not the current value.
+        reconcileScratchSinks(with: documents)
+    }
+
+    // MARK: - Phase 69 scratch-buffer helpers
+
+    /// Diff `docs` against the live `scratchSinks` dictionary and
+    /// add / remove per-document debounced text sinks so the
+    /// scratch store mirrors every open tab's dirty text. Called
+    /// from the `$documents` sink above every time a tab opens,
+    /// closes, or reorders (reorder is a no-op because the keys
+    /// stay the same).
+    private func reconcileScratchSinks(with docs: [Document]) {
+        let liveIDs = Set(docs.map { $0.id })
+        // Tear down sinks for closed documents. The sink's cancellable
+        // drops here which is what actually cancels the pipeline.
+        for id in scratchSinks.keys where !liveIDs.contains(id) {
+            scratchSinks.removeValue(forKey: id)
+        }
+        // Attach sinks for newly-arrived documents. We deliberately
+        // DO NOT drop the first emit — a placeholder Document's
+        // "" text value still reaches the sink, but `captureScratch`
+        // short-circuits on `!doc.isDirty` so cold-start noise
+        // never makes it to disk. Keeping the first value live
+        // also means a test (or an unusual real-world sequence)
+        // that sets text *before* pumping the runloop still fires
+        // the sink once the Document first registers.
+        //
+        // Scheduler is RunLoop.main rather than DispatchQueue.main
+        // so Tests that drive the main runloop via
+        // `RunLoop.main.run(until:)` (the same pattern the session-
+        // restore tests use) see the debounce fire. DispatchQueue's
+        // timer work items don't always drain through RunLoop.run
+        // which was making `test_workspace_capturesDirtyBuffer…`
+        // flake on cold runs.
+        for doc in docs where scratchSinks[doc.id] == nil {
+            let debounceSeconds = scratchDebounceSeconds
+            scratchSinks[doc.id] = doc.$text
+                .debounce(for: .seconds(debounceSeconds),
+                          scheduler: RunLoop.main)
+                .sink { [weak self, weak doc] newText in
+                    guard let self, let doc else { return }
+                    self.captureScratch(for: doc, text: newText)
+                }
+        }
+    }
+
+    /// Debounce window in seconds. Reads from `EditorPreferences`
+    /// so users can tune it in Settings; clamps at a lower bound so
+    /// a misbehaving prefs write can't turn every keystroke into a
+    /// disk flush. Upper bound is loose — a user who wants 60 s
+    /// snapshots is knowingly accepting the risk.
+    private var scratchDebounceSeconds: TimeInterval {
+        max(prefs.autoSaveScratchDebounceSeconds, 0.5)
+    }
+
+    /// Snapshot a dirty document into the scratch store. Skips
+    /// clean buffers (nothing worth saving) and large-file
+    /// documents whose text is managed by the chunked load path
+    /// (the in-memory `doc.text` is empty for those, and writing
+    /// an empty scratch would actively hurt recovery).
+    private func captureScratch(for doc: Document, text: String) {
+        guard prefs.autoSaveScratchEnabled else {
+            // Honour "off means off": if the user flipped the
+            // toggle while the debounce was pending, drop any
+            // stale entry instead of writing a new one.
+            scratchStore.drop(id: doc.id)
+            return
+        }
+        guard !doc.isLargeFile else { return }
+        guard doc.isDirty else {
+            scratchStore.drop(id: doc.id)
+            return
+        }
+        let info = scratchDiskInfo(for: doc.url)
+        scratchStore.record(
+            id: doc.id,
+            text: text,
+            originalPath: doc.url?.standardizedFileURL.path,
+            title: doc.title,
+            encoding: doc.encoding.rawValue,
+            lineEnding: doc.lineEnding.rawValue,
+            diskMTime: info.mtime,
+            diskSize: info.size)
+    }
+
+    /// Read the underlying file's mtime + size so the recovery UI
+    /// can flag "your file also changed externally after this
+    /// snapshot was taken". Returns `(nil, nil)` for Untitled
+    /// documents (no file to probe) or when the stat call fails.
+    private func scratchDiskInfo(for url: URL?) -> (mtime: Date?, size: Int?) {
+        guard let url else { return (nil, nil) }
+        let attrs = try? FileManager.default.attributesOfItem(
+            atPath: url.standardizedFileURL.path)
+        let mtime = attrs?[.modificationDate] as? Date
+        let size = (attrs?[.size] as? NSNumber)?.intValue
+        return (mtime, size)
     }
 
     // MARK: - Phase 67d session-restore helpers
@@ -739,6 +889,33 @@ final class Workspace: ObservableObject {
         applyDecodedExternalChange(prompt.decoded, to: doc)
     }
 
+    /// Phase 69 — sheet button "Restore selected": funnel through
+    /// CrashRecovery.apply with the user's tick-marked subset, then
+    /// dismiss. The sheet payload is identified by its UUID so we
+    /// can guard against a re-fire (defensive — the sheet is
+    /// modal, but the @Published binding could race a second
+    /// `detectPending` call).
+    func applyCrashRecovery(_ prompt: CrashRecoveryPrompt,
+                            selectedIDs: Set<UUID>) {
+        if crashRecoveryPrompt?.id == prompt.id {
+            crashRecoveryPrompt = nil
+        }
+        CrashRecovery.apply(selectedIDs: selectedIDs,
+                            store: scratchStore,
+                            workspace: self)
+    }
+
+    /// Phase 69 — sheet button "Discard all": wipe every entry
+    /// from the store without restoring anything. The user has
+    /// explicitly told us their previous session's dirty buffers
+    /// aren't worth keeping.
+    func discardCrashRecovery(_ prompt: CrashRecoveryPrompt) {
+        if crashRecoveryPrompt?.id == prompt.id {
+            crashRecoveryPrompt = nil
+        }
+        CrashRecovery.discardAll(store: scratchStore)
+    }
+
     private func applyDecodedExternalChange(_ decoded: DetectedTextFormat, to doc: Document) {
         doc.text = decoded.text
         doc.encoding = decoded.encoding
@@ -1010,6 +1187,11 @@ final class Workspace: ObservableObject {
             try payload.write(to: url, options: .atomic)
             commitSaveURLIfNeeded(commitURLOnSuccess, for: doc)
             doc.isDirty = false
+            // Phase 69 — a successful save is what the scratch
+            // store was insuring against; drop the snapshot so a
+            // later crash doesn't prompt the user to "recover"
+            // content they've already committed to disk.
+            scratchStore.drop(id: doc.id)
             // Phase 31 — the just-written bytes are what `git diff`
             // sees; refresh the gutter so the saved-then-unmodified
             // lines disappear from the strip immediately. The watcher
@@ -1089,6 +1271,12 @@ final class Workspace: ObservableObject {
             if documents.isEmpty { newDocument() }
             return
         }
+        // Phase 69 — closing a tab means the user has either saved
+        // (scratch already dropped by `write(doc:to:)`) or
+        // explicitly discarded dirty changes. Either way the
+        // scratch is obsolete; drop is idempotent so the save path
+        // double-dropping here is cheap.
+        scratchStore.drop(id: documentID)
         documents.remove(at: liveIdx)
         if selectedID == documentID {
             selectedID = documents.last?.id
