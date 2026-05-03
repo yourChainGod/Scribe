@@ -821,6 +821,10 @@
 "export.html.defaultTitle"           = "源码导出";
 "export.html.error"                  = "无法写入 %@：%@";
 
+// Phase 61 — Theme bundle import / export
+"settings.appearance.customize.export" = "导出主题…";
+"settings.appearance.customize.import" = "导入主题…";
+
 // Phase 59 — Character panel (special-character picker)
 "menu.edit.insertCharacter"          = "插入字符…";
 "palette.command.insertCharacter"    = "插入特殊字符";

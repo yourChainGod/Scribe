@@ -413,6 +413,20 @@ final class EditorPreferences: ObservableObject {
         themeOverrides.removeValue(forKey: themeID)
     }
 
+    /// Phase 61 — replace `themeID`'s overrides with `incoming`
+    /// in one atomic write. Used by the `.scribetheme` import
+    /// path so a partial-failure mid-loop can't leave a half-
+    /// applied colour set behind. Empty `slots` clears the entry
+    /// (sparse-stays-sparse invariant).
+    func replaceOverrides(_ themeID: ThemeID,
+                          with incoming: ThemeOverrides) {
+        if incoming.isEmpty {
+            themeOverrides.removeValue(forKey: themeID)
+        } else {
+            themeOverrides[themeID] = incoming
+        }
+    }
+
     /// Persistence: re-encode the full map to JSON whenever
     /// `themeOverrides` mutates. Outer keys are stringified
     /// `ThemeID.rawValue` so future enum-case removal doesn't

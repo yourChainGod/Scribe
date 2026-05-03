@@ -824,6 +824,10 @@
 "export.html.defaultTitle"           = "Source export";
 "export.html.error"                  = "Couldn't write %@: %@";
 
+// Phase 61 — Theme bundle import / export
+"settings.appearance.customize.export" = "Export Theme…";
+"settings.appearance.customize.import" = "Import Theme…";
+
 // Phase 59 — Character panel (special-character picker)
 "menu.edit.insertCharacter"          = "Insert Character…";
 "palette.command.insertCharacter"    = "Insert Special Character";

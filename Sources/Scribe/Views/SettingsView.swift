@@ -328,29 +328,91 @@ private struct ThemeCustomizationSection: View {
         } header: {
             Text("settings.appearance.section.customize", bundle: .module)
         } footer: {
-            HStack {
-                Button {
-                    prefs.clearAllOverrides(uiTargetID)
-                } label: {
-                    Text("settings.appearance.customize.resetAllUI",
-                         bundle: .module)
-                }
-                .disabled(prefs.overrides(for: uiTargetID).isEmpty)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Button {
+                        prefs.clearAllOverrides(uiTargetID)
+                    } label: {
+                        Text("settings.appearance.customize.resetAllUI",
+                             bundle: .module)
+                    }
+                    .disabled(prefs.overrides(for: uiTargetID).isEmpty)
 
-                Spacer()
+                    Spacer()
 
-                Button {
-                    prefs.clearAllOverrides(editorTargetID)
-                } label: {
-                    Text("settings.appearance.customize.resetAllEditor",
-                         bundle: .module)
+                    Button {
+                        prefs.clearAllOverrides(editorTargetID)
+                    } label: {
+                        Text("settings.appearance.customize.resetAllEditor",
+                             bundle: .module)
+                    }
+                    .disabled(prefs.overrides(for: editorTargetID).isEmpty
+                              || (prefs.editorFollowsUITheme
+                                  && editorTargetID == uiTargetID))
                 }
-                .disabled(prefs.overrides(for: editorTargetID).isEmpty
-                          || (prefs.editorFollowsUITheme
-                              && editorTargetID == uiTargetID))
+
+                // Phase 61 — Theme bundle import/export. Operates
+                // on the *UI* theme target by convention; with
+                // "editor follows UI theme" on (the default), the
+                // export captures both surfaces. Power users who
+                // decoupled get an explicit picker row in a future
+                // 61b iteration.
+                HStack {
+                    Button {
+                        exportTheme(themeID: uiTargetID)
+                    } label: {
+                        Text("settings.appearance.customize.export",
+                             bundle: .module)
+                    }
+
+                    Button {
+                        importTheme()
+                    } label: {
+                        Text("settings.appearance.customize.import",
+                             bundle: .module)
+                    }
+                }
+                .padding(.top, 4)
             }
-            .padding(.top, 4)
         }
+    }
+
+    // MARK: - Phase 61 — Import / Export
+
+    /// Snapshot the current overrides for `themeID` into a
+    /// `.scribetheme` JSON file via NSSavePanel. Errors print to
+    /// stderr (cheap because Settings is modal); no toast surface
+    /// is reachable from inside a Settings tab.
+    private func exportTheme(themeID: ThemeID) {
+        let overrides = prefs.overrides(for: themeID)
+        guard let data = try? ThemeBundleIO.encode(themeID: themeID,
+                                                   overrides: overrides) else {
+            return
+        }
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "\(themeID.rawValue).scribetheme"
+        panel.allowsOtherFileTypes = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        try? data.write(to: url, options: .atomic)
+    }
+
+    /// Read a `.scribetheme` file via NSOpenPanel and *replace*
+    /// the targeted theme's overrides with its contents. We use
+    /// `replaceOverrides` rather than per-slot `setOverride` so
+    /// a partial-failure decode can't leave the user with a
+    /// half-applied colour set; the bundle either lands in full
+    /// or not at all.
+    private func importTheme() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowsOtherFileTypes = true
+        guard panel.runModal() == .OK,
+              let url = panel.url,
+              let data = try? Data(contentsOf: url) else { return }
+        guard let result = try? ThemeBundleIO.decode(data) else { return }
+        prefs.replaceOverrides(result.themeID, with: result.overrides)
     }
 
     /// The theme ID whose override map UI-chrome slots should
