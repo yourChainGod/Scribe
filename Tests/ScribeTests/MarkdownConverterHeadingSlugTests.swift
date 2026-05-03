@@ -77,7 +77,7 @@ final class MarkdownConverterHeadingSlugTests: XCTestCase {
 
     func test_render_headingHasIdAttribute() {
         let html = MarkdownConverter.render("## Hello World")
-        XCTAssertEqual(html, "<h2 id=\"hello-world\">Hello World</h2>\n")
+        XCTAssertEqual(html, "<h2 id=\"hello-world\" data-source-line=\"1\">Hello World</h2>\n")
     }
 
     func test_render_emphasisInsideHeadingDoesNotPolluteSlug() {
@@ -97,11 +97,11 @@ final class MarkdownConverterHeadingSlugTests: XCTestCase {
         ## Setup
         """
         let html = MarkdownConverter.render(md)
-        XCTAssertTrue(html.contains("<h2 id=\"setup\">Setup</h2>"),
+        XCTAssertTrue(html.contains("<h2 id=\"setup\" data-source-line=\"1\">Setup</h2>"),
                       "first occurrence keeps the bare slug — got \(html)")
-        XCTAssertTrue(html.contains("<h2 id=\"setup-1\">Setup</h2>"),
+        XCTAssertTrue(html.contains("<h2 id=\"setup-1\" data-source-line=\"2\">Setup</h2>"),
                       "second occurrence gets -1 suffix — got \(html)")
-        XCTAssertTrue(html.contains("<h2 id=\"setup-2\">Setup</h2>"),
+        XCTAssertTrue(html.contains("<h2 id=\"setup-2\" data-source-line=\"3\">Setup</h2>"),
                       "third occurrence gets -2 suffix — got \(html)")
     }
 
@@ -142,7 +142,7 @@ final class MarkdownConverterHeadingSlugTests: XCTestCase {
         let html = MarkdownConverter.render(md)
         XCTAssertTrue(html.contains("href=\"#installation-steps\""),
                       "anchor link must keep the literal `#slug` — got \(html)")
-        XCTAssertTrue(html.contains("<h2 id=\"installation-steps\">"),
+        XCTAssertTrue(html.contains("<h2 id=\"installation-steps\" data-source-line=\"3\">"),
                       "heading must carry matching id — got \(html)")
     }
 

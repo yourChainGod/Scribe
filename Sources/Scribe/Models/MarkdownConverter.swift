@@ -81,8 +81,18 @@ enum MarkdownConverter {
         var ctx = BlockContext()
         ctx.footnoteRefs = prep.refs
         ctx.baseDirectory = baseDirectory
-        for line in prep.body.split(separator: "\n",
-                                    omittingEmptySubsequences: false) {
+        // Phase 52a — scroll-sync plumbing. Every emitted block
+        // carries a `data-source-line="<N>"` attribute pointing back
+        // at the 1-based source line where the block started, so the
+        // preview's JS reveal helper can map editor caret / scroll
+        // position to the corresponding rendered element. We capture
+        // the source line before dispatching each line; paragraph
+        // start lines get tracked separately (see `paragraphStartLine`)
+        // because a paragraph is emitted only when the *next* block
+        // closes it, not at its opening line.
+        for (idx, line) in prep.body.split(separator: "\n",
+                                           omittingEmptySubsequences: false).enumerated() {
+            ctx.currentSourceLine = idx + 1
             ctx.process(line: String(line))
         }
         ctx.flushAll()
@@ -213,6 +223,44 @@ enum MarkdownConverter {
         /// GitHub renders READMEs).
         var usedSlugs: Set<String> = []
 
+        /// Phase 52a — 1-based source line of the line being processed
+        /// right now. Written by `render(_:baseDirectory:)` before
+        /// each `process(line:)` call. Read by every emitter that
+        /// opens a block-level element so the `data-source-line`
+        /// attribute points back at the right spot in the editor.
+        var currentSourceLine: Int = 0
+        /// Phase 52a — source line of the first line accumulated for
+        /// the currently-open `<p>`. Captured on paragraph open so
+        /// `flushParagraph` can stamp the block with the start line
+        /// rather than the (much later) closing line.
+        var paragraphStartLine: Int = 0
+        /// Phase 52a — source line the currently-open `<blockquote>`
+        /// started on.
+        var blockquoteStartLine: Int = 0
+        /// Phase 52a — source line the currently-open `<ul>` / `<ol>`
+        /// started on. Individual `<li>` elements carry their own
+        /// source line independently so the preview can scroll to a
+        /// specific item, not just the list's top.
+        var listStartLine: Int = 0
+        /// Phase 52a — source line the currently-open `<pre><code>`
+        /// started on. Only meaningful while `fence != nil`.
+        var fenceStartLine: Int = 0
+        /// Phase 52a — source line the currently-open `<table>`
+        /// started on (the header row, not the alignment row).
+        var tableStartLine: Int = 0
+
+        /// Build a `data-source-line="<N>"` attribute for the given
+        /// 1-based line number, including the leading space so the
+        /// caller can drop the return value directly into a tag.
+        /// Accepts 0 as a "don't know / skip" sentinel — an element
+        /// without a source line is better than one pointing at
+        /// line 0, which would cause off-by-one weirdness in the
+        /// JS reveal helper.
+        func dsl(_ line: Int) -> String {
+            guard line > 0 else { return "" }
+            return " data-source-line=\"\(line)\""
+        }
+
         mutating func process(line: String) {
             // Fenced-code mode short-circuits everything else: the
             // *only* recognised token inside a fence is its closing
@@ -318,10 +366,17 @@ enum MarkdownConverter {
                 flushList()
                 flushBlockquote()
                 fence = info.mark
+                fenceStartLine = currentSourceLine
+                // Phase 52a — stamp the `<pre>` (not `<code>`) with
+                // the source line. The JS reveal helper queries
+                // `[data-source-line]` at any DOM depth, and a
+                // highlight-js run later will mutate the `<code>`
+                // contents — putting the attribute on `<pre>` keeps
+                // it out of hljs' way.
                 if info.lang.isEmpty {
-                    output.append("<pre><code>")
+                    output.append("<pre\(dsl(fenceStartLine))><code>")
                 } else {
-                    output.append("<pre><code class=\"language-\(htmlEscape(info.lang))\">")
+                    output.append("<pre\(dsl(fenceStartLine))><code class=\"language-\(htmlEscape(info.lang))\">")
                 }
                 return
             }
@@ -342,7 +397,7 @@ enum MarkdownConverter {
                 flushParagraph()
                 flushList()
                 flushBlockquote()
-                output.append("<hr/>\n")
+                output.append("<hr\(dsl(currentSourceLine))/>\n")
                 return
             }
 
@@ -356,7 +411,7 @@ enum MarkdownConverter {
                 flushList()
                 flushBlockquote()
                 let slug = uniqueSlug(for: content)
-                output.append("<h\(level) id=\"\(htmlEscape(slug))\">")
+                output.append("<h\(level) id=\"\(htmlEscape(slug))\"\(dsl(currentSourceLine))>")
                 output.append(renderInline(content,
                                            footnoteRefs: footnoteRefs,
                                            baseDirectory: baseDirectory))
@@ -373,10 +428,15 @@ enum MarkdownConverter {
                 flushParagraph()
                 flushList()
                 if !inBlockquote {
-                    output.append("<blockquote>\n")
+                    // Phase 52a — stamp the `<blockquote>` with the
+                    // line it opened on; every inner `<p>` is also
+                    // stamped with its own line so a multi-line quote
+                    // can be scrolled to a specific paragraph inside.
+                    blockquoteStartLine = currentSourceLine
+                    output.append("<blockquote\(dsl(blockquoteStartLine))>\n")
                     inBlockquote = true
                 }
-                output.append("<p>")
+                output.append("<p\(dsl(currentSourceLine))>")
                 output.append(renderInline(inner,
                                            footnoteRefs: footnoteRefs,
                                            baseDirectory: baseDirectory))
@@ -394,13 +454,18 @@ enum MarkdownConverter {
                 flushBlockquote()
                 if list != "ul" {
                     flushList()
-                    output.append("<ul>\n")
+                    // Phase 52a — `<ul>` gets the source line of its
+                    // first item; each `<li>` is also stamped
+                    // individually below so a scroll can land on a
+                    // specific row rather than the list's top.
+                    listStartLine = currentSourceLine
+                    output.append("<ul\(dsl(listStartLine))>\n")
                     list = "ul"
                 }
                 if let task = matchTaskMarker(item) {
                     let checkedAttr = task.checked ? " checked" : ""
                     output.append(
-                        "<li class=\"task-list-item\">"
+                        "<li class=\"task-list-item\"\(dsl(currentSourceLine))>"
                         + "<input type=\"checkbox\" disabled\(checkedAttr)/> "
                     )
                     output.append(renderInline(task.content,
@@ -408,7 +473,7 @@ enum MarkdownConverter {
                                                baseDirectory: baseDirectory))
                     output.append("</li>\n")
                 } else {
-                    output.append("<li>")
+                    output.append("<li\(dsl(currentSourceLine))>")
                     output.append(renderInline(item,
                                                footnoteRefs: footnoteRefs,
                                                baseDirectory: baseDirectory))
@@ -423,10 +488,11 @@ enum MarkdownConverter {
                 flushBlockquote()
                 if list != "ol" {
                     flushList()
-                    output.append("<ol>\n")
+                    listStartLine = currentSourceLine
+                    output.append("<ol\(dsl(listStartLine))>\n")
                     list = "ol"
                 }
-                output.append("<li>")
+                output.append("<li\(dsl(currentSourceLine))>")
                 output.append(renderInline(item,
                                            footnoteRefs: footnoteRefs,
                                            baseDirectory: baseDirectory))
@@ -441,6 +507,12 @@ enum MarkdownConverter {
             // not a forced <br>).
             flushList()
             flushBlockquote()
+            // Phase 52a — capture the paragraph's opening source
+            // line on first accumulation. `flushParagraph` stamps
+            // `<p>` with this, not the closing line.
+            if paragraph.isEmpty {
+                paragraphStartLine = currentSourceLine
+            }
             paragraph.append(line)
         }
 
@@ -507,7 +579,7 @@ enum MarkdownConverter {
                     pieces.append(hardBreak ? "<br/>" : " ")
                 }
             }
-            output.append("<p>")
+            output.append("<p\(dsl(paragraphStartLine))>")
             output.append(pieces.joined())
             output.append("</p>\n")
             paragraph.removeAll(keepingCapacity: false)
@@ -535,7 +607,14 @@ enum MarkdownConverter {
         mutating func openTable(header: String, alignments: [TableAlign]) {
             tableAlignments = alignments
             let cells = splitTableCells(header)
-            output.append("<table>\n<thead>\n<tr>")
+            // Phase 52a — stamp `<table>` with the header row's
+            // source line. The alignment row is consumed implicitly
+            // (no `<tr>` emitted for it), and body `<tr>` rows
+            // already carry their own source line via
+            // `appendTableRow`. A line that scrolls to the table
+            // lands on the header, which is the expected UX.
+            tableStartLine = currentSourceLine - 1
+            output.append("<table\(dsl(tableStartLine))>\n<thead>\n<tr\(dsl(tableStartLine))>")
             for (i, raw) in cells.enumerated() {
                 let align = i < alignments.count ? alignments[i] : .none
                 output.append("<th\(align.styleAttr)>")
@@ -554,7 +633,7 @@ enum MarkdownConverter {
         mutating func appendTableRow(_ row: String) {
             guard let aligns = tableAlignments else { return }
             let cells = splitTableCells(row)
-            output.append("<tr>")
+            output.append("<tr\(dsl(currentSourceLine))>")
             for col in 0..<aligns.count {
                 let raw = col < cells.count ? cells[col] : ""
                 output.append("<td\(aligns[col].styleAttr)>")

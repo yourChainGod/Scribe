@@ -21,19 +21,19 @@ final class MarkdownConverterTests: XCTestCase {
         for n in 1...6 {
             let prefix = String(repeating: "#", count: n)
             let html = MarkdownConverter.render("\(prefix) Title")
-            XCTAssertEqual(html, "<h\(n) id=\"title\">Title</h\(n)>\n")
+            XCTAssertEqual(html, "<h\(n) id=\"title\" data-source-line=\"1\">Title</h\(n)>\n")
         }
     }
 
     func testHashWithoutSpaceIsNotHeading() {
         let html = MarkdownConverter.render("#NotAHeading")
         // Falls back to a paragraph; the # is HTML-safe (still #).
-        XCTAssertEqual(html, "<p>#NotAHeading</p>\n")
+        XCTAssertEqual(html, "<p data-source-line=\"1\">#NotAHeading</p>\n")
     }
 
     func testHeadingTrailingHashesStripped() {
         let html = MarkdownConverter.render("## Heading ##")
-        XCTAssertEqual(html, "<h2 id=\"heading\">Heading</h2>\n")
+        XCTAssertEqual(html, "<h2 id=\"heading\" data-source-line=\"1\">Heading</h2>\n")
     }
 
     // MARK: Paragraphs + soft / hard breaks
@@ -45,7 +45,7 @@ final class MarkdownConverterTests: XCTestCase {
         line three
         """
         let html = MarkdownConverter.render(md)
-        XCTAssertEqual(html, "<p>line one line two line three</p>\n")
+        XCTAssertEqual(html, "<p data-source-line=\"1\">line one line two line three</p>\n")
     }
 
     func testHardBreakViaTwoTrailingSpaces() {
@@ -53,7 +53,7 @@ final class MarkdownConverterTests: XCTestCase {
         // emits the break and joins with no extra space.
         let md = "line one  \nline two"
         let html = MarkdownConverter.render(md)
-        XCTAssertEqual(html, "<p>line one<br/>line two</p>\n")
+        XCTAssertEqual(html, "<p data-source-line=\"1\">line one<br/>line two</p>\n")
     }
 
     // MARK: Inline emphasis
@@ -61,7 +61,7 @@ final class MarkdownConverterTests: XCTestCase {
     func testBoldAndItalic() {
         let html = MarkdownConverter.render("**bold** and *italic*")
         XCTAssertEqual(html,
-                       "<p><strong>bold</strong> and <em>italic</em></p>\n")
+                       "<p data-source-line=\"1\"><strong>bold</strong> and <em>italic</em></p>\n")
     }
 
     func testTripleAsteriskNests() {
@@ -70,13 +70,13 @@ final class MarkdownConverterTests: XCTestCase {
         // pair, leaving `*…*` for italic to wrap around it →
         // <em><strong>both</strong></em>.
         let html = MarkdownConverter.render("***both***")
-        XCTAssertEqual(html, "<p><em><strong>both</strong></em></p>\n")
+        XCTAssertEqual(html, "<p data-source-line=\"1\"><em><strong>both</strong></em></p>\n")
     }
 
     func testUnderscoreEmphasisIgnoredInsideWords() {
         // snake_case_var must NOT become <em>case</em>.
         let html = MarkdownConverter.render("snake_case_var")
-        XCTAssertEqual(html, "<p>snake_case_var</p>\n")
+        XCTAssertEqual(html, "<p data-source-line=\"1\">snake_case_var</p>\n")
     }
 
     // MARK: Inline code
@@ -84,14 +84,14 @@ final class MarkdownConverterTests: XCTestCase {
     func testInlineCodeEscapesAngleBrackets() {
         let html = MarkdownConverter.render("`<div>` is HTML")
         XCTAssertEqual(html,
-                       "<p><code>&lt;div&gt;</code> is HTML</p>\n")
+                       "<p data-source-line=\"1\"><code>&lt;div&gt;</code> is HTML</p>\n")
     }
 
     func testInlineCodeProtectedFromEmphasis() {
         // ** inside ` ` should render as literal stars.
         let html = MarkdownConverter.render("`**not bold**`")
         XCTAssertEqual(html,
-                       "<p><code>**not bold**</code></p>\n")
+                       "<p data-source-line=\"1\"><code>**not bold**</code></p>\n")
     }
 
     // MARK: Fenced code blocks
@@ -104,7 +104,7 @@ final class MarkdownConverterTests: XCTestCase {
         """
         let html = MarkdownConverter.render(md)
         XCTAssertEqual(html,
-                       "<pre><code class=\"language-swift\">let x = 1\n</code></pre>\n")
+                       "<pre data-source-line=\"1\"><code class=\"language-swift\">let x = 1\n</code></pre>\n")
     }
 
     func testFencedCodeEscapesHTML() {
@@ -117,7 +117,7 @@ final class MarkdownConverterTests: XCTestCase {
         // The literal &amp; should escape its `&` so the rendered
         // page actually shows `&amp;`, not collapse to `&`.
         XCTAssertEqual(html,
-                       "<pre><code>&lt;html&gt;&amp;amp;&lt;/html&gt;\n</code></pre>\n")
+                       "<pre data-source-line=\"1\"><code>&lt;html&gt;&amp;amp;&lt;/html&gt;\n</code></pre>\n")
     }
 
     func testFencedCodeNeverParsedAsMarkdown() {
@@ -146,10 +146,10 @@ final class MarkdownConverterTests: XCTestCase {
         let html = MarkdownConverter.render(md)
         XCTAssertEqual(html,
                        """
-                       <ul>
-                       <li>apple</li>
-                       <li>banana</li>
-                       <li>cherry</li>
+                       <ul data-source-line="1">
+                       <li data-source-line="1">apple</li>
+                       <li data-source-line="2">banana</li>
+                       <li data-source-line="3">cherry</li>
                        </ul>
 
                        """)
@@ -164,10 +164,10 @@ final class MarkdownConverterTests: XCTestCase {
         let html = MarkdownConverter.render(md)
         XCTAssertEqual(html,
                        """
-                       <ol>
-                       <li>one</li>
-                       <li>two</li>
-                       <li>three</li>
+                       <ol data-source-line="1">
+                       <li data-source-line="1">one</li>
+                       <li data-source-line="2">two</li>
+                       <li data-source-line="3">three</li>
                        </ol>
 
                        """)
@@ -183,11 +183,11 @@ final class MarkdownConverterTests: XCTestCase {
         let html = MarkdownConverter.render(md)
         XCTAssertEqual(html,
                        """
-                       <ul>
-                       <li>first</li>
-                       <li>second</li>
+                       <ul data-source-line="1">
+                       <li data-source-line="1">first</li>
+                       <li data-source-line="2">second</li>
                        </ul>
-                       <p>paragraph</p>
+                       <p data-source-line="4">paragraph</p>
 
                        """)
     }
@@ -202,9 +202,9 @@ final class MarkdownConverterTests: XCTestCase {
         let html = MarkdownConverter.render(md)
         XCTAssertEqual(html,
                        """
-                       <blockquote>
-                       <p>line a</p>
-                       <p>line b</p>
+                       <blockquote data-source-line="1">
+                       <p data-source-line="1">line a</p>
+                       <p data-source-line="2">line b</p>
                        </blockquote>
 
                        """)
@@ -215,25 +215,25 @@ final class MarkdownConverterTests: XCTestCase {
     func testLinkRendersAnchor() {
         let html = MarkdownConverter.render("see [docs](https://x.test/y)")
         XCTAssertEqual(html,
-                       "<p>see <a href=\"https://x.test/y\">docs</a></p>\n")
+                       "<p data-source-line=\"1\">see <a href=\"https://x.test/y\">docs</a></p>\n")
     }
 
     func testImageRendersImg() {
         let html = MarkdownConverter.render("![logo](logo.png)")
         XCTAssertEqual(html,
-                       "<p><img src=\"logo.png\" alt=\"logo\"/></p>\n")
+                       "<p data-source-line=\"1\"><img src=\"logo.png\" alt=\"logo\"/></p>\n")
     }
 
     // MARK: Thematic break
 
     func testThematicBreak() {
         let html = MarkdownConverter.render("---")
-        XCTAssertEqual(html, "<hr/>\n")
+        XCTAssertEqual(html, "<hr data-source-line=\"1\"/>\n")
     }
 
     func testThematicBreakWithSpaces() {
         let html = MarkdownConverter.render("- - -")
-        XCTAssertEqual(html, "<hr/>\n")
+        XCTAssertEqual(html, "<hr data-source-line=\"1\"/>\n")
     }
 
     // MARK: Whole document smoke test
@@ -256,13 +256,13 @@ final class MarkdownConverterTests: XCTestCase {
         ```
         """
         let html = MarkdownConverter.render(md)
-        XCTAssertTrue(html.contains("<h1 id=\"title\">Title</h1>"))
-        XCTAssertTrue(html.contains("<h2 id=\"sub\">Sub</h2>"))
+        XCTAssertTrue(html.contains("<h1 id=\"title\" data-source-line=\"1\">Title</h1>"))
+        XCTAssertTrue(html.contains("<h2 id=\"sub\" data-source-line=\"5\">Sub</h2>"))
         XCTAssertTrue(html.contains("<strong>bold</strong>"))
         XCTAssertTrue(html.contains("<code>code</code>"))
-        XCTAssertTrue(html.contains("<ul>"))
-        XCTAssertTrue(html.contains("<li>one</li>"))
-        XCTAssertTrue(html.contains("<blockquote>"))
+        XCTAssertTrue(html.contains("<ul data-source-line=\"7\">"))
+        XCTAssertTrue(html.contains("<li data-source-line=\"7\">one</li>"))
+        XCTAssertTrue(html.contains("<blockquote data-source-line=\"10\">"))
         XCTAssertTrue(html.contains("language-js"))
         XCTAssertTrue(html.contains("console.log(&quot;hi&quot;);"))
     }
@@ -271,7 +271,7 @@ final class MarkdownConverterTests: XCTestCase {
 
     func testStrayLeftAngleEscaped() {
         let html = MarkdownConverter.render("a < b")
-        XCTAssertEqual(html, "<p>a &lt; b</p>\n")
+        XCTAssertEqual(html, "<p data-source-line=\"1\">a &lt; b</p>\n")
     }
 
     func testEmptyInput() {
@@ -282,7 +282,7 @@ final class MarkdownConverterTests: XCTestCase {
         // Windows-saved README: same output as LF source.
         let md = "# Title\r\n\r\nbody"
         let html = MarkdownConverter.render(md)
-        XCTAssertEqual(html, "<h1 id=\"title\">Title</h1>\n<p>body</p>\n")
+        XCTAssertEqual(html, "<h1 id=\"title\" data-source-line=\"1\">Title</h1>\n<p data-source-line=\"3\">body</p>\n")
     }
 
     func testUnclosedFenceStillCloses() {
@@ -292,7 +292,7 @@ final class MarkdownConverterTests: XCTestCase {
         let x = 1
         """
         let html = MarkdownConverter.render(md)
-        XCTAssertTrue(html.hasPrefix("<pre><code>"))
+        XCTAssertTrue(html.hasPrefix("<pre data-source-line=\"1\"><code>"))
         XCTAssertTrue(html.hasSuffix("</code></pre>\n"))
     }
 
@@ -306,7 +306,7 @@ final class MarkdownConverterTests: XCTestCase {
         | Bob | 25 |
         """
         let html = MarkdownConverter.render(md)
-        XCTAssertTrue(html.contains("<table>"))
+        XCTAssertTrue(html.contains("<table data-source-line=\"1\">"))
         XCTAssertTrue(html.contains("<thead>"))
         XCTAssertTrue(html.contains("<th>Name</th>"))
         XCTAssertTrue(html.contains("<th>Age</th>"))
@@ -353,7 +353,7 @@ final class MarkdownConverterTests: XCTestCase {
         """
         let html = MarkdownConverter.render(md)
         // First body cell, then two empty placeholders.
-        XCTAssertTrue(html.contains("<tr><td>1</td><td></td><td></td></tr>"))
+        XCTAssertTrue(html.contains("<tr data-source-line=\"3\"><td>1</td><td></td><td></td></tr>"))
     }
 
     func testTableEndsAtBlankLineThenParagraph() {
@@ -366,7 +366,7 @@ final class MarkdownConverterTests: XCTestCase {
         """
         let html = MarkdownConverter.render(md)
         // Table closes, then a fresh <p>after</p>.
-        XCTAssertTrue(html.contains("</tbody>\n</table>\n<p>after</p>"))
+        XCTAssertTrue(html.contains("</tbody>\n</table>\n<p data-source-line=\"5\">after</p>"))
     }
 
     func testPipeRowWithoutAlignmentStaysParagraph() {
@@ -374,9 +374,9 @@ final class MarkdownConverterTests: XCTestCase {
         // should be a paragraph with the literal pipes.
         let md = "| this is | not a table |"
         let html = MarkdownConverter.render(md)
-        XCTAssertTrue(html.contains("<p>"))
+        XCTAssertTrue(html.contains("<p data-source-line=\"1\">"))
         XCTAssertTrue(html.contains("| this is | not a table |"))
-        XCTAssertFalse(html.contains("<table>"))
+        XCTAssertFalse(html.contains("<table data-source-line"))
     }
 
     func testBlockquoteWithPipeStaysBlockquote() {
@@ -384,8 +384,8 @@ final class MarkdownConverterTests: XCTestCase {
         // not get hijacked by the table-stash gate.
         let md = "> | inside | quote |"
         let html = MarkdownConverter.render(md)
-        XCTAssertTrue(html.contains("<blockquote>"))
-        XCTAssertFalse(html.contains("<table>"))
+        XCTAssertTrue(html.contains("<blockquote data-source-line=\"1\">"))
+        XCTAssertFalse(html.contains("<table data-source-line"))
     }
 
     // MARK: Phase 32 · Task lists
@@ -393,7 +393,7 @@ final class MarkdownConverterTests: XCTestCase {
     func testTaskListUnchecked() {
         let md = "- [ ] todo"
         let html = MarkdownConverter.render(md)
-        XCTAssertTrue(html.contains("<li class=\"task-list-item\">"))
+        XCTAssertTrue(html.contains("<li class=\"task-list-item\" data-source-line=\"1\">"))
         XCTAssertTrue(html.contains("<input type=\"checkbox\" disabled/> todo"))
         XCTAssertFalse(html.contains("checked"))
     }
@@ -417,8 +417,8 @@ final class MarkdownConverterTests: XCTestCase {
         - [x] done
         """
         let html = MarkdownConverter.render(md)
-        XCTAssertTrue(html.contains("<li>regular</li>"))
-        XCTAssertTrue(html.contains("<li class=\"task-list-item\">"))
+        XCTAssertTrue(html.contains("<li data-source-line=\"1\">regular</li>"))
+        XCTAssertTrue(html.contains("<li class=\"task-list-item\" data-source-line=\"2\">"))
         XCTAssertTrue(html.contains("checked"))
     }
 
@@ -491,7 +491,7 @@ final class MarkdownConverterTests: XCTestCase {
         let html = MarkdownConverter.render(md)
         XCTAssertFalse(html.contains("forgotten"))
         XCTAssertFalse(html.contains("<section class=\"footnotes\">"))
-        XCTAssertTrue(html.contains("<p>plain paragraph</p>"))
+        XCTAssertTrue(html.contains("<p data-source-line=\"1\">plain paragraph</p>"))
     }
 
     func testFootnoteWithEmphasisInDef() {
@@ -511,8 +511,8 @@ final class MarkdownConverterTests: XCTestCase {
         // emitted as a paragraph at EOF, not silently dropped.
         let md = "| just text |"
         let html = MarkdownConverter.render(md)
-        XCTAssertTrue(html.contains("<p>"))
+        XCTAssertTrue(html.contains("<p data-source-line=\"1\">"))
         XCTAssertTrue(html.contains("| just text |"))
-        XCTAssertFalse(html.contains("<table>"))
+        XCTAssertFalse(html.contains("<table data-source-line"))
     }
 }

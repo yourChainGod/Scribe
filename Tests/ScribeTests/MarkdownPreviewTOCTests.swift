@@ -191,40 +191,69 @@ final class MarkdownPreviewTOCTests: XCTestCase {
 
     // MARK: - revealLineScript
 
-    func test_revealLineScript_emitsEmptyArrayWhenNoHeadings() {
-        let s = MarkdownPreviewPane.revealLineScript(headings: [])
-        XCTAssertTrue(s.contains("window.__scribeHeadings = [];"))
-        XCTAssertTrue(s.contains("scribeRevealLine"))
-    }
+    // Phase 52a — the reveal helper no longer depends on a Swift-built
+    // `__scribeHeadings` literal. The DOM (every `[data-source-line]`
+    // element stamped by the converter) is the source of truth, so
+    // these tests pin the new contract: helper *names*, the build
+    // path that scans the DOM, and the binary-search reveal logic.
 
-    func test_revealLineScript_emitsLineAndSlugPairs() {
-        let h: [MarkdownPreviewPane.PreviewHeading] = [
-            .init(line: 5,  level: 1, slug: "intro",   title: "Intro"),
-            .init(line: 12, level: 2, slug: "details", title: "Details"),
-        ]
-        let s = MarkdownPreviewPane.revealLineScript(headings: h)
-        XCTAssertTrue(s.contains("{l:5,i:\"intro\"}"),
-                      "must serialise first heading: \(s)")
-        XCTAssertTrue(s.contains("{l:12,i:\"details\"}"),
-                      "must serialise second heading")
-    }
-
-    func test_revealLineScript_escapesQuotesInSlug() {
-        // Slugs from the converter never contain quote characters, but
-        // the helper has to be safe regardless.
-        let h: [MarkdownPreviewPane.PreviewHeading] = [
-            .init(line: 1, level: 1, slug: "weird\"name", title: "Weird"),
-        ]
-        let s = MarkdownPreviewPane.revealLineScript(headings: h)
-        XCTAssertTrue(s.contains("\\\""),
-                      "must escape embedded quotes in slug — got \(s)")
+    func test_revealLineScript_definesBlockIndexBuilder() {
+        // The page-side helper that enumerates `[data-source-line]`
+        // and stuffs the result into `window.__scribeBlockIndex`.
+        let s = MarkdownPreviewPane.revealLineScript()
+        XCTAssertTrue(s.contains("window.scribeBuildBlockIndex"),
+                      "must declare the index builder — got \(s)")
+        XCTAssertTrue(s.contains("data-source-line"),
+                      "builder must scan the data-source-line attribute")
+        XCTAssertTrue(s.contains("__scribeBlockIndex"),
+                      "must publish the index on window so injectBody can rebuild")
     }
 
     func test_revealLineScript_definesRevealFunction() {
-        let s = MarkdownPreviewPane.revealLineScript(headings: [])
+        let s = MarkdownPreviewPane.revealLineScript()
         XCTAssertTrue(s.contains("window.scribeRevealLine"),
                       "must declare the public reveal helper")
         XCTAssertTrue(s.contains("scrollIntoView"),
-                      "must call scrollIntoView so the heading is brought into the viewport")
+                      "must call scrollIntoView so the block is brought into the viewport")
+    }
+
+    func test_revealLineScript_usesBinarySearchForReveal() {
+        // The reveal helper does a "largest entry ≤ line" lookup; the
+        // pre-52a linear scan worked for ≤100 headings but blows out
+        // when every paragraph is in the index. Lock the binary search
+        // by checking for the canonical loop tokens.
+        let s = MarkdownPreviewPane.revealLineScript()
+        XCTAssertTrue(s.contains("lo = 0"),
+                      "must initialise lo for binary search")
+        XCTAssertTrue(s.contains("hi ="),
+                      "must initialise hi for binary search")
+        XCTAssertTrue(s.contains(">> 1"),
+                      "must use bit-shift midpoint — got \(s)")
+    }
+
+    func test_revealLineScript_doesNotEmbedSwiftHeadingData() {
+        // Backstop: the old path serialised the heading map into the
+        // emitted JS. The new path reads the DOM, so the script must
+        // *not* contain a hard-coded array of source-line / slug
+        // pairs from Swift — that would risk drift between the
+        // injected body and the index, exactly the bug 52a removes.
+        let h: [MarkdownPreviewPane.PreviewHeading] = [
+            .init(line: 5, level: 1, slug: "intro", title: "Intro"),
+        ]
+        let s = MarkdownPreviewPane.revealLineScript(headings: h)
+        XCTAssertFalse(s.contains("\"intro\""),
+                       "must not inline heading slugs — got \(s)")
+        XCTAssertFalse(s.contains("__scribeHeadings"),
+                       "the legacy heading map global should be gone")
+    }
+
+    func test_revealLineScript_buildsIndexOnDOMReady() {
+        // The shell ships with the script in `<head>`, so DOMContent-
+        // Loaded fires *after* the script parses and the helper
+        // wouldn't run unless we wire it up explicitly.
+        let s = MarkdownPreviewPane.revealLineScript()
+        XCTAssertTrue(s.contains("DOMContentLoaded")
+                       || s.contains("readyState"),
+                      "must auto-build the index once the DOM is ready — got \(s)")
     }
 }

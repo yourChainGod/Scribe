@@ -127,7 +127,7 @@ final class MarkdownPreviewIncrementalTests: XCTestCase {
         // plus a lightweight check on the preview pane's injected
         // root id string (same constant used in `injectBody`).
         let body = MarkdownConverter.render("# Hi\n\nBody.")
-        XCTAssertTrue(body.contains("<h1 id=\"hi\">"),
+        XCTAssertTrue(body.contains("<h1 id=\"hi\""),
                       "smoke: converter still produces ids — got \(body)")
         // The `md-root` id is the anchor the JS path depends on. If
         // someone renames it, the injection fails silently and we

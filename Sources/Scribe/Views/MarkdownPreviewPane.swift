@@ -201,30 +201,27 @@ struct MarkdownPreviewPane: NSViewRepresentable {
                             headings: [PreviewHeading],
                             into view: WKWebView,
                             coordinator: Coordinator) {
-        // Phase 51e — the JS injection path also has to re-publish the
-        // heading line→id map, otherwise a freshly-typed heading
-        // wouldn't be reachable via `scribeRevealLine`. Easiest: pack
-        // the new map into `window.__scribeHeadings` *before* the
-        // innerHTML swap, so the ordering invariant the reveal helper
-        // relies on (sorted by `l`) holds even if the user hits a
-        // caret move on the same runloop tick.
+        // Phase 52a — the heading map (`__scribeHeadings`) is gone;
+        // the reveal helper now sources its block index from the
+        // DOM, so the injection path's only job on that front is to
+        // call `scribeBuildBlockIndex()` *after* the innerHTML swap
+        // lands so a freshly-typed block is immediately reachable
+        // on the next caret move.
         let jsBody = Self.jsStringLiteral(tocHTML + body)
-        let headingsLiteral = headings.map { h in
-            "{l:\(h.line),i:\"\(Self.jsStringEscape(h.slug))\"}"
-        }.joined(separator: ",")
         // Phase 51d — after the innerHTML swap, re-run hljs against
         // every `<pre><code>` in the freshly-injected tree so newly
         // added code blocks pick up colour tokens. `try/catch` keeps
         // a hljs grammar-not-found from aborting the rest of the JS
         // (it shouldn't, but fenced blocks with unknown hints are
         // common enough that we're defensive).
-        let js = "window.__scribeHeadings = [\(headingsLiteral)]; "
-            + "var _r = document.getElementById('md-root'); "
+        let js = "var _r = document.getElementById('md-root'); "
             + "if (_r) { _r.innerHTML = \(jsBody); "
             + "if (window.hljs) { "
             + "_r.querySelectorAll('pre code').forEach(function (b) { "
             + "try { hljs.highlightElement(b); } catch (e) {} }); "
-            + "} true; } else { false; }"
+            + "} "
+            + "if (window.scribeBuildBlockIndex) { scribeBuildBlockIndex(); } "
+            + "true; } else { false; }"
         // Capture a pre-rendered fallback html NOW (not lazily) so the
         // retry branch below doesn't have to re-enter the converter
         // on the error path. The string cost is a one-off copy and
@@ -440,30 +437,90 @@ struct MarkdownPreviewPane: NSViewRepresentable {
         return out
     }
 
-    /// Inline `<script>` that publishes the heading line→id map and
-    /// defines the `scribeRevealLine` helper the caret-sync path
-    /// fires on every cursor move. The map is regenerated on every
-    /// shell rebuild (full reload) and re-published on every JS
-    /// injection (so headings added / removed mid-edit stay accurate).
-    static func revealLineScript(headings: [PreviewHeading]) -> String {
-        let pairs = headings.map { h in
-            "{l:\(h.line),i:\"\(jsStringEscape(h.slug))\"}"
-        }.joined(separator: ",")
+    /// Inline `<script>` that defines the `scribeRevealLine` /
+    /// `scribeBuildBlockIndex` helpers the caret- + scroll-sync
+    /// paths fire on every cursor / viewport move.
+    ///
+    /// Phase 52a — the block index is now sourced from the DOM by
+    /// scanning every element carrying a `data-source-line`
+    /// attribute, not from a Swift-built heading map. The converter
+    /// stamps every block (heading / paragraph / list / list item
+    /// / blockquote / code / table / hr) with its source line, so
+    /// the JS reveal helper can land on whichever block contains
+    /// the caret — much finer than the 51e heading-only pass.
+    ///
+    /// `scribeRevealLine(line)` picks the block whose
+    /// `data-source-line` is the largest value ≤ `line` and calls
+    /// `scrollIntoView({block:'start', behavior:'auto'})` on it.
+    /// The index is rebuilt on DOMContentLoaded and on every
+    /// `#md-root` innerHTML swap via the injection path.
+    ///
+    /// No per-render Swift data is needed anymore: the DOM *is* the
+    /// source of truth. The function accepts zero arguments beyond
+    /// the line number, so the injection path can call it directly
+    /// without serialising headings into the JS statement.
+    static func revealLineScript(headings: [PreviewHeading] = []) -> String {
+        // `headings` parameter retained for API compatibility with the
+        // 51e test suite; unused in the body. The block index is
+        // rebuilt from the DOM, so a stale `__scribeHeadings` would
+        // only waste bytes.
+        _ = headings
         return """
         <script>
-          window.__scribeHeadings = [\(pairs)];
-          window.scribeRevealLine = function (line) {
-            var hs = window.__scribeHeadings || [];
-            var best = null;
-            for (var i = 0; i < hs.length; i++) {
-              if (hs[i].l <= line) { best = hs[i]; } else { break; }
+          // Binary-searchable [{line, el}] array, sorted by source
+          // line. Re-materialised from the DOM on every rebuild call
+          // so mid-edit innerHTML swaps stay in sync without any
+          // Swift-side plumbing.
+          window.__scribeBlockIndex = [];
+          window.scribeBuildBlockIndex = function () {
+            var els = document.querySelectorAll('[data-source-line]');
+            var idx = [];
+            for (var i = 0; i < els.length; i++) {
+              var v = parseInt(els[i].getAttribute('data-source-line'), 10);
+              if (!isNaN(v) && v > 0) {
+                idx.push({line: v, el: els[i]});
+              }
             }
-            if (!best) return false;
-            var el = document.getElementById(best.i);
-            if (!el) return false;
-            el.scrollIntoView({block: 'start', behavior: 'auto'});
+            // Stable enough: DOM order already approximates line
+            // order, and identical lines (e.g. two `<li>`s on the
+            // same source line, which shouldn't happen but the
+            // converter can produce with a pathological table) stay
+            // in document order.
+            idx.sort(function (a, b) { return a.line - b.line; });
+            window.__scribeBlockIndex = idx;
+          };
+          window.scribeRevealLine = function (line) {
+            var idx = window.__scribeBlockIndex || [];
+            if (!idx.length) {
+              scribeBuildBlockIndex();
+              idx = window.__scribeBlockIndex;
+            }
+            if (!idx.length) return false;
+            // Binary search for the largest idx[k].line ≤ line.
+            var lo = 0, hi = idx.length - 1, best = -1;
+            while (lo <= hi) {
+              var mid = (lo + hi) >> 1;
+              if (idx[mid].line <= line) { best = mid; lo = mid + 1; }
+              else { hi = mid - 1; }
+            }
+            // Before the first source-mapped block (e.g. caret on
+            // a lead-in blank line), snap to the very first block
+            // rather than doing nothing — the user expects *some*
+            // visual response to a caret move.
+            if (best < 0) { best = 0; }
+            idx[best].el.scrollIntoView({block: 'start', behavior: 'auto'});
             return true;
           };
+          // Initial build once the shell's DOM is ready. Subsequent
+          // `#md-root.innerHTML = …` swaps have to call
+          // `scribeBuildBlockIndex()` themselves (the injection
+          // statement in Swift does exactly that).
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded',
+                                      scribeBuildBlockIndex);
+          } else {
+            scribeBuildBlockIndex();
+          }
         </script>
         """
     }
