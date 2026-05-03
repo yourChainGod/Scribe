@@ -148,8 +148,39 @@ struct MarkdownPreviewPane: NSViewRepresentable {
     /// without spinning up a WKWebView. Returns the *exact* string
     /// production injects, so any drift between this seam and the
     /// real shell is impossible.
-    static func wrapForTests(body: String, isDark: Bool = false) -> String {
-        return wrap(body: body, isDark: isDark, scrollY: 0)
+    static func wrapForTests(body: String,
+                             isDark: Bool = false,
+                             userCSS: String = "") -> String {
+        // Phase 53e-3 — explicit empty default so existing tests
+        // don't accidentally pick up a developer's local
+        // ~/.scribe/preview.css and tip into a flaky failure on
+        // a different machine.
+        return wrap(body: body, isDark: isDark, scrollY: 0,
+                    userCSS: userCSS)
+    }
+
+    /// Phase 53e-3 — read `~/.scribe/preview.css` if the user has
+    /// dropped one in. Returns the file contents on success, or
+    /// the empty string on missing file / read failure / decode
+    /// error. The preview must never fail to render because a
+    /// user's optional theme tweak couldn't be loaded; an empty
+    /// string lands in the `<style>` block harmlessly.
+    ///
+    /// `homeDirectory` is injectable for tests; production
+    /// callers pass nil and we use `FileManager.default.
+    /// homeDirectoryForCurrentUser`.
+    static func loadUserPreviewCSS(homeDirectory: URL? = nil) -> String {
+        let home = homeDirectory
+            ?? FileManager.default.homeDirectoryForCurrentUser
+        let path = home
+            .appendingPathComponent(".scribe", isDirectory: true)
+            .appendingPathComponent("preview.css")
+        // `try?` collapses the four ways this could fail (no
+        // file, no permission, IO error, encoding) into a single
+        // empty-string return. The user can debug via the file
+        // system; we don't surface read errors to the UI.
+        guard let data = try? Data(contentsOf: path) else { return "" }
+        return String(decoding: data, as: UTF8.self)
     }
 
     func makeNSView(context: Context) -> WKWebView {
@@ -887,7 +918,13 @@ struct MarkdownPreviewPane: NSViewRepresentable {
                              isDark: Bool,
                              scrollY: CGFloat,
                              tocHTML: String = "",
-                             headings: [PreviewHeading] = []) -> String {
+                             headings: [PreviewHeading] = [],
+                             userCSS: String? = nil) -> String {
+        // Phase 53e-3 — production callers pass nil and we resolve
+        // `~/.scribe/preview.css` at render time; XCTest passes a
+        // pre-built string via `wrapForTests` so it can pin
+        // injection without writing to the real home directory.
+        let userOverrideCSS = userCSS ?? Self.loadUserPreviewCSS()
         // We hard-code the colour palette per scheme rather than
         // relying on prefers-color-scheme alone so the editor's theme
         // toggle controls the preview too.
@@ -1161,6 +1198,12 @@ struct MarkdownPreviewPane: NSViewRepresentable {
           }
         </script>
         \(Self.revealLineScript(headings: headings))
+        <!-- Phase 53e-3 — user override styles. Inlined LAST so
+             the CSS cascade lets the user's rules win on a tie
+             without `!important`. Empty when ~/.scribe/
+             preview.css is absent (the default), so the <style>
+             tag stays inert in that case. -->
+        <style>\(userOverrideCSS)</style>
         </head>
         <body>
         <div id="md-root">\(tocHTML)\(body)</div>
