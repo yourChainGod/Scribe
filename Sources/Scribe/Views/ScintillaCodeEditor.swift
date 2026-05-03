@@ -651,6 +651,32 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                     let col1  = Int(col)  + 1
                     if doc.cursorLine != line1 { doc.cursorLine = line1 }
                     if doc.cursorColumn != col1 { doc.cursorColumn = col1 }
+                    // Phase 52b — viewport scroll drives the
+                    // markdown-preview scroll sync. SCN_UPDATEUI's
+                    // `updated` bitmask carries `SC_UPDATE.V_SCROLL`
+                    // only on ticks where the vertical viewport
+                    // moved, so we gate the (cheap but non-free)
+                    // GETFIRSTVISIBLELINE + DOCLINEFROMVISIBLE round-
+                    // trip behind the bit. Caret-only moves (the
+                    // much more common case) skip the work.
+                    let updated = scn.pointee.updated
+                    if updated & SC_UPDATE.V_SCROLL != 0 {
+                        let firstVisible = view.message(SCI.GETFIRSTVISIBLELINE)
+                        // `GETFIRSTVISIBLELINE` returns a *display* line
+                        // (wrapped / folded-line counted); we want the
+                        // document line so the preview's 1-based
+                        // `data-source-line` stamps line up. On a doc
+                        // without wrap or fold, the call is identity
+                        // — but the cost is trivial and having it in
+                        // place means we won't silently desync the
+                        // day soft-wrap lands.
+                        let docLine = view.message(SCI.DOCLINEFROMVISIBLE,
+                                                   wParam: UInt(firstVisible))
+                        let topLine1 = Int(docLine) + 1
+                        if doc.viewportTopLine != topLine1 {
+                            doc.viewportTopLine = topLine1
+                        }
+                    }
                     // Phase 35c-ii-γ — caret moved to a new line:
                     // chip needs to follow. Scintilla fires UPDATEUI
                     // on selection-only changes too, but the

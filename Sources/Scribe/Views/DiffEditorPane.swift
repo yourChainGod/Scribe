@@ -372,13 +372,9 @@ private enum SCI_DIFF {
     static let INDICATORCLEARRANGE: UInt32 = 2505
 }
 
-/// Bit flags for SCNotification.updated.
-private enum SC_UPDATE {
-    static let CONTENT:  Int32 = 0x1
-    static let SELECTION: Int32 = 0x2
-    static let V_SCROLL: Int32 = 0x4
-    static let H_SCROLL: Int32 = 0x8
-}
+// Phase 52b — `SC_UPDATE` bit flags moved to `SCIConstants.swift`
+// so both DiffEditorPane and ScintillaCodeEditor can read the
+// same V_SCROLL constant when they sync sibling panes.
 
 private enum SC_DIFF {
     static let STYLE_DEFAULT:    Int = 32

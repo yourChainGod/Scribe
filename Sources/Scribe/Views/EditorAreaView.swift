@@ -68,11 +68,19 @@ private struct DocumentEditorPane: View {
                         isDark: colorScheme == .dark,
                         baseDirectory: doc.url?.deletingLastPathComponent(),
                         // Phase 51e — caret line drives the
-                        // preview's scroll-to-nearest-heading
+                        // preview's scroll-to-nearest-block
                         // behaviour. Document publishes 1-based
                         // line numbers; preview agrees on that
-                        // convention with extractHeadings.
-                        cursorLine: doc.cursorLine
+                        // convention with MarkdownConverter's
+                        // data-source-line stamps.
+                        cursorLine: doc.cursorLine,
+                        // Phase 52b — the viewport-top line
+                        // drives the editor→preview scroll sync.
+                        // Both signals flow through
+                        // Document; MarkdownPreviewPane's
+                        // updateNSView picks viewport over
+                        // caret when both are present.
+                        viewportLine: doc.viewportTopLine
                     )
                     .frame(minWidth: 260)
                 }

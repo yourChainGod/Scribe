@@ -73,6 +73,19 @@ enum SCI {
     // Selection / scrolling
     static let SETSEL:           UInt32 = 2160
     static let SCROLLCARET:      UInt32 = 2169
+    /// Phase 52b — top-of-viewport visible-line index (folded /
+    /// wrapped lines counted). Cheap O(1) read every time the
+    /// V_SCROLL bit fires on SCN_UPDATEUI.
+    static let GETFIRSTVISIBLELINE: UInt32 = 2152
+    /// Phase 52b — translate a "display line" (the index returned by
+    /// GETFIRSTVISIBLELINE) back to a "document line" (the 0-based
+    /// index that matches our 1-based source-line stamps after a +1).
+    /// This is identity in the common case (no folding, no soft
+    /// wrap) but the call cost is still trivial — and the day a
+    /// user enables soft-wrap, we'd silently desync the preview
+    /// without it.
+    static let DOCLINEFROMVISIBLE:  UInt32 = 2221
+    static let LINESONSCREEN:       UInt32 = 2370
     // Search
     static let SETTARGETSTART:   UInt32 = 2190
     static let GETTARGETSTART:   UInt32 = 2191
@@ -368,4 +381,17 @@ enum SCN {
     static let UPDATEUI: UInt32 = 2007
     static let DWELLSTART: UInt32 = 2016
     static let DWELLEND: UInt32 = 2017
+}
+
+/// Bit flags for `SCNotification.updated` — the bitmask that rides
+/// along with every `SCN_UPDATEUI` notification. Centralised here
+/// (rather than duplicated inside each Scintilla-consuming view)
+/// so the diff-pane scroll sync (Phase 35) and the markdown-preview
+/// scroll sync (Phase 52b) can't silently disagree about what the
+/// `V_SCROLL` bit value is.
+enum SC_UPDATE {
+    static let CONTENT:  Int32 = 0x1
+    static let SELECTION: Int32 = 0x2
+    static let V_SCROLL: Int32 = 0x4
+    static let H_SCROLL: Int32 = 0x8
 }

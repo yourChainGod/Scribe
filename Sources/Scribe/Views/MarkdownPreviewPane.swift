@@ -97,12 +97,20 @@ struct MarkdownPreviewPane: NSViewRepresentable {
     let baseDirectory: URL?
     /// Phase 51e — 1-based caret line, fed by `Document.cursorLine`.
     /// When this changes between updateNSView ticks we run a small JS
-    /// helper inside the preview that picks the heading whose source
+    /// helper inside the preview that picks the block whose source
     /// line is the largest one ≤ caret and scrolls it into view. Kept
     /// optional so non-document contexts (preview tests, scratch
     /// renders) can opt out by passing nil — the preview just won't
     /// follow caret moves in that case.
     var cursorLine: Int? = nil
+    /// Phase 52b — 1-based top-of-viewport line, fed by
+    /// `Document.viewportTopLine`. Written by ScintillaCodeEditor
+    /// whenever the V_SCROLL bit fires on SCN_UPDATEUI. Takes
+    /// precedence over `cursorLine` in the reveal helper because a
+    /// scroll drag is a more direct user intent than an implicit
+    /// caret move that happens during typing. Optional for the same
+    /// reason as `cursorLine`.
+    var viewportLine: Int? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -137,18 +145,33 @@ struct MarkdownPreviewPane: NSViewRepresentable {
 
     func updateNSView(_ view: WKWebView, context: Context) {
         let coord = context.coordinator
-        // Phase 51e — caret-only changes (markdown unchanged, theme
-        // unchanged) take a third, even cheaper path: just fire the
-        // reveal-line JS helper. No re-render, no innerHTML swap.
-        // Guarded behind hasInitialLoad so we don't try to call into
-        // a window that hasn't loaded the helper yet — the next full
-        // reload will publish it and the caret reveal will catch up
-        // on the subsequent tick.
+        // Phase 51e / 52b — caret- or scroll-only changes (markdown
+        // unchanged, theme unchanged) take a third, even cheaper
+        // path: just fire the reveal-line JS helper. No re-render,
+        // no innerHTML swap. Guarded behind hasInitialLoad so we
+        // don't try to call into a window that hasn't loaded the
+        // helper yet — the next full reload will publish it and the
+        // caret / scroll reveal will catch up on the subsequent tick.
         if coord.cachedMarkdown == markdown,
            coord.cachedIsDark == isDark {
-            if let line = cursorLine,
-               coord.hasInitialLoad,
-               coord.lastCursorLine != line {
+            guard coord.hasInitialLoad else { return }
+            let action = Self.decideReveal(cursorLine: cursorLine,
+                                           viewportLine: viewportLine,
+                                           lastCursor: coord.lastCursorLine,
+                                           lastViewport: coord.lastViewportLine)
+            switch action {
+            case .none:
+                break
+            case .viewport(let vp):
+                coord.lastViewportLine = vp
+                // Stamp the caret mirror too so a later tick where
+                // cursorLine changed *back* to the pre-scroll value
+                // doesn't immediately yank the preview away from
+                // where the user scrolled it.
+                if let line = cursorLine { coord.lastCursorLine = line }
+                view.evaluateJavaScript("window.scribeRevealLine && scribeRevealLine(\(vp));",
+                                        completionHandler: nil)
+            case .cursor(let line):
                 coord.lastCursorLine = line
                 view.evaluateJavaScript("window.scribeRevealLine && scribeRevealLine(\(line));",
                                         completionHandler: nil)
@@ -156,6 +179,44 @@ struct MarkdownPreviewPane: NSViewRepresentable {
             return
         }
         loadHTML(into: view, coordinator: coord)
+    }
+
+    /// Phase 52b — pure decision helper for the reveal fast path.
+    ///
+    /// Picks between three possible actions on every re-render where
+    /// markdown + theme are unchanged:
+    ///
+    ///   - `.none`      – neither signal moved since last tick; the
+    ///                    preview stays put.
+    ///   - `.viewport(line)` – the editor's viewport-top line moved;
+    ///                        explicit user scroll intent, wins over
+    ///                        caret.
+    ///   - `.cursor(line)`   – caret moved to a different line while
+    ///                        the viewport stayed put; implicit
+    ///                        follow.
+    ///
+    /// Lifted out of `updateNSView` so XCTest can pin the priority
+    /// ordering and the "no-op when nothing changed" invariant
+    /// without spinning up a WKWebView. The function is deliberately
+    /// parameter-only (no Coordinator, no view) so every assertion
+    /// reads like a plain state-transition test.
+    enum RevealAction: Equatable {
+        case none
+        case viewport(Int)
+        case cursor(Int)
+    }
+
+    static func decideReveal(cursorLine: Int?,
+                             viewportLine: Int?,
+                             lastCursor: Int,
+                             lastViewport: Int) -> RevealAction {
+        if let vp = viewportLine, lastViewport != vp {
+            return .viewport(vp)
+        }
+        if let line = cursorLine, lastCursor != line {
+            return .cursor(line)
+        }
+        return .none
     }
 
     private func loadHTML(into view: WKWebView, coordinator: Coordinator) {
@@ -187,6 +248,11 @@ struct MarkdownPreviewPane: NSViewRepresentable {
         coordinator.cachedMarkdown = markdown
         coordinator.cachedIsDark = isDark
         if let line = cursorLine { coordinator.lastCursorLine = line }
+        // Phase 52b — seed the viewport mirror so the very next
+        // updateNSView tick (fired as Document re-publishes) doesn't
+        // re-reveal a line we already landed on during the full
+        // reload.
+        if let vp = viewportLine { coordinator.lastViewportLine = vp }
     }
 
     /// Phase 51b — incremental body swap. Builds a JS statement that
@@ -810,6 +876,11 @@ struct MarkdownPreviewPane: NSViewRepresentable {
         /// we don't fire a JS round-trip per re-render when the line is
         /// the same as last tick.
         var lastCursorLine: Int = -1
+        /// Phase 52b — last viewport-top line we received from the
+        /// editor's V_SCROLL handler. The scroll-sync fast path
+        /// short-circuits when the value matches so a steady-state
+        /// re-render doesn't fire a redundant scribeRevealLine call.
+        var lastViewportLine: Int = -1
 
         // The user clicked an `<a href="…">`. We never want WKWebView
         // to actually navigate (then the preview would go blank); we

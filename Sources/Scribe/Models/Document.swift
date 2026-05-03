@@ -17,6 +17,15 @@ final class Document: ObservableObject, Identifiable {
     @Published var isDirty: Bool = false
     @Published var cursorLine: Int = 1
     @Published var cursorColumn: Int = 1
+    /// Phase 52b — 1-based source line at the top of the editor's
+    /// visible viewport. Written by ScintillaCodeEditor's
+    /// V_SCROLL handler after every vertical scroll event; read by
+    /// MarkdownPreviewPane to drive the editor→preview scroll-sync
+    /// path. A dedicated signal (rather than repurposing
+    /// `cursorLine`) keeps the caret-driven reveal independent of
+    /// viewport drag gestures, which matters when the user scrolls
+    /// without moving the caret.
+    @Published var viewportTopLine: Int = 1
     /// User-chosen Lexilla lexer name. When set, takes precedence over the
     /// extension-based detection in `LexerCatalog`. `nil` ⇒ auto.
     @Published var lexerOverride: String?
