@@ -93,6 +93,21 @@ private let katexCSSAsset: String = {
     return s
 }()
 
+/// Phase 53e-5 — cached Mermaid runtime shipped inside
+/// `Bundle.module`. ~3.3 MB minified — Mermaid carries its own
+/// d3 plus parsers for every chart type (flowchart / sequence /
+/// gantt / class / state / pie / journey / git / mindmap / …)
+/// and there is no smaller "core" build upstream. Empty on a
+/// missing-asset build → CDN fallback so dev iteration still
+/// works with an incomplete Resources/ tree.
+private let mermaidJSAsset: String = {
+    guard let url = Bundle.module.url(forResource: "mermaid.min",
+                                      withExtension: "js"),
+          let s = try? String(contentsOf: url, encoding: .utf8)
+    else { return "" }
+    return s
+}()
+
 /// Cached GitHub dark theme CSS for highlight.js.
 private let githubDarkCSS: String = {
     guard let url = Bundle.module.url(forResource: "github-dark.min",
@@ -169,6 +184,7 @@ struct MarkdownPreviewPane: NSViewRepresentable {
     static var githubDarkCSSForTests: String { githubDarkCSS }
     static var katexJSAssetForTests: String { katexJSAsset }
     static var katexCSSAssetForTests: String { katexCSSAsset }
+    static var mermaidJSAssetForTests: String { mermaidJSAsset }
 
     /// Phase 53c — exposes the private `wrap(...)` shell builder
     /// so XCTest can pin structural invariants (KaTeX CDN
@@ -1204,16 +1220,15 @@ struct MarkdownPreviewPane: NSViewRepresentable {
         \(katexJSAsset.isEmpty
           ? "<script defer src=\"https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js\" crossorigin=\"anonymous\"></script>"
           : "<script>\(katexJSAsset)</script>")
-        <!-- Phase 53d — Mermaid runtime. Loaded as a classic
-             (non-module) script because the module build uses ESM
-             imports that WKWebView's `file://` + `about:blank`
-             shells mis-parse. Auto-init is disabled: we drive
-             rendering manually via `scribeRenderMermaid` so
-             incremental DOM swaps (Phase 51b) get re-rendered
-             without waiting for a full DOMContentLoaded. -->
-        <script
-            src="https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js"
-            crossorigin="anonymous"></script>
+        <!-- Phase 53e-5 — Mermaid runtime shipped inside the app
+             bundle (~3.3 MB). Inline `<script>` so `window.mermaid`
+             is ready before mermaid.initialize is called below.
+             Falls back to the CDN URL if the bundled asset is
+             missing — dev iteration with an incomplete Resources/
+             tree still gets a working preview. -->
+        \(mermaidJSAsset.isEmpty
+          ? "<script src=\"https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js\" crossorigin=\"anonymous\"></script>"
+          : "<script>\(mermaidJSAsset)</script>")
         <script>
           // Mermaid reads the current theme immediately on
           // initialize; re-running initialize with a different

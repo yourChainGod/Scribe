@@ -22,10 +22,32 @@ final class MarkdownPreviewMermaidTests: XCTestCase {
 
     // MARK: - Wrapped shell injection
 
-    func test_wrapInjectsMermaidScript() {
+    func test_wrapInjectsMermaidRuntime() {
+        // Phase 53e-5 — bundled inline by default; CDN fallback
+        // path only fires when SwiftPM lost the asset. Branch on
+        // the cached state so we test whichever path the build
+        // actually took.
         let html = MarkdownPreviewPane.wrapForTests(body: "<p>hi</p>")
-        XCTAssertTrue(html.contains("mermaid@10.9.3/dist/mermaid.min.js"),
-                      "shell must include pinned Mermaid runtime")
+        let bundled = !MarkdownPreviewPane.mermaidJSAssetForTests.isEmpty
+        if bundled {
+            // Stable upstream marker visible in the minified
+            // bundle. mermaid carries its own bundled d3, which
+            // exports `__webpack_require__` for the chunk loader.
+            XCTAssertTrue(html.contains("mermaid"),
+                          "bundled mermaid runtime must be inlined")
+            XCTAssertFalse(html.contains("https://cdn.jsdelivr.net/npm/mermaid"),
+                           "bundled path must NOT also load from CDN")
+        } else {
+            XCTAssertTrue(html.contains("mermaid@10.9.3/dist/mermaid.min.js"),
+                          "missing-bundle path must fall back to the CDN")
+        }
+    }
+
+    func test_wrapBundlesMermaidRuntimeByDefault() {
+        // Production builds with a complete Resources/ tree
+        // must ship Mermaid inline.
+        XCTAssertFalse(MarkdownPreviewPane.mermaidJSAssetForTests.isEmpty,
+                       "mermaid.min.js must be bundled into the app")
     }
 
     func test_wrapCallsMermaidInitializeWithoutAutoStart() {
