@@ -380,6 +380,7 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                     case .hideInlineBlameTooltip: self.hideInlineBlameTooltip(in: view)
                     case .toggleMarkdownTaskCheckbox: self.toggleMarkdownTaskCheckbox(in: view)
                     case .toggleMarkdownTaskCheckboxAt(let line): self.toggleMarkdownTaskCheckbox(atLine: line, in: view)
+                    case .jumpToMatchingBracket: self.jumpToMatchingBracket(in: view)
                     case .insertAtCarets(let s): self.insertAtCarets(s, in: view)
                     case let .testRectSelectExtend(d, r):
                         self.testRectSelectExtend(linesDown: d, charsRight: r, in: view)
@@ -727,14 +728,18 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                 // only, and only inside markdown documents, so the
                 // hot path for non-markdown buffers is a single
                 // switch arm + an Int compare.
-                if let view, doc.isMarkdown {
+                if let view {
                     let ch = scn.pointee.ch
-                    // Scintilla reports both LF (10) and CR (13)
-                    // for line-end inserts depending on the doc's
-                    // EOL mode; we treat both as "user just ended a
-                    // line".
-                    if ch == 10 || ch == 13 {
+                    if doc.isMarkdown, ch == 10 || ch == 13 {
                         applyMarkdownListContinuation(in: view)
+                    }
+                    // Phase 62 — bracket auto-close. Only reacts to
+                    // the three openers; the gate inside
+                    // `autoCloseBracket` also skips markdown to keep
+                    // prose typing WYSIWYG.
+                    if ch == 0x28 /* ( */ || ch == 0x5B /* [ */ || ch == 0x7B /* { */ {
+                        let scalar = Unicode.Scalar(UInt8(ch))
+                        autoCloseBracket(opener: Character(scalar), in: view)
                     }
                 }
             case SCN.UPDATEUI:
@@ -791,6 +796,13 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                     // set) so unconditional re-paint is cheaper than
                     // tracking whether the line index actually moved.
                     self.applyInlineBlame(in: view)
+                    // Phase 62 — repaint the matched-bracket highlight
+                    // on every caret / selection tick. The function is
+                    // ~O(1) when the caret isn't adjacent to a bracket
+                    // (two GETCHARAT calls + set membership), so
+                    // gating it behind "V_SCROLL / content" bits would
+                    // save less than the added branching cost.
+                    applyBraceMatchHighlight(in: view)
                     // Phase 18 — push the live selection to Workspace so
                     // the "Find in Files" command can prefill its query
                     // from whatever the user just highlighted. Single-

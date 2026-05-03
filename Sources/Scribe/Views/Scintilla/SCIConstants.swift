@@ -266,6 +266,28 @@ enum SCI {
     static let SETVSCROLLBAR:     UInt32 = 2280
     static let SETCARETSTYLE:     UInt32 = 2512
 
+    // Phase 62 — bracket matching + auto-close. Scintilla paints
+    // BRACEHIGHLIGHT as `STYLE_BRACELIGHT` (34) and BRACEBADLIGHT
+    // as `STYLE_BRACEBAD` (35); we configure both foreground /
+    // background colours through SC.STYLE_BRACELIGHT /
+    // SC.STYLE_BRACEBAD at theme-apply time.
+    static let BRACEHIGHLIGHT:    UInt32 = 2351
+    static let BRACEBADLIGHT:     UInt32 = 2352
+    /// `SCI_BRACEMATCH(pos, maxReStyle)` — returns the position of
+    /// the matching bracket, or `INVALID_POSITION` (-1) when no
+    /// partner exists within the styling budget. `maxReStyle` is
+    /// unused in 5.x and must be 0.
+    static let BRACEMATCH:        UInt32 = 2353
+    /// `SCI_GETCHARAT(pos)` — single byte at `pos`. Used by the
+    /// brace-match path to peek at the character behind / under
+    /// the caret before deciding whether to fire `BRACEMATCH`.
+    static let GETCHARAT:         UInt32 = 2007
+    /// `SCI_POSITIONBEFORE(pos)` — step one code point left.
+    /// Honors the multi-byte codec (UTF-8 in Scribe's case); the
+    /// naive `pos - 1` would split a grapheme and leave the caret
+    /// inside a continuation byte.
+    static let POSITIONBEFORE:    UInt32 = 2417
+
     // Phase 35c-ii-γ — EOL annotations (Scintilla 5.x feature).
     // Lets us paint a soft trailing label after a line's contents
     // without pushing the source text around. Used by the inline-
@@ -365,6 +387,12 @@ enum SC {
     static let DOCUMENTOPTION_TEXT_LARGE:  Int = 0x100
     static let STYLE_DEFAULT:    Int = 32
     static let STYLE_LINENUMBER: Int = 33
+    /// Phase 62 — Scintilla reserves two additional style slots for
+    /// bracket matching: BRACELIGHT (34) paints a matched pair and
+    /// BRACEBAD (35) paints a dangler. Configured at theme-apply
+    /// time in `Coordinator+Theme.swift`.
+    static let STYLE_BRACELIGHT: Int = 34
+    static let STYLE_BRACEBAD:   Int = 35
     /// Phase 23 — `SelectionMode` enum values. Stream is the
     /// default; rectangle is what VSCode calls "Column Selection
     /// Mode". `lines` and `thin` are exposed by Scintilla but we

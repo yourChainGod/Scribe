@@ -81,6 +81,25 @@ extension ScintillaCodeEditor.Coordinator {
         view.message(SCI.SETSELBACK, wParam: 1, lParam: sciColor(theme.selectionBackground))
         view.message(SCI.SETCARETFORE, wParam: UInt(bitPattern: sciColor(theme.caret)))
 
+        // Phase 62 — matched-bracket paints use the same accent
+        // colour as the rest of the chrome so a highlight feels
+        // like "Scribe noticing you, not a warning". BAD gets the
+        // theme's `number` colour boosted to red on most themes;
+        // fallback for themes whose number happens to be low-
+        // contrast would be a Phase-62b refinement.
+        view.message(SCI.STYLESETFORE,
+                     wParam: UInt(SC.STYLE_BRACELIGHT),
+                     lParam: sciColor(theme.uiAccent))
+        view.message(SCI.STYLESETBACK,
+                     wParam: UInt(SC.STYLE_BRACELIGHT),
+                     lParam: sciColor(theme.selectionBackground))
+        view.message(SCI.STYLESETFORE,
+                     wParam: UInt(SC.STYLE_BRACEBAD),
+                     lParam: sciColor(0xFF3B30))   // macOS system red
+        view.message(SCI.STYLESETBACK,
+                     wParam: UInt(SC.STYLE_BRACEBAD),
+                     lParam: sciColor(theme.background))
+
         // Per-token colours depend on which lexer family is active.
         applyLanguageStyles(theme: theme, lexer: currentLexer, to: view)
     }

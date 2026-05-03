@@ -360,6 +360,22 @@ struct ScribeCommands: Commands {
             }
             .keyboardShortcut(.upArrow, modifiers: [.option, .shift])
             .disabled(workspace.current == nil)
+
+            Divider()
+
+            // Phase 62 — Go to matching bracket. ⌘⇧B mirrors
+            // Xcode's "Balance Delimiter" shortcut (which in
+            // practice most users recall as "go to matching").
+            // No-ops when the caret isn't adjacent to a bracket;
+            // the visible matched-bracket highlight already
+            // telegraphs when the command will do something.
+            Button {
+                findState.commands.send(.jumpToMatchingBracket)
+            } label: {
+                Text("menu.tools.jumpToMatchingBracket", bundle: .module)
+            }
+            .keyboardShortcut("b", modifiers: [.command, .shift])
+            .disabled(workspace.current == nil)
         }
 
         // — Edit menu —

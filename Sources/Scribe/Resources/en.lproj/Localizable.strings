@@ -828,6 +828,10 @@
 "settings.appearance.customize.export" = "Export Theme…";
 "settings.appearance.customize.import" = "Import Theme…";
 
+// Phase 62 — Bracket matching + goto matching bracket
+"menu.tools.jumpToMatchingBracket"     = "Go to Matching Bracket";
+"palette.command.jumpToMatchingBracket" = "Go to Matching Bracket";
+
 // Phase 59 — Character panel (special-character picker)
 "menu.edit.insertCharacter"          = "Insert Character…";
 "palette.command.insertCharacter"    = "Insert Special Character";

@@ -505,6 +505,22 @@ enum CommandRegistration {
                 findState.commands.send(.transformSelection(spec.action))
             }
         })
+
+        // Phase 62 — Go to Matching Bracket palette entry. Mirrors
+        // Tools ▸ Go to Matching Bracket / ⌘⇧B. Always registered
+        // when a document is open; the Coordinator no-ops when the
+        // caret isn't adjacent to a bracket.
+        commands.append(
+            ScribeCommand(id: "edit.jumpToMatchingBracket",
+                          title: localize("palette.command.jumpToMatchingBracket"),
+                          subtitle: localize("menu.tools"),
+                          keywords: ["bracket", "brace", "paren", "matching",
+                                     "partner", "balance", "jump", "goto",
+                                     "括号", "匹配", "跳转"],
+                          shortcutLabel: "⇧⌘B") {
+                findState.commands.send(.jumpToMatchingBracket)
+            }
+        )
         return commands
     }
 

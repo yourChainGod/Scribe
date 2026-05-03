@@ -126,6 +126,11 @@ final class FindState: ObservableObject {
         /// through FindState.commands so the menu / shortcut driver
         /// doesn't need to know the Coordinator's private API.
         case toggleMarkdownTaskCheckbox
+        /// Phase 62 — jump the caret to the bracket partner of the
+        /// one at / just before the caret. No-op when the caret
+        /// isn't adjacent to a bracket character or when the
+        /// bracket has no partner within Scintilla's styling budget.
+        case jumpToMatchingBracket
         /// Phase 53b — same flip as `toggleMarkdownTaskCheckbox`
         /// but at an explicit 1-based source line, not the caret.
         /// Fired by the preview-side JS click handler when the

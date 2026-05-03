@@ -825,6 +825,10 @@
 "settings.appearance.customize.export" = "导出主题…";
 "settings.appearance.customize.import" = "导入主题…";
 
+// Phase 62 — Bracket matching + goto matching bracket
+"menu.tools.jumpToMatchingBracket"     = "跳到匹配括号";
+"palette.command.jumpToMatchingBracket" = "跳到匹配括号";
+
 // Phase 59 — Character panel (special-character picker)
 "menu.edit.insertCharacter"          = "插入字符…";
 "palette.command.insertCharacter"    = "插入特殊字符";
