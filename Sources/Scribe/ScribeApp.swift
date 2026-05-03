@@ -23,6 +23,12 @@ struct ScribeApp: App {
     @StateObject private var findInFiles = FindInFilesState()
     @StateObject private var fileIndex = FileIndex()
     @StateObject private var outline = SymbolOutline()
+    /// Phase 65 — workspace-wide symbol catalogue that backs the
+    /// ⌘T "Go to Symbol in Workspace…" palette. Lives at the app
+    /// level alongside `fileIndex` because a single workspace
+    /// root produces one catalogue; every window / sheet that
+    /// might want to jump into a symbol reads the same store.
+    @StateObject private var workspaceSymbolIndex = WorkspaceSymbolIndex()
     /// Phase 33 — user's snippet collection. Owned at the app level
     /// so the ⌘⇧T palette and the Settings → Snippets tab share
     /// one source of truth; @Published mutations from the editor
@@ -60,6 +66,7 @@ struct ScribeApp: App {
                 .environmentObject(findInFiles)
                 .environmentObject(fileIndex)
                 .environmentObject(outline)
+                .environmentObject(workspaceSymbolIndex)
                 .environmentObject(snippets)
                 .environmentObject(clipboardHistory)
                 .themed(prefs: prefs)
@@ -70,14 +77,18 @@ struct ScribeApp: App {
                                                 workspace: workspace,
                                                 prefs: prefs,
                                                 findState: findState,
-                                                clipboardHistory: clipboardHistory)
+                                                clipboardHistory: clipboardHistory,
+                                                fileIndex: fileIndex,
+                                                workspaceSymbolIndex: workspaceSymbolIndex)
                 }
                 .onChange(of: workspace.selectedID) { _, _ in
                     CommandRegistration.refresh(registry: commands,
                                                 workspace: workspace,
                                                 prefs: prefs,
                                                 findState: findState,
-                                                clipboardHistory: clipboardHistory)
+                                                clipboardHistory: clipboardHistory,
+                                                fileIndex: fileIndex,
+                                                workspaceSymbolIndex: workspaceSymbolIndex)
                     outline.update(for: workspace.current)
                 }
                 .onChange(of: workspace.current?.text) { _, _ in
@@ -88,7 +99,9 @@ struct ScribeApp: App {
                                                 workspace: workspace,
                                                 prefs: prefs,
                                                 findState: findState,
-                                                clipboardHistory: clipboardHistory)
+                                                clipboardHistory: clipboardHistory,
+                                                fileIndex: fileIndex,
+                                                workspaceSymbolIndex: workspaceSymbolIndex)
                 }
                 .onChange(of: workspace.folderRoot?.url) { _, newRoot in
                     if let newRoot {
@@ -96,6 +109,12 @@ struct ScribeApp: App {
                     } else {
                         fileIndex.clear()
                     }
+                    // Phase 65 — folder swap invalidates the
+                    // workspace symbol catalogue. The index
+                    // lazily rebuilds itself the next time the
+                    // user invokes ⌘T, so we just drop the
+                    // stale snapshot here.
+                    workspaceSymbolIndex.clear()
                 }
                 .onOpenURL { url in
                     workspace.openFile(at: url)
@@ -117,6 +136,7 @@ struct ScribeApp: App {
                            findInFiles: findInFiles,
                            fileIndex: fileIndex,
                            outline: outline,
+                           workspaceSymbolIndex: workspaceSymbolIndex,
                            commands: commands,
                            snippets: snippets,
                            clipboardHistory: clipboardHistory,
@@ -150,7 +170,9 @@ struct ScribeApp: App {
                                     workspace: workspace,
                                     prefs: prefs,
                                     findState: findState,
-                                    clipboardHistory: clipboardHistory)
+                                    clipboardHistory: clipboardHistory,
+                                    fileIndex: fileIndex,
+                                    workspaceSymbolIndex: workspaceSymbolIndex)
         // Wire ⌘P's `>` route through to the same registry ⌘⇧P
         // uses, so users can run any palette command without
         // dismissing Quick Open first.

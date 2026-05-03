@@ -23,6 +23,9 @@ struct ScribeCommands: Commands {
     @ObservedObject var findInFiles: FindInFilesState
     @ObservedObject var fileIndex: FileIndex
     @ObservedObject var outline: SymbolOutline
+    /// Phase 65 — workspace-wide symbol catalogue the ⌘T "Go to
+    /// Symbol in Workspace…" menu item dispatches through.
+    @ObservedObject var workspaceSymbolIndex: WorkspaceSymbolIndex
     @ObservedObject var commands: CommandRegistry
     /// Phase 33 — passed through so the Edit → Insert Snippet menu
     /// can hand the active catalog to SnippetController.
@@ -160,6 +163,20 @@ struct ScribeCommands: Commands {
                                                   outline: outline)
             } label: { Text("menu.go.quickOpen", bundle: .module) }
             .keyboardShortcut("p", modifiers: .command)
+
+            // Phase 65 — ⌘T opens the workspace-wide Go to Symbol
+            // palette. Disabled until a folder is open because
+            // there's nothing to index otherwise.
+            Button {
+                GoToSymbolController.shared.toggle(
+                    workspace: workspace,
+                    symbolIndex: workspaceSymbolIndex,
+                    fileIndex: fileIndex)
+            } label: {
+                Text("menu.goto.workspaceSymbol", bundle: .module)
+            }
+            .keyboardShortcut("t", modifiers: .command)
+            .disabled(fileIndex.rootURL == nil)
 
             Button {
                 PaletteWindowController.shared.toggle(registry: commands)

@@ -510,6 +510,14 @@
 "palette.symbol.placeholder"    = "Jump to symbol in %@ (%d)";
 "palette.gotoLine.placeholder"  = "Go to line in %@ (e.g. :42)";
 "palette.commandRoute.placeholder" = "Run a command (%d available)";
+"palette.symbol.workspace.detail"         = "%@ · %@:%d";
+"palette.goToSymbol.placeholder"          = "Go to symbol in %@ (%d symbols)";
+"palette.goToSymbol.placeholder.truncated"= "Go to symbol in %@ (%d symbols shown — catalogue truncated)";
+"palette.goToSymbol.placeholder.indexing" = "Indexing workspace symbols…";
+"palette.goToSymbol.placeholder.noFolder" = "Open a folder to index its symbols";
+"menu.goto.workspaceSymbol"               = "Go to Symbol in Workspace…";
+"palette.command.workspaceSymbol"         = "Go to Symbol in Workspace…";
+"palette.command.workspaceSymbol.subtitle"= "Fuzzy-match symbols across every file in the open folder";
 "symbol.kind.function"          = "function";
 "symbol.kind.method"            = "method";
 "symbol.kind.class"             = "class";

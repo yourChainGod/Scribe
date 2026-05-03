@@ -22,6 +22,8 @@ enum CommandRegistration {
                         prefs: EditorPreferences,
                         findState: FindState? = nil,
                         clipboardHistory: ClipboardHistoryStore? = nil,
+                        fileIndex: FileIndex? = nil,
+                        workspaceSymbolIndex: WorkspaceSymbolIndex? = nil,
                         localize: (String) -> String = L10n.t) {
         var batch: [ScribeCommand] = []
         batch.append(contentsOf: fileCommands(workspace: workspace, prefs: prefs, localize: localize))
@@ -34,7 +36,53 @@ enum CommandRegistration {
         batch.append(contentsOf: encodingCommands(workspace: workspace, localize: localize))
         batch.append(contentsOf: lineEndingCommands(workspace: workspace, localize: localize))
         batch.append(contentsOf: lexerCommands(workspace: workspace, localize: localize))
+        batch.append(contentsOf: navigationCommands(workspace: workspace,
+                                                    fileIndex: fileIndex,
+                                                    workspaceSymbolIndex: workspaceSymbolIndex,
+                                                    localize: localize))
         registry.commands = batch
+    }
+
+    // MARK: - Navigation (Phase 65)
+
+    /// Navigation-category palette entries that live outside the
+    /// File / View / Text clusters above. Currently just the
+    /// workspace-wide Go to Symbol bridge; future Navigation
+    /// palette commands drop in alongside it without polluting
+    /// the existing groupings.
+    private static func navigationCommands(workspace: Workspace,
+                                           fileIndex: FileIndex?,
+                                           workspaceSymbolIndex: WorkspaceSymbolIndex?,
+                                           localize: (String) -> String) -> [ScribeCommand] {
+        var out: [ScribeCommand] = []
+        // Phase 65 — Go to Symbol in Workspace… (⌘T) palette mirror.
+        // Skipped when the caller can't wire the dispatch (e.g.
+        // the SettingsScene, which reuses `refresh` with a trimmed
+        // argument set) so the palette doesn't claim the shortcut
+        // in contexts where the controller wouldn't resolve.
+        if let fileIndex, let workspaceSymbolIndex {
+            out.append(
+                ScribeCommand(
+                    id: "go.workspaceSymbol",
+                    title: localize("palette.command.workspaceSymbol"),
+                    subtitle: localize("palette.command.workspaceSymbol.subtitle"),
+                    keywords: ["symbol", "goto", "go to", "workspace",
+                               "outline", "jump", "navigate",
+                               "符号", "跳转", "工作区", "导航"],
+                    shortcutLabel: "⌘T") { [weak workspace,
+                                             weak fileIndex,
+                                             weak workspaceSymbolIndex] in
+                        guard let workspace,
+                              let fileIndex,
+                              let workspaceSymbolIndex else { return }
+                        GoToSymbolController.shared.toggle(
+                            workspace: workspace,
+                            symbolIndex: workspaceSymbolIndex,
+                            fileIndex: fileIndex)
+                    }
+            )
+        }
+        return out
     }
 
     // MARK: - File

@@ -508,6 +508,14 @@
 "palette.symbol.placeholder"    = "跳转到 %@ 中的符号（%d）";
 "palette.gotoLine.placeholder"  = "跳转到 %@ 中的行（例如 :42）";
 "palette.commandRoute.placeholder" = "运行命令（%d 个可用）";
+"palette.symbol.workspace.detail"         = "%@ · %@:%d";
+"palette.goToSymbol.placeholder"          = "跳转到 %@ 中的符号（%d 个）";
+"palette.goToSymbol.placeholder.truncated"= "跳转到 %@ 中的符号（已显示 %d 个，目录已截断）";
+"palette.goToSymbol.placeholder.indexing" = "正在索引工作区符号…";
+"palette.goToSymbol.placeholder.noFolder" = "请先打开一个文件夹以索引其符号";
+"menu.goto.workspaceSymbol"               = "在工作区中跳转到符号…";
+"palette.command.workspaceSymbol"         = "在工作区中跳转到符号…";
+"palette.command.workspaceSymbol.subtitle"= "模糊匹配打开文件夹下所有文件的符号";
 "symbol.kind.function"          = "函数";
 "symbol.kind.method"            = "方法";
 "symbol.kind.class"             = "类";
