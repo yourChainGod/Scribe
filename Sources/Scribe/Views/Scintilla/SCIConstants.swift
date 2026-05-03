@@ -256,6 +256,16 @@ enum SCI {
     static let RELEASEDOCUMENT:   UInt32 = 2377
     static let ADDREFDOCUMENT:    UInt32 = 2376
 
+    // Phase 56 — Document Map (minimap) config surface. The minimap
+    // hides its scrollbars, freezes its caret, and translates click
+    // coordinates back to a line number, so it needs the few
+    // message IDs below on top of the ones already here.
+    static let POSITIONFROMPOINT: UInt32 = 2022
+    static let SETCARETPERIOD:    UInt32 = 2076
+    static let SETHSCROLLBAR:     UInt32 = 2130
+    static let SETVSCROLLBAR:     UInt32 = 2280
+    static let SETCARETSTYLE:     UInt32 = 2512
+
     // Phase 35c-ii-γ — EOL annotations (Scintilla 5.x feature).
     // Lets us paint a soft trailing label after a line's contents
     // without pushing the source text around. Used by the inline-

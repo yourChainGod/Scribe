@@ -804,6 +804,12 @@
 "palette.command.colorSwatch.show" = "Show Inline Color Swatches";
 "palette.command.colorSwatch.hide" = "Hide Inline Color Swatches";
 
+// Phase 56 — Document Map (minimap)
+"menu.view.minimap.show" = "Show Minimap";
+"menu.view.minimap.hide" = "Hide Minimap";
+"palette.command.minimap.show" = "Show Minimap";
+"palette.command.minimap.hide" = "Hide Minimap";
+
 // Phase 41b — Generator Pack (UUID / Lorem / Password / Timestamp / QR)
 "generator.menu"        = "Generate";
 "generator.uuid"        = "UUID v4";

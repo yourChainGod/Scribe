@@ -58,7 +58,7 @@ private struct DocumentEditorPane: View {
                 // preview's minWidth keeps it from collapsing into
                 // an unreadable strip.
                 HSplitView {
-                    editor
+                    editorWithMinimap
                     // Phase 51a — `doc.url?.deletingLastPathComponent()`
                     // is the on-disk parent we resolve relative
                     // image / link refs against. Untitled buffers
@@ -111,7 +111,7 @@ private struct DocumentEditorPane: View {
                     .frame(minWidth: 260)
                 }
             } else {
-                editor
+                editorWithMinimap
             }
         }
     }
@@ -123,6 +123,32 @@ private struct DocumentEditorPane: View {
             .contextMenu {
                 editorContextMenu(doc: doc)
             }
+    }
+
+    /// Phase 56 — main editor with an optional trailing Document
+    /// Map strip. The minimap is attached inside an HStack so the
+    /// user still gets the familiar editor chrome on the left;
+    /// turning the pref off collapses the strip entirely (no
+    /// placeholder, no wasted pixels).
+    ///
+    /// We keep this single entry point for both the Markdown-split
+    /// and plain-editor branches so the two paths stay in lock-step:
+    /// any future pane Scribe grows (e.g. a symbol panel) only has
+    /// to plug in here once.
+    private var editorWithMinimap: some View {
+        HStack(spacing: 0) {
+            editor
+            if prefs.isMinimapVisible {
+                // Thin divider separates the editor surface from the
+                // map so the transition reads as "two panes" rather
+                // than "editor with weird tail". Matches the vibe of
+                // Scintilla's fold / git-gutter margins.
+                Divider()
+                DocumentMapPane(doc: doc, prefs: prefs)
+                    .id(doc.id)
+                    .frame(width: DocumentMapPane.preferredWidth)
+            }
+        }
     }
 
     /// Editor right-click menu. Replaces Scintilla's English built-in

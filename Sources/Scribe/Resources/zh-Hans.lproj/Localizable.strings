@@ -801,6 +801,12 @@
 "palette.command.colorSwatch.show" = "显示内联色块";
 "palette.command.colorSwatch.hide" = "隐藏内联色块";
 
+// Phase 56 — Document Map (minimap)
+"menu.view.minimap.show" = "显示缩略图";
+"menu.view.minimap.hide" = "隐藏缩略图";
+"palette.command.minimap.show" = "显示缩略图";
+"palette.command.minimap.hide" = "隐藏缩略图";
+
 // Phase 41b — Generator Pack (UUID / Lorem / Password / Timestamp / QR)
 "generator.menu"        = "生成";
 "generator.uuid"        = "UUID v4";

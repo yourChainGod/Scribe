@@ -152,6 +152,20 @@ enum CommandRegistration {
                   keywords: ["color", "swatch", "hex", "rgb", "hsl",
                              "preview", "highlight", "颜色", "色块"]) {
                 prefs.inlineColorSwatchesEnabled.toggle()
+            },
+            // Phase 56 — Document Map toggle. Keywords cover both
+            // the "minimap" (VSCode / Sublime) and "document map"
+            // (Notepad++) vocabulary so muscle memory from either
+            // editor finds it.
+            .init(id: "view.toggleMinimap",
+                  title: prefs.isMinimapVisible
+                    ? localize("palette.command.minimap.hide")
+                    : localize("palette.command.minimap.show"),
+                  subtitle: localize("menu.view"),
+                  keywords: ["minimap", "document", "map", "thumbnail",
+                             "overview", "缩略图", "地图", "概览"],
+                  shortcutLabel: "⌥⌘M") {
+                prefs.isMinimapVisible.toggle()
             }
         ]
 

@@ -167,6 +167,22 @@ struct ScribeCommands: Commands {
                     Text("menu.view.colorSwatch.show", bundle: .module)
                 }
             }
+
+            // Phase 56 — Document Map (minimap) toggle. Label flips
+            // with state so the verb always reads as the action the
+            // click will perform. ⌥⌘M avoids the ⌘M "minimise
+            // window" collision macOS owns at the system level.
+            Button {
+                prefs.isMinimapVisible.toggle()
+            } label: {
+                if prefs.isMinimapVisible {
+                    Label(L10n.t("menu.view.minimap.hide"),
+                          systemImage: "checkmark")
+                } else {
+                    Text("menu.view.minimap.show", bundle: .module)
+                }
+            }
+            .keyboardShortcut("m", modifiers: [.command, .option])
         }
 
         // — Tools menu —

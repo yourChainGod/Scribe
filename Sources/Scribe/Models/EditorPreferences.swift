@@ -59,6 +59,13 @@ final class EditorPreferences: ObservableObject {
         // file containing CSS-style hex / rgb / hsl literals, and
         // costs nothing on documents without colors.
         static let inlineColorSwatchesEnabled = "editor.inlineColorSwatchesEnabled"
+        // Phase 56 — Document Map (minimap) visibility toggle.
+        // Default OFF so existing users don't get a surprise sidebar
+        // strip on first launch after upgrade; ⌥⌘M (or View ▸ Show
+        // Minimap) opts in. Per-window state would be nicer, but the
+        // pref is a single bool persisted in UserDefaults like every
+        // other view-mode toggle (find bar visibility, soft-tabs).
+        static let isMinimapVisible = "editor.isMinimapVisible"
         // Phase 46b — pinned tab paths. Persisted as a sorted string
         // array under one key so `defaults read` shows a single list
         // rather than scattered entries. Standardized-file-URL path
@@ -172,6 +179,14 @@ final class EditorPreferences: ObservableObject {
                               forKey: Key.inlineColorSwatchesEnabled) }
     }
 
+    /// Phase 56 — when true, EditorAreaView attaches a `DocumentMapPane`
+    /// to the right of the main editor. Off by default; toggled via
+    /// View ▸ Show Minimap (⌥⌘M). Persists to UserDefaults so the
+    /// next launch remembers the user's choice.
+    @Published var isMinimapVisible: Bool {
+        didSet { defaults.set(isMinimapVisible, forKey: Key.isMinimapVisible) }
+    }
+
     /// Phase 46b — set of standardized file-URL paths the user has
     /// pinned across sessions. Workspace consults this on
     /// `openFile(at:)` to re-apply the pin flag to freshly opened
@@ -278,6 +293,11 @@ final class EditorPreferences: ObservableObject {
         } else {
             self.inlineColorSwatchesEnabled = true
         }
+
+        // Phase 56 — Document Map default OFF. `defaults.bool(...)`
+        // already returns false on a missing key so the explicit
+        // object-presence dance other prefs use isn't needed here.
+        self.isMinimapVisible = defaults.bool(forKey: Key.isMinimapVisible)
 
         // Phase 46b — load pinned URL paths. Missing key ⇒ empty set
         // (no pins yet); any non-string elements are filtered out so
