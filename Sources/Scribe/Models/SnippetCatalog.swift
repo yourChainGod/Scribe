@@ -131,11 +131,21 @@ final class SnippetCatalog: ObservableObject {
         Snippet(
             name: "Date (ISO 8601)",
             prefix: "date",
-            // Snippet bodies are static text in v1; for a real "now"
-            // expander we'd need v2 placeholders. Keep this as a
-            // template the user can adjust manually.
-            body: "YYYY-MM-DD",
-            description: "ISO 8601 date placeholder — replace by hand."
+            // Phase 63 — when the user expands this snippet the
+            // four-digit year is pre-selected and Tab walks
+            // through MM, DD before parking the caret at the
+            // tail (`$0`).
+            body: "${1:YYYY}-${2:MM}-${3:DD}",
+            description: "ISO 8601 date — Tab through year/month/day."
+        ),
+        Snippet(
+            name: "Function (Swift)",
+            prefix: "func",
+            // Phase 63 — placeholders demo. `$1` is the function
+            // name, `$2` is the parameter list, `$3` is the
+            // return type, `$0` parks the caret on the body.
+            body: "func ${1:name}(${2:args}) -> ${3:Void} {\n    $0\n}",
+            description: "Swift function with placeholder navigation."
         )
     ]
 }

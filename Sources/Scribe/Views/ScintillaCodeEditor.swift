@@ -58,6 +58,12 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         context.coordinator.applyTheme(to: view)
         context.coordinator.configureMatchIndicator(to: view)
         context.coordinator.configureColorSwatchIndicator(to: view)
+        // Phase 63 — reserve indicator slot 2 for the active
+        // snippet placeholder. Done once at attach time alongside
+        // the find / color-swatch slots; the tint is re-applied
+        // from `beginSnippetSession` so a theme flip during an
+        // expanded snippet also re-paints the highlight.
+        context.coordinator.configureSnippetIndicator(in: view)
         context.coordinator.configureMultiSelection(to: view)
         // Phase 35c-ii-γ — inline-blame style + visibility +
         // engine subscription. Three calls because the lifecycle
@@ -116,6 +122,17 @@ struct ScintillaCodeEditor: NSViewRepresentable {
     }
 
     func updateNSView(_ view: ScintillaView, context: Context) {
+        // Phase 63 — when the SwiftUI parent swaps the doc under
+        // us (tab switch, command-K split, file open), drop any
+        // active snippet session. The byte ranges it tracks are
+        // tied to the previous document's buffer; carrying them
+        // forward into a new doc would land the next Tab on
+        // arbitrary text. Idempotent + cheap when no session is
+        // live, so the unconditional call is safe on the hot
+        // path.
+        if context.coordinator.doc.id != doc.id {
+            context.coordinator.endSnippetSession(in: view)
+        }
         // Pick up SwiftUI-driven changes to doc/prefs. The coordinator's flag
         // is what stops the SCN_MODIFIED ↔ doc.text feedback loop.
         context.coordinator.doc = doc
@@ -374,7 +391,7 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                     case .toggleColumnSelectionMode: self.toggleColumnSelectionMode()
                     case .gotoNextHunk: self.gotoNextHunk(in: view)
                     case .gotoPrevHunk: self.gotoPrevHunk(in: view)
-                    case .insertSnippet(let body): self.insertAtCarets(body, in: view)
+                    case .insertSnippet(let body): self.beginSnippetSession(body: body, in: view)
                     case .transformSelection(let action): self.transformSelection(action, in: view)
                     case .replaceSelectionText(let text): self.replaceCurrentSelection(with: text, in: view)
                     case .hideInlineBlameTooltip: self.hideInlineBlameTooltip(in: view)
@@ -720,6 +737,18 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                     // sync is throttled.
                     if !doc.isDirty { doc.isDirty = true }
                     scheduleDocSync()
+                    // Phase 63 — keep the active snippet session's
+                    // byte ranges aligned with whatever the user
+                    // just typed. The forwarder no-ops cleanly when
+                    // no session is active so the cost is one
+                    // pointer-load on the hot path.
+                    if let view {
+                        self.applySnippetSessionModification(
+                            position: Int(scn.pointee.position),
+                            length: Int(scn.pointee.length),
+                            modificationType: Int32(scn.pointee.modificationType),
+                            in: view)
+                    }
                 }
             case SCN.CHARADDED:
                 // Phase 53a — markdown list / quote continuation.

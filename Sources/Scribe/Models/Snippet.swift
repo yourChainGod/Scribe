@@ -2,16 +2,19 @@
 //  Snippet.swift
 //  Phase 33 — text-insert templates surfaced in the ⌘⇧T palette.
 //
-//  v1 scope:
-//    - prefix → body text replacement, no placeholder navigation
+//  v1 scope (Phase 33):
+//    - prefix → body text replacement
 //    - inserted at the current caret (or every caret when multi-cursor
 //      is active, via `insertAtCarets` from Coordinator+MultiCursor)
 //    - persisted as JSON in UserDefaults; managed in
 //      Settings → Snippets tab + ⌘⇧T palette picker
 //
+//  v2 scope (Phase 63):
+//    - `$N`, `${N}`, `${N:default}` placeholder navigation. Tab cycles
+//      `$1 → $2 → … → $0`, ⇧Tab walks back, Esc cancels. Implemented
+//      in `SnippetParser` + `SnippetSession` + `Coordinator+Snippet`.
+//
 //  Out of scope:
-//    - `${1:placeholder}` field jumping (v2 — needs a SnippetSession
-//      tracking carets across tab presses)
 //    - Tab-key trigger from buffer text (v2 — Scintilla autocomplete)
 //    - Per-language scoping (v2 — currently every snippet shows for
 //      every document)
