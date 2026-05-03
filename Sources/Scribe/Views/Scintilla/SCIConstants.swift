@@ -29,6 +29,15 @@ enum SCI {
     static let GETCURRENTPOS:    UInt32 = 2008
     static let LINEFROMPOSITION: UInt32 = 2166
     static let GETCOLUMN:        UInt32 = 2129
+    /// `SCI_LINELENGTH(line)` — UTF-8 byte length of `line` *including*
+    /// its terminating newline. Phase 53a sizes the read buffer for
+    /// the markdown list-continuation parser with this.
+    static let LINELENGTH:       UInt32 = 2350
+    /// `SCI_GETLINE(line, buf)` — copies the raw bytes of `line`
+    /// (including the trailing newline if present) into the supplied
+    /// buffer. Used by Phase 53a to read just the line the user
+    /// pressed Enter on without a full `view.string()` round-trip.
+    static let GETLINE:          UInt32 = 2153
     static let GETSELECTIONSTART:UInt32 = 2143
     static let GETSELECTIONEND:  UInt32 = 2145
     static let GETSELTEXT:       UInt32 = 2161
@@ -109,6 +118,17 @@ enum SCI {
     /// when no selection is active.
     static let SETTEXT:          UInt32 = 2181
     static let INSERTTEXT:       UInt32 = 2003
+    /// `SCI_DELETERANGE(start, length)` — wipes `length` bytes
+    /// starting at `start`. Phase 53a uses it to clear the
+    /// dangling list / quote prefix when the user presses Enter on
+    /// an empty bullet ("exit the list").
+    static let DELETERANGE:      UInt32 = 2645
+    /// `SCI_BEGINUNDOACTION` / `SCI_ENDUNDOACTION` bracket a group of
+    /// edits so a single ⌘Z reverts them as one unit. Phase 53a
+    /// uses them to make synthetic list-prefix insertions undoable
+    /// in one shot rather than character-by-character.
+    static let BEGINUNDOACTION:  UInt32 = 2078
+    static let ENDUNDOACTION:    UInt32 = 2079
     static let SEARCHINTARGET:   UInt32 = 2197
     static let SETSEARCHFLAGS:   UInt32 = 2198
     // Indicators (for "highlight all matches")
@@ -391,6 +411,13 @@ enum SCN {
     static let UPDATEUI: UInt32 = 2007
     static let DWELLSTART: UInt32 = 2016
     static let DWELLEND: UInt32 = 2017
+    /// Phase 53a — fires after a single character is inserted by the
+    /// user. `scn.pointee.ch` carries the codepoint; we only act on
+    /// `\n` (the line-break the user just committed) for the
+    /// markdown list-continuation path. Pre-53a we never registered
+    /// for this notification, so the cost is one switch arm in the
+    /// existing notification dispatcher.
+    static let CHARADDED: UInt32 = 2001
 }
 
 /// Bit flags for `SCNotification.updated` — the bitmask that rides

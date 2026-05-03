@@ -675,6 +675,23 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                     if !doc.isDirty { doc.isDirty = true }
                     scheduleDocSync()
                 }
+            case SCN.CHARADDED:
+                // Phase 53a — markdown list / quote continuation.
+                // The notification fires after Scintilla has already
+                // inserted the typed character; we react to `\n`
+                // only, and only inside markdown documents, so the
+                // hot path for non-markdown buffers is a single
+                // switch arm + an Int compare.
+                if let view, doc.isMarkdown {
+                    let ch = scn.pointee.ch
+                    // Scintilla reports both LF (10) and CR (13)
+                    // for line-end inserts depending on the doc's
+                    // EOL mode; we treat both as "user just ended a
+                    // line".
+                    if ch == 10 || ch == 13 {
+                        applyMarkdownListContinuation(in: view)
+                    }
+                }
             case SCN.UPDATEUI:
                 if let view {
                     self.hideInlineBlameTooltip(in: view)
