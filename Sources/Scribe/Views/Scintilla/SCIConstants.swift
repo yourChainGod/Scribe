@@ -239,8 +239,20 @@ enum SCI {
     /// `SCI_SETDOCPOINTER(0, doc)` swaps Scintilla's active document for
     /// the one the loader produced. Both bypass `setString` so a 1 GB
     /// file no longer round-trips through a Swift `String`.
+    ///
+    /// Phase 56 fix — `SETDOCPOINTER` was mis-wired to 2026 (which is
+    /// `SCI_SETANCHOR`) from Phase 34a onwards. Every large-file doc
+    /// swap was silently setting the selection anchor to `0` instead
+    /// of swapping the document pointer, so the placeholder empty
+    /// buffer stayed on screen and the streamed-in bytes never
+    /// reached the view. The bug hid because `LargeFilePolicy`'s
+    /// 64 MiB trigger rarely fires in normal usage. `SCI_SETDOCPOINTER`'s
+    /// real ID is 2358; `GETDOCPOINTER` at 2357 is new for Phase 56
+    /// (Document Map needs to read the main editor's pointer before
+    /// calling `ADDREFDOCUMENT` on the mirrored view).
     static let CREATELOADER:      UInt32 = 2632
-    static let SETDOCPOINTER:     UInt32 = 2026
+    static let GETDOCPOINTER:     UInt32 = 2357
+    static let SETDOCPOINTER:     UInt32 = 2358
     static let RELEASEDOCUMENT:   UInt32 = 2377
     static let ADDREFDOCUMENT:    UInt32 = 2376
 

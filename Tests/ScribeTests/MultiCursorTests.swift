@@ -83,6 +83,31 @@ final class MultiCursorTests: XCTestCase {
                        "Scintilla.h pins GETMOUSESELECTIONRECTANGULARSWITCH at 2669")
     }
 
+    // MARK: - Phase 56 — document pointer IDs
+
+    func test_sciConstants_docPointerIDsMatchScintilla() {
+        // Phase 56 — DocumentMap mirrors the main editor's buffer by
+        // reading GETDOCPOINTER + ADDREFDOCUMENT + SETDOCPOINTER.
+        // The values below are pinned against Vendor/scintilla/include/
+        // Scintilla.h; any drift silently breaks the mirror (the
+        // minimap goes blank, or worse, the main editor's selection
+        // anchor gets stomped).
+        //
+        // A previous mis-wiring of SETDOCPOINTER to 2026 (the
+        // SCI_SETANCHOR ID) slipped past Phase 34a–34c because
+        // LargeFilePolicy's 64 MiB trigger rarely fires in normal
+        // usage. Pinning the literals here is the cheapest guard
+        // against a repeat.
+        XCTAssertEqual(SCI.GETDOCPOINTER, 2357,
+                       "Scintilla.h pins GETDOCPOINTER at 2357")
+        XCTAssertEqual(SCI.SETDOCPOINTER, 2358,
+                       "Scintilla.h pins SETDOCPOINTER at 2358")
+        XCTAssertEqual(SCI.ADDREFDOCUMENT, 2376,
+                       "Scintilla.h pins ADDREFDOCUMENT at 2376")
+        XCTAssertEqual(SCI.RELEASEDOCUMENT, 2377,
+                       "Scintilla.h pins RELEASEDOCUMENT at 2377")
+    }
+
     func test_findStateCommands_orderingIsPreserved() {
         // Multi-cursor + Find commands share one subject. We assert
         // they don't reorder relative to each other so a user
