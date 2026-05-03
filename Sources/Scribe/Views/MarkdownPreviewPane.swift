@@ -67,6 +67,32 @@ private let githubLightCSS: String = {
     return s
 }()
 
+/// Phase 53e-4 — cached KaTeX minified JS shipped inside
+/// `Bundle.module`. Empty string on a missing-asset build so the
+/// shell silently falls back to the CDN `<script>` below.
+/// ~270 KB minified; base64-inlined fonts live in the sibling
+/// CSS asset so the JS file is the official upstream distro.
+private let katexJSAsset: String = {
+    guard let url = Bundle.module.url(forResource: "katex.min",
+                                      withExtension: "js"),
+          let s = try? String(contentsOf: url, encoding: .utf8)
+    else { return "" }
+    return s
+}()
+
+/// Phase 53e-4 — cached KaTeX CSS with all twenty woff2 fonts
+/// base64-inlined so the preview renders full-fidelity typeset
+/// math with zero network dependency. ~370 KB after inlining
+/// (23 KB upstream CSS + 268 KB of woff2 fonts encoded). Empty
+/// on a missing-asset build → CDN fallback.
+private let katexCSSAsset: String = {
+    guard let url = Bundle.module.url(forResource: "katex.min",
+                                      withExtension: "css"),
+          let s = try? String(contentsOf: url, encoding: .utf8)
+    else { return "" }
+    return s
+}()
+
 /// Cached GitHub dark theme CSS for highlight.js.
 private let githubDarkCSS: String = {
     guard let url = Bundle.module.url(forResource: "github-dark.min",
@@ -141,6 +167,8 @@ struct MarkdownPreviewPane: NSViewRepresentable {
     static var highlightJSAssetForTests: String { highlightJSAsset }
     static var githubLightCSSForTests: String { githubLightCSS }
     static var githubDarkCSSForTests: String { githubDarkCSS }
+    static var katexJSAssetForTests: String { katexJSAsset }
+    static var katexCSSAssetForTests: String { katexCSSAsset }
 
     /// Phase 53c — exposes the private `wrap(...)` shell builder
     /// so XCTest can pin structural invariants (KaTeX CDN
@@ -1159,20 +1187,23 @@ struct MarkdownPreviewPane: NSViewRepresentable {
         </style>
         <style>\(hlThemeCSS)</style>
         <script>\(highlightJSAsset)</script>
-        <!-- Phase 53c — KaTeX math rendering. CDN keeps the
-             ~280 KB CSS + JS + font assets out of the app bundle;
-             `crossorigin` lets the browser cache the same copy
-             across WKWebView instances. Offline sessions simply
-             fail the script load silently — revealLineScript's
-             `scribeRenderMath` checks `window.katex` and no-ops
-             when it's missing, so the preview still renders the
-             raw `$x$` text instead of breaking. -->
-        <link rel="stylesheet"
-              href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css"
-              crossorigin="anonymous">
-        <script defer
-                src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js"
-                crossorigin="anonymous"></script>
+        <!-- Phase 53e-4 — KaTeX math rendering shipped inside
+             the app bundle. The CSS carries 20 woff2 fonts as
+             base64 data: URLs so offline sessions still get
+             full-fidelity typeset math. The `<script>` is the
+             stock upstream dist; running it inline (no defer)
+             means `window.katex` is ready before the load
+             handler calls `scribeRenderMath`. If the bundle
+             assets are missing (a misconfigured build, empty
+             strings), we fall back to the CDN so development
+             builds with an incomplete Resources/ tree still
+             render math. -->
+        \(katexCSSAsset.isEmpty
+          ? "<link rel=\"stylesheet\" href=\"https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css\" crossorigin=\"anonymous\">"
+          : "<style>\(katexCSSAsset)</style>")
+        \(katexJSAsset.isEmpty
+          ? "<script defer src=\"https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js\" crossorigin=\"anonymous\"></script>"
+          : "<script>\(katexJSAsset)</script>")
         <!-- Phase 53d — Mermaid runtime. Loaded as a classic
              (non-module) script because the module build uses ESM
              imports that WKWebView's `file://` + `about:blank`

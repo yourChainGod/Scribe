@@ -23,34 +23,70 @@ import XCTest
 
 final class MarkdownPreviewMathTests: XCTestCase {
 
-    // MARK: - CDN injection in the wrapped shell
+    // MARK: - KaTeX assets in the wrapped shell
+    //
+    // Phase 53e-4 — the shell now ships KaTeX inline from
+    // `Bundle.module`. The CDN `<link>` / `<script defer>` are
+    // a fallback when the bundle assets are missing (a build
+    // misconfiguration); we test both branches by inspecting the
+    // cached asset state.
 
-    func test_wrapInjectsKatexCSSLink() {
+    func test_wrapInjectsKatexCSS() {
+        // Bundle assets present (the normal build) → inline
+        // <style>; missing → CDN <link>. Either way the page
+        // sources KaTeX CSS one way or another.
         let html = MarkdownPreviewPane.wrapForTests(body: "<p>hi</p>")
-        XCTAssertTrue(html.contains("rel=\"stylesheet\""),
-                      "shell must include a stylesheet link tag")
-        XCTAssertTrue(html.contains("katex@0.16.21/dist/katex.min.css"),
-                      "stylesheet must point at the pinned KaTeX CSS")
+        let bundled = !MarkdownPreviewPane.katexCSSAssetForTests.isEmpty
+        if bundled {
+            // Inline marker — `@font-face{font-family:KaTeX_AMS`
+            // is a stable upstream prefix in katex.min.css that
+            // we are unlikely to ever rewrite.
+            XCTAssertTrue(html.contains("font-family:KaTeX_AMS"),
+                          "bundled KaTeX CSS must be inlined into the shell")
+        } else {
+            XCTAssertTrue(html.contains("katex@0.16.21/dist/katex.min.css"),
+                          "missing-bundle path must fall back to the CDN <link>")
+        }
     }
 
-    func test_wrapInjectsKatexJSScript() {
+    func test_wrapInjectsKatexJS() {
         let html = MarkdownPreviewPane.wrapForTests(body: "<p>hi</p>")
-        XCTAssertTrue(html.contains("katex@0.16.21/dist/katex.min.js"),
-                      "shell must include the pinned KaTeX JS")
-        XCTAssertTrue(html.contains("crossorigin=\"anonymous\""),
-                      "crossorigin attr lets the browser cache the CDN copy")
+        let bundled = !MarkdownPreviewPane.katexJSAssetForTests.isEmpty
+        if bundled {
+            // Stable upstream marker: KaTeX exposes `module.exports.
+            // ParseError` from the IIFE bootstrap.
+            XCTAssertTrue(html.contains("katex")
+                          && html.contains("ParseError"),
+                          "bundled KaTeX JS must be inlined into the shell")
+        } else {
+            XCTAssertTrue(html.contains("katex@0.16.21/dist/katex.min.js"),
+                          "missing-bundle path must fall back to the CDN <script>")
+            XCTAssertTrue(html.contains("<script defer"),
+                          "CDN script must be deferred to avoid blocking first paint")
+        }
     }
 
-    func test_wrapDeferKatexJSToAvoidBlockingFirstPaint() {
-        // `defer` keeps katex.min.js out of the critical render
-        // path; the load handler waits for `window.load` so by
-        // the time `scribeRenderMath` runs, the script has
-        // executed. Pinning the attribute means a future refactor
-        // that drops it will trip a test, not silently regress
-        // first-paint times.
-        let html = MarkdownPreviewPane.wrapForTests(body: "<p>hi</p>")
-        XCTAssertTrue(html.contains("<script defer"),
-                      "KaTeX script must be deferred so it doesn't block rendering")
+    func test_wrapBundlesKatexAssetsByDefault() {
+        // Production builds with a complete Resources/ tree must
+        // ship KaTeX inline — that's the whole point of 53e-4.
+        // A failure here means SwiftPM didn't pick up the
+        // Resources/MarkdownPreview/katex/ subtree.
+        XCTAssertFalse(MarkdownPreviewPane.katexJSAssetForTests.isEmpty,
+                       "katex.min.js must be bundled into the app")
+        XCTAssertFalse(MarkdownPreviewPane.katexCSSAssetForTests.isEmpty,
+                       "katex.min.css (with inlined fonts) must be bundled")
+    }
+
+    func test_wrapBundledKatexCSSCarriesInlinedFonts() {
+        // The bundled CSS carries 20 woff2 fonts as base64
+        // data: URLs so offline shells render full-fidelity
+        // typeset math. Pinning the data: URL count here
+        // catches a regression where the inlining script
+        // stopped running pre-build.
+        let css = MarkdownPreviewPane.katexCSSAssetForTests
+        let count = css.components(separatedBy: "data:font/woff2;base64,").count - 1
+        XCTAssertGreaterThanOrEqual(count, 20,
+                                    "bundle CSS must inline ≥20 woff2 fonts; got \(count)")
     }
 
     func test_wrapLoadHandlerCallsScribeRenderMath() {
