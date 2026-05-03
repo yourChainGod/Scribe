@@ -21,10 +21,14 @@ enum CommandRegistration {
                         workspace: Workspace,
                         prefs: EditorPreferences,
                         findState: FindState? = nil,
+                        clipboardHistory: ClipboardHistoryStore? = nil,
                         localize: (String) -> String = L10n.t) {
         var batch: [ScribeCommand] = []
         batch.append(contentsOf: fileCommands(workspace: workspace, prefs: prefs, localize: localize))
-        batch.append(contentsOf: viewCommands(workspace: workspace, prefs: prefs, localize: localize))
+        batch.append(contentsOf: viewCommands(workspace: workspace,
+                                              prefs: prefs,
+                                              clipboardHistory: clipboardHistory,
+                                              localize: localize))
         batch.append(contentsOf: textCommands(workspace: workspace, findState: findState, prefs: prefs, localize: localize))
         batch.append(contentsOf: tabCommands(workspace: workspace, localize: localize))
         batch.append(contentsOf: encodingCommands(workspace: workspace, localize: localize))
@@ -104,6 +108,7 @@ enum CommandRegistration {
 
     private static func viewCommands(workspace: Workspace,
                                      prefs: EditorPreferences,
+                                     clipboardHistory: ClipboardHistoryStore? = nil,
                                      localize: (String) -> String) -> [ScribeCommand] {
         var commands: [ScribeCommand] = [
             .init(id: "view.toggleSidebar",
@@ -168,6 +173,23 @@ enum CommandRegistration {
                 prefs.isMinimapVisible.toggle()
             }
         ]
+
+        // Phase 57 — Clipboard History picker. Registered only when
+        // the app wired a store; the refresh path in tests that
+        // don't care about the picker skips this entry cleanly.
+        if let clipboardHistory {
+            commands.append(
+                .init(id: "edit.clipboardHistory",
+                      title: localize("palette.command.clipboardHistory"),
+                      subtitle: localize("menu.edit"),
+                      keywords: ["clipboard", "history", "paste", "clip",
+                                 "copy", "buffer", "剪贴板", "历史", "粘贴"],
+                      shortcutLabel: "⌥⌘V") { [weak clipboardHistory] in
+                    guard let store = clipboardHistory else { return }
+                    ClipboardHistoryController.shared.show(store: store)
+                }
+            )
+        }
 
         if workspace.current != nil {
             commands.append(

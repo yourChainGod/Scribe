@@ -28,6 +28,11 @@ struct ScribeApp: App {
     /// one source of truth; @Published mutations from the editor
     /// pane immediately reflect in the picker.
     @StateObject private var snippets = SnippetCatalog()
+    /// Phase 57 — clipboard history. Single store for the whole app
+    /// so every editor / sidebar / sheet hits the same FIFO. Polling
+    /// kicks off in `bootstrap()` once the window is up, so a launch
+    /// that never opens the main window doesn't spin the timer.
+    @StateObject private var clipboardHistory = ClipboardHistoryStore()
     private let findInFilesEngine = FindInFilesEngine()
 
     init() {
@@ -56,6 +61,7 @@ struct ScribeApp: App {
                 .environmentObject(fileIndex)
                 .environmentObject(outline)
                 .environmentObject(snippets)
+                .environmentObject(clipboardHistory)
                 .themed(prefs: prefs)
                 .frame(minWidth: 900, minHeight: 600)
                 .onAppear(perform: bootstrap)
@@ -63,13 +69,15 @@ struct ScribeApp: App {
                     CommandRegistration.refresh(registry: commands,
                                                 workspace: workspace,
                                                 prefs: prefs,
-                                                findState: findState)
+                                                findState: findState,
+                                                clipboardHistory: clipboardHistory)
                 }
                 .onChange(of: workspace.selectedID) { _, _ in
                     CommandRegistration.refresh(registry: commands,
                                                 workspace: workspace,
                                                 prefs: prefs,
-                                                findState: findState)
+                                                findState: findState,
+                                                clipboardHistory: clipboardHistory)
                     outline.update(for: workspace.current)
                 }
                 .onChange(of: workspace.current?.text) { _, _ in
@@ -79,7 +87,8 @@ struct ScribeApp: App {
                     CommandRegistration.refresh(registry: commands,
                                                 workspace: workspace,
                                                 prefs: prefs,
-                                                findState: findState)
+                                                findState: findState,
+                                                clipboardHistory: clipboardHistory)
                 }
                 .onChange(of: workspace.folderRoot?.url) { _, newRoot in
                     if let newRoot {
@@ -110,6 +119,7 @@ struct ScribeApp: App {
                            outline: outline,
                            commands: commands,
                            snippets: snippets,
+                           clipboardHistory: clipboardHistory,
                            findInFilesEngine: findInFilesEngine)
         }
 
@@ -139,7 +149,8 @@ struct ScribeApp: App {
         CommandRegistration.refresh(registry: commands,
                                     workspace: workspace,
                                     prefs: prefs,
-                                    findState: findState)
+                                    findState: findState,
+                                    clipboardHistory: clipboardHistory)
         // Wire ⌘P's `>` route through to the same registry ⌘⇧P
         // uses, so users can run any palette command without
         // dismissing Quick Open first.
@@ -157,6 +168,12 @@ struct ScribeApp: App {
             fileIndex.rebuild(at: root)
         }
         outline.update(for: workspace.current)
+
+        // Phase 57 — kick off clipboard-history polling now that
+        // the main window is up. Idempotent (the store guards
+        // re-entry), so a SwiftUI re-bootstrap never spins a
+        // second timer.
+        clipboardHistory.start()
 
         // Drive every SCRIBE_TEST_* hook. Production users never
         // hit any of these because every variable defaults to

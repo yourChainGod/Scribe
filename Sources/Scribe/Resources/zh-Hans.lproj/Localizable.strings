@@ -807,6 +807,14 @@
 "palette.command.minimap.show" = "显示缩略图";
 "palette.command.minimap.hide" = "隐藏缩略图";
 
+// Phase 57 — Clipboard History picker
+"menu.edit.clipboardHistory"          = "剪贴板历史…";
+"palette.command.clipboardHistory"    = "打开剪贴板历史";
+"clipboard.picker.placeholder"        = "搜索 %@ 条剪贴记录";
+"clipboard.picker.placeholder.empty"  = "剪贴板历史为空";
+"clipboard.picker.empty.title"        = "剪贴板历史为空";
+"clipboard.picker.empty.subtitle"     = "先复制点什么再回来";
+
 // Phase 41b — Generator Pack (UUID / Lorem / Password / Timestamp / QR)
 "generator.menu"        = "生成";
 "generator.uuid"        = "UUID v4";

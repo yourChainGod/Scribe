@@ -810,6 +810,14 @@
 "palette.command.minimap.show" = "Show Minimap";
 "palette.command.minimap.hide" = "Hide Minimap";
 
+// Phase 57 — Clipboard History picker
+"menu.edit.clipboardHistory"          = "Clipboard History…";
+"palette.command.clipboardHistory"    = "Open Clipboard History";
+"clipboard.picker.placeholder"        = "Search %@ clipboard entries";
+"clipboard.picker.placeholder.empty"  = "Clipboard history is empty";
+"clipboard.picker.empty.title"        = "Clipboard history is empty";
+"clipboard.picker.empty.subtitle"     = "Copy something to start tracking";
+
 // Phase 41b — Generator Pack (UUID / Lorem / Password / Timestamp / QR)
 "generator.menu"        = "Generate";
 "generator.uuid"        = "UUID v4";

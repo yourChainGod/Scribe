@@ -27,6 +27,9 @@ struct ScribeCommands: Commands {
     /// Phase 33 — passed through so the Edit → Insert Snippet menu
     /// can hand the active catalog to SnippetController.
     @ObservedObject var snippets: SnippetCatalog
+    /// Phase 57 — passed through so the Edit → Clipboard History
+    /// menu can hand the live store to ClipboardHistoryController.
+    @ObservedObject var clipboardHistory: ClipboardHistoryStore
     let findInFilesEngine: FindInFilesEngine
 
     var body: some Commands {
@@ -485,6 +488,19 @@ struct ScribeCommands: Commands {
             } label: { Text("menu.edit.insertSnippet", bundle: .module) }
             .keyboardShortcut("t", modifiers: [.command, .option])
             .disabled(workspace.current == nil)
+
+            // Phase 57 — Clipboard History picker. ⌥⌘V because
+            // ⇧⌘V is already markdown-preview-toggle and the
+            // ⌥⌘V slot is unused on the modifier map. Disabled
+            // when the FIFO is empty so the menu reads truthful
+            // ("nothing to paste") at first launch.
+            Button {
+                ClipboardHistoryController.shared.toggle(store: clipboardHistory)
+            } label: {
+                Text("menu.edit.clipboardHistory", bundle: .module)
+            }
+            .keyboardShortcut("v", modifiers: [.command, .option])
+            .disabled(clipboardHistory.entries.isEmpty)
 
             Divider()
 
