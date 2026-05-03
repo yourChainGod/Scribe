@@ -817,6 +817,19 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                            doc.viewportTopLine != topLine1 {
                             doc.viewportTopLine = topLine1
                         }
+                        // Phase 64 — also publish the bottom-of-
+                        // viewport line so the Document Map's
+                        // overlay can size its rectangle. Cheap:
+                        // both messages are O(1) and only fire on
+                        // V_SCROLL ticks (not caret-only moves).
+                        let onScreen = view.message(SCI.LINESONSCREEN)
+                        let lastVisible = firstVisible + max(0, onScreen - 1)
+                        let docLineBottom = view.message(SCI.DOCLINEFROMVISIBLE,
+                                                         wParam: UInt(lastVisible))
+                        let bottomLine1 = Int(docLineBottom) + 1
+                        if doc.viewportBottomLine != bottomLine1 {
+                            doc.viewportBottomLine = bottomLine1
+                        }
                     }
                     // Phase 35c-ii-γ — caret moved to a new line:
                     // chip needs to follow. Scintilla fires UPDATEUI

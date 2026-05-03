@@ -26,6 +26,13 @@ final class Document: ObservableObject, Identifiable {
     /// viewport drag gestures, which matters when the user scrolls
     /// without moving the caret.
     @Published var viewportTopLine: Int = 1
+    /// Phase 64 — 1-based source line at the *bottom* of the
+    /// editor's visible viewport (the last fully or partially
+    /// visible row). Published alongside `viewportTopLine` on
+    /// every V_SCROLL tick. The Document Map's viewport overlay
+    /// reads both to size the translucent rectangle that shows
+    /// where the user is in the buffer.
+    @Published var viewportBottomLine: Int = 1
     /// Phase 52c — reverse channel: 1-based source line of the
     /// block currently at the top of the *preview's* viewport.
     /// Published by MarkdownPreviewPane's JS scroll handler via a

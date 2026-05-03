@@ -36,6 +36,20 @@
 //    into view and selecting the destination line — same affordance
 //    the cross-file find / outline / CLI-jump paths use.
 //
+//  Viewport overlay (Phase 64)
+//    A translucent rectangle painted on top of the minimap shows the
+//    user *which* slice of the document is currently visible in the
+//    main editor. It tracks `Document.viewportTopLine` /
+//    `viewportBottomLine` (published by the editor's V_SCROLL
+//    handler) and converts those line numbers to minimap-local
+//    pixel Y positions through `SCI_POINTYFROMPOSITION`.
+//
+//    The overlay is a sibling NSView (not a Scintilla indicator)
+//    because indicators only fill text glyphs, not the empty area
+//    of short lines or trailing blank rows. The overlay returns
+//    `nil` from `hitTest` so clicks pass straight through to the
+//    Scintilla view's existing click-to-jump monitor.
+//
 
 import AppKit
 import SwiftUI
@@ -64,10 +78,11 @@ struct DocumentMapPane: NSViewRepresentable {
         Coordinator(doc: doc, prefs: prefs)
     }
 
-    func makeNSView(context: Context) -> ScintillaView {
-        let view = ScintillaView(frame: .zero)
+    func makeNSView(context: Context) -> DocumentMapContainerView {
+        let container = DocumentMapContainerView(frame: .zero)
+        let view = container.scintilla
         view.delegate = context.coordinator
-        context.coordinator.attach(view: view)
+        context.coordinator.attach(container: container)
 
         // Initial state push. Order matters: lexer first so the
         // theme's per-style colours land on the right SCE_* indices.
@@ -90,21 +105,23 @@ struct DocumentMapPane: NSViewRepresentable {
         // Scribe routes context menus through SwiftUI elsewhere.
         view.message(SCI.USEPOPUP, wParam: UInt(0))   // SC_POPUP_NEVER
 
-        return view
+        return container
     }
 
-    static func dismantleNSView(_ view: ScintillaView, coordinator: Coordinator) {
+    static func dismantleNSView(_ container: DocumentMapContainerView,
+                                coordinator: Coordinator) {
         // Mirror ScintillaCodeEditor.dismantleNSView's `unsafe_unretained`
         // delegate-clear, defending against Scintilla's NSNotificationCenter
         // observers calling back into a freed Coordinator. See the
         // long-form comment over there for the full rationale.
-        view.delegate = nil
+        container.scintilla.delegate = nil
     }
 
-    func updateNSView(_ view: ScintillaView, context: Context) {
+    func updateNSView(_ container: DocumentMapContainerView, context: Context) {
         context.coordinator.doc = doc
         context.coordinator.prefs = prefs
 
+        let view = container.scintilla
         // Resync only when the byte count differs — `setString` is
         // O(N) and SwiftUI calls `updateNSView` on every keystroke
         // tick. The byte-count cheap-signature is the same trick
@@ -121,6 +138,12 @@ struct DocumentMapPane: NSViewRepresentable {
         context.coordinator.applyLexer(to: view)
         context.coordinator.applyMinimapStyling(to: view, isDark: colorScheme == .dark)
         context.coordinator.applyViewportHighlight(to: view)
+        // Phase 64 — repaint the overlay rectangle. Driven on
+        // every updateNSView tick because both `viewportTopLine`
+        // / `viewportBottomLine` publishes _and_ the minimap's
+        // own scroll position changes (handled inside
+        // `applyViewportHighlight`) can move the rect.
+        context.coordinator.applyOverlayFrame(to: container)
     }
 
     // MARK: - Coordinator
@@ -154,9 +177,15 @@ struct DocumentMapPane: NSViewRepresentable {
             }
         }
 
-        func attach(view: ScintillaView) {
-            self.view = view
-            installClickToJump(in: view)
+        /// Phase 64 — weak ref to the parent container so the
+        /// overlay frame update can reach the overlay subview
+        /// without going through SwiftUI again.
+        weak var container: DocumentMapContainerView?
+
+        func attach(container: DocumentMapContainerView) {
+            self.container = container
+            self.view = container.scintilla
+            installClickToJump(in: container.scintilla)
         }
 
         // MARK: - Lexer
@@ -259,6 +288,79 @@ struct DocumentMapPane: NSViewRepresentable {
             }
         }
 
+        // MARK: - Viewport overlay (Phase 64)
+
+        /// Update the translucent rectangle that shows where the
+        /// main editor's viewport sits relative to the minimap.
+        /// Called every `updateNSView` tick. Cheap O(1) Scintilla
+        /// queries (`SCI_POSITIONFROMLINE` + `SCI_POINTYFROMPOSITION`)
+        /// plus a single `setNeedsDisplay` when the rect actually
+        /// changes — guards against pointless redraws on caret-only
+        /// updates that don't move the viewport.
+        func applyOverlayFrame(to container: DocumentMapContainerView) {
+            let view = container.scintilla
+            let totalLines = Int(view.message(SCI.GETLINECOUNT))
+            guard totalLines > 0 else {
+                container.overlay.update(topY: 0, height: 0)
+                return
+            }
+            // Convert 1-based viewport lines into clamped 0-based
+            // document line indices the Scintilla messages expect.
+            let mainTop0 = max(0,
+                               min(totalLines - 1,
+                                   doc.viewportTopLine - 1))
+            // `viewportBottomLine` defaults to 1 before the first
+            // V_SCROLL fires; treat that as "same as top" so the
+            // overlay starts as a thin caret-line strip rather
+            // than spanning the whole minimap.
+            let rawBottom0 = max(0,
+                                 min(totalLines - 1,
+                                     doc.viewportBottomLine - 1))
+            let mainBottom0 = max(rawBottom0, mainTop0)
+            // POINTYFROMPOSITION returns Y relative to the
+            // *visible* viewport with origin at the top. If the
+            // requested line lies above / below the minimap's
+            // first visible line, the value falls outside
+            // `[0, bounds.height)` and we clamp to the bounds.
+            let topPos = view.message(SCI.POSITIONFROMLINE,
+                                      wParam: UInt(mainTop0))
+            // Bottom edge = top of the line *after* the bottom
+            // viewport line, falling back to TEXTHEIGHT * 1
+            // when the bottom is the very last line of the doc.
+            let bottomLineForY: Int
+            if mainBottom0 + 1 < totalLines {
+                bottomLineForY = mainBottom0 + 1
+            } else {
+                bottomLineForY = mainBottom0
+            }
+            let botPos = view.message(SCI.POSITIONFROMLINE,
+                                      wParam: UInt(bottomLineForY))
+            var topY = CGFloat(view.message(SCI.POINTYFROMPOSITION,
+                                            wParam: 0,
+                                            lParam: topPos))
+            var botY = CGFloat(view.message(SCI.POINTYFROMPOSITION,
+                                            wParam: 0,
+                                            lParam: botPos))
+            if bottomLineForY == mainBottom0 {
+                // We aimed at the very last line — POINTYFROMPOSITION
+                // returns the top of that line, not its bottom.
+                // Add one line height so the rectangle covers it.
+                let lineHeight = CGFloat(view.message(SCI.TEXTHEIGHT,
+                                                       wParam: UInt(mainBottom0)))
+                botY += lineHeight
+            }
+            // Clamp to the minimap's visible area. Don't clamp the
+            // height-derived value first or we'd lose the case
+            // where the editor's viewport entirely overshoots the
+            // minimap (rect should clip but stay visible at the
+            // edge).
+            let viewHeight = container.scintilla.bounds.height
+            topY = max(0, min(viewHeight, topY))
+            botY = max(0, min(viewHeight, botY))
+            let height = max(0, botY - topY)
+            container.overlay.update(topY: topY, height: height)
+        }
+
         // MARK: - Click-to-jump
 
         /// Install a local NSEvent monitor that intercepts left
@@ -320,5 +422,124 @@ struct DocumentMapPane: NSViewRepresentable {
             let b =  rgb        & 0xFF
             return (b << 16) | (g << 8) | r
         }
+    }
+}
+
+// MARK: - Container + overlay (Phase 64)
+
+/// Parent NSView that hosts the minimap's ScintillaView and the
+/// viewport-overlay subview. Using a container (rather than letting
+/// the representable return the ScintillaView directly) means the
+/// overlay paints as a sibling Cocoa view — no Scintilla indicator
+/// juggling, no Core Animation layer host, no extra compositor
+/// pass. Both children size to the full bounds; the overlay's
+/// `hitTest` returns nil so clicks fall through to Scintilla's
+/// existing click-to-jump monitor.
+final class DocumentMapContainerView: NSView {
+    let scintilla: ScintillaView
+    let overlay: DocumentMapViewportOverlay
+
+    override init(frame: NSRect) {
+        self.scintilla = ScintillaView(frame: frame)
+        self.overlay = DocumentMapViewportOverlay(frame: frame)
+        super.init(frame: frame)
+        // Scintilla underneath; overlay on top so the rectangle
+        // is painted above the text render.
+        addSubview(scintilla)
+        addSubview(overlay)
+        scintilla.autoresizingMask = [.width, .height]
+        overlay.autoresizingMask = [.width, .height]
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        // The minimap is assembled in code only; init(coder:) would
+        // imply a nib / storyboard origin we don't use.
+        fatalError("DocumentMapContainerView does not support Interface Builder")
+    }
+
+    override func layout() {
+        super.layout()
+        // Keep children pinned to the full bounds. Without this
+        // resizing the window can momentarily leave the Scintilla
+        // subview sized to the old bounds (autoresizing mask fires
+        // on geometry change, but layout() is the canonical
+        // AppKit hook for "parent geometry just changed").
+        scintilla.frame = bounds
+        overlay.frame = bounds
+    }
+}
+
+/// Translucent rectangle painted on top of the minimap to show the
+/// slice of the document that's currently visible in the main
+/// editor. Click-through (`hitTest` returns nil) so the existing
+/// mouse-down monitor on the Scintilla sibling still receives the
+/// click-to-jump events.
+final class DocumentMapViewportOverlay: NSView {
+
+    /// Pixel Y of the top edge of the rectangle, in the overlay's
+    /// own (top-left-origin via `isFlipped`) coordinates. Updated
+    /// by the coordinator; triggers a redraw when it changes.
+    /// Readable from tests but only mutable via `update(topY:height:)`.
+    private(set) var currentTopY: CGFloat = 0
+    private(set) var currentHeight: CGFloat = 0
+
+    override var isFlipped: Bool { true }
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        // Cocoa views default to opaque; the overlay is a
+        // translucent chrome element and needs to composite with
+        // the ScintillaView below.
+        wantsLayer = true
+        layer?.backgroundColor = .clear
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("DocumentMapViewportOverlay does not support Interface Builder")
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        // Fully transparent to input — clicks flow through to
+        // the Scintilla sibling so the click-to-jump affordance
+        // keeps working unchanged, even on the highlighted rect.
+        nil
+    }
+
+    /// Update the rectangle's vertical placement. Pushes a redraw
+    /// only when either dimension actually changed; the
+    /// coordinator calls this on every SwiftUI tick so the
+    /// idempotent guard keeps the minimap from flickering.
+    /// Returns `true` when the values actually changed — visible
+    /// to tests so they can verify the no-op path without
+    /// relying on `needsDisplay`, which AppKit clears eagerly
+    /// outside a live window.
+    @discardableResult
+    func update(topY: CGFloat, height: CGFloat) -> Bool {
+        guard topY != currentTopY || height != currentHeight else {
+            return false
+        }
+        currentTopY = topY
+        currentHeight = height
+        needsDisplay = true
+        return true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        guard currentHeight > 0 else { return }
+        let rect = NSRect(x: 0,
+                          y: currentTopY,
+                          width: bounds.width,
+                          height: currentHeight)
+        let fill = NSColor.controlAccentColor.withAlphaComponent(0.14)
+        let border = NSColor.controlAccentColor.withAlphaComponent(0.45)
+        fill.setFill()
+        rect.fill()
+        border.setStroke()
+        let path = NSBezierPath(rect: rect.insetBy(dx: 0.5, dy: 0.5))
+        path.lineWidth = 1
+        path.stroke()
     }
 }
