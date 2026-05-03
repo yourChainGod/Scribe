@@ -965,6 +965,8 @@
 "merge.conflict.button.acceptIncoming" = "Accept Incoming";
 "merge.conflict.button.acceptBoth"     = "Accept Both";
 "merge.conflict.button.compare"        = "Compare";
+"menu.tools.nextMergeConflict"         = "Next Merge Conflict";
+"menu.tools.prevMergeConflict"         = "Previous Merge Conflict";
 
 // Phase 69 — auto-save scratch / crash recovery
 "settings.tab.autoSave"                    = "Auto-save";

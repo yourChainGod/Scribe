@@ -416,6 +416,8 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                     case .toggleColumnSelectionMode: self.toggleColumnSelectionMode()
                     case .gotoNextHunk: self.gotoNextHunk(in: view)
                     case .gotoPrevHunk: self.gotoPrevHunk(in: view)
+                    case .gotoNextMergeConflict: self.gotoNextMergeConflict(in: view)
+                    case .gotoPrevMergeConflict: self.gotoPrevMergeConflict(in: view)
                     case .insertSnippet(let body): self.beginSnippetSession(body: body, in: view)
                     case .transformSelection(let action): self.transformSelection(action, in: view)
                     case .replaceSelectionText(let text): self.replaceCurrentSelection(with: text, in: view)

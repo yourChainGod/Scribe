@@ -17,6 +17,45 @@
 
 import Foundation
 
+/// Phase 68b — pure navigation helpers for the menu / banner
+/// "next / previous merge conflict" commands. Kept off the
+/// Coordinator so they're trivially unit-testable: pass a sorted
+/// conflict array + the caret's 1-based line, get the start line
+/// of the next / previous block (or `nil` when there are none).
+enum MergeConflictNavigation {
+
+    /// First conflict whose start line is *strictly* after
+    /// `currentLine1`, wrapping to the first conflict when the
+    /// caret is past the last one. Strict inequality is the
+    /// reason the user can mash Next on a `<<<<<<<` line and
+    /// march through every block instead of getting stuck on the
+    /// one they're already on. `nil` only when the array is empty
+    /// — the caller's keypress should beep in that case.
+    static func next(after currentLine1: Int,
+                     in conflicts: [MergeConflict]) -> Int? {
+        guard !conflicts.isEmpty else { return nil }
+        if let target = conflicts.first(where: { $0.startLine > currentLine1 }) {
+            return target.startLine
+        }
+        return conflicts.first?.startLine
+    }
+
+    /// Symmetric: last conflict whose start line is *strictly*
+    /// before `currentLine1`, wrapping to the last block when the
+    /// caret is before the first one. Strict inequality so a
+    /// caret already parked on a conflict's first line jumps to
+    /// the *previous* block, not back to itself.
+    static func previous(before currentLine1: Int,
+                         in conflicts: [MergeConflict]) -> Int? {
+        guard !conflicts.isEmpty else { return nil }
+        if let target = conflicts.reversed()
+            .first(where: { $0.startLine < currentLine1 }) {
+            return target.startLine
+        }
+        return conflicts.last?.startLine
+    }
+}
+
 /// A single git merge / rebase conflict block recovered from a
 /// document's text. Holds the byte range plus the three (or four,
 /// for diff3 style) sub-payloads the resolver needs.

@@ -98,6 +98,14 @@ final class FindState: ObservableObject {
         /// dispatches them without an extra subscription.
         case gotoNextHunk
         case gotoPrevHunk
+        /// Phase 68b — jump the caret to the next / previous merge
+        /// conflict block (the line carrying the `<<<<<<<` marker).
+        /// Wraps top↔bottom and beeps if the file has no conflicts.
+        /// Same dispatch story as gotoNextHunk: routed through
+        /// FindState.commands so the Coordinator's existing sink
+        /// picks them up without a dedicated subscription.
+        case gotoNextMergeConflict
+        case gotoPrevMergeConflict
         /// Phase 33 — insert a snippet's body at every active caret.
         /// Reuses the same Scintilla path as `insertAtCarets`; this
         /// case exists so the menu / palette can dispatch a *user-

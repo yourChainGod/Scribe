@@ -378,6 +378,27 @@ struct ScribeCommands: Commands {
             .keyboardShortcut(.upArrow, modifiers: [.option, .shift])
             .disabled(workspace.current == nil)
 
+            // Phase 68b — merge conflict navigation. No keyboard
+            // shortcut by default: the option-shift-arrow pair is
+            // already taken by git-gutter hunks (a superset of
+            // conflicts), so we'd be fighting muscle memory. The
+            // command palette + the banner buttons cover the rest.
+            // Disabled when no conflicts are live so the menu
+            // doesn't lie about what it can do.
+            Button {
+                findState.commands.send(.gotoNextMergeConflict)
+            } label: {
+                Text("menu.tools.nextMergeConflict", bundle: .module)
+            }
+            .disabled(workspace.mergeConflictEngine.conflicts.isEmpty)
+
+            Button {
+                findState.commands.send(.gotoPrevMergeConflict)
+            } label: {
+                Text("menu.tools.prevMergeConflict", bundle: .module)
+            }
+            .disabled(workspace.mergeConflictEngine.conflicts.isEmpty)
+
             Divider()
 
             // Phase 62 — Go to matching bracket. ⌘⇧B mirrors

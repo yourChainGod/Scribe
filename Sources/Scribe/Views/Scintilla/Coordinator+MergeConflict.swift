@@ -171,14 +171,80 @@ extension ScintillaCodeEditor.Coordinator {
         workspace?.mergeConflictEngine.refresh()
     }
 
-    /// Stub for the Compare button — wired up in the navigation
-    /// follow-up so the first banner phase ships without the
-    /// side-by-side diff path. Banners always render the button
-    /// for visual completeness; clicking it just nudges focus to
-    /// the conflict for now.
+    /// Phase 68b — Compare hand-off. Spins up a fresh `DiffSession`
+    /// pre-loaded with the conflict's two sides as inline strings
+    /// (no URLs — `loadInline` was added precisely for this) and
+    /// hands it to `Workspace.compareSession`, which flips
+    /// MainWindow over to the side-by-side DiffView. Pane labels
+    /// surface the marker labels (`HEAD` / `feature/translations`)
+    /// so the user always knows which side they're staring at.
     func openMergeConflictCompare(seed: MergeConflict) {
-        guard let view = self.view else { return }
-        let line0 = max(0, seed.startLine - 1)
+        guard let workspace else { return }
+        // Prefer the live conflict (post-flush re-parse) so a fast
+        // typist who edited the buffer between banner render and
+        // click compares the *current* text, not the stale snapshot.
+        // Fall back to the seed if the parser no longer finds a
+        // matching block — the user can still see what the banner
+        // captured at render time.
+        doc.flushPendingEdit?()
+        let live = MergeConflictParser.parse(doc.text)
+            .first(where: { $0.startLine == seed.startLine })
+        let conflict = live ?? seed
+
+        let session = DiffSession()
+        let docTitle = doc.title
+        session.loadInline(
+            leftText: conflict.currentText,
+            leftLabel: conflict.currentLabel.isEmpty ? "ours" : conflict.currentLabel,
+            leftSubtitle: docTitle,
+            rightText: conflict.incomingText,
+            rightLabel: conflict.incomingLabel.isEmpty ? "theirs" : conflict.incomingLabel,
+            rightSubtitle: docTitle)
+        workspace.compareSession = session
+    }
+
+    // MARK: - Navigation (Phase 68b)
+
+    /// Jump the caret to the start of the next conflict block after
+    /// the current line. Wraps to the first conflict when past the
+    /// last one. Beeps when the file has no conflicts so a stray
+    /// keystroke doesn't silently no-op.
+    func gotoNextMergeConflict(in view: ScintillaView) {
+        let conflicts = workspace?.mergeConflictEngine.conflicts ?? []
+        guard let target = MergeConflictNavigation.next(
+            after: currentLine1Based(in: view), in: conflicts) else {
+            NSSound.beep()
+            return
+        }
+        moveCaretToConflict(line1: target, in: view)
+    }
+
+    /// Symmetric with `gotoNextMergeConflict` — jumps to the
+    /// previous conflict, wrapping to the last when past the first.
+    func gotoPrevMergeConflict(in view: ScintillaView) {
+        let conflicts = workspace?.mergeConflictEngine.conflicts ?? []
+        guard let target = MergeConflictNavigation.previous(
+            before: currentLine1Based(in: view), in: conflicts) else {
+            NSSound.beep()
+            return
+        }
+        moveCaretToConflict(line1: target, in: view)
+    }
+
+    private func currentLine1Based(in view: ScintillaView) -> Int {
+        let pos = view.message(SCI.GETCURRENTPOS)
+        let line0 = view.message(SCI.LINEFROMPOSITION,
+                                 wParam: UInt(pos), lParam: 0)
+        return Int(line0) + 1
+    }
+
+    /// Distinct from `Coordinator+GitGutter.swift`'s fileprivate
+    /// `moveCaret(to:in:)` only by name — Swift resolves them per
+    /// file, so renaming here keeps them from looking like a
+    /// duplicate during a future refactor that promotes either
+    /// helper to module-internal.
+    private func moveCaretToConflict(line1: Int, in view: ScintillaView) {
+        let line0 = max(0, line1 - 1)
         view.message(SCI.GOTOLINE, wParam: UInt(line0))
         view.message(SCI.SCROLLCARET)
     }

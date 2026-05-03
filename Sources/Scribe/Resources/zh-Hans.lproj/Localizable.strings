@@ -962,6 +962,8 @@
 "merge.conflict.button.acceptIncoming" = "接受传入";
 "merge.conflict.button.acceptBoth"     = "全部保留";
 "merge.conflict.button.compare"        = "对比";
+"menu.tools.nextMergeConflict"         = "下一个合并冲突";
+"menu.tools.prevMergeConflict"         = "上一个合并冲突";
 
 // Phase 69 — 自动保存暂存区 / 崩溃恢复
 "settings.tab.autoSave"                    = "自动保存";

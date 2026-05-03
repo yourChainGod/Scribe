@@ -136,6 +136,31 @@ final class DiffSession: ObservableObject {
         }
     }
 
+    /// Phase 68b — load two raw strings (no URLs) and trigger a
+    /// recompute. Used by the merge-conflict overlay's Compare
+    /// button to surface a conflict's two sides side by side
+    /// without writing them to temp files first. The labels /
+    /// subtitles default to nil if the caller skips them; the
+    /// pane header then falls back to "Left" / "Right" the same
+    /// way the URL path does.
+    func loadInline(leftText: String,
+                    leftLabel: String? = nil,
+                    leftSubtitle: String? = nil,
+                    rightText: String,
+                    rightLabel: String? = nil,
+                    rightSubtitle: String? = nil) {
+        leftURL = nil
+        rightURL = nil
+        self.leftLabel = leftLabel
+        self.rightLabel = rightLabel
+        self.leftSubtitle = leftSubtitle
+        self.rightSubtitle = rightSubtitle
+        self.leftText = leftText
+        self.rightText = rightText
+        error = nil
+        Task { await recompute() }
+    }
+
     func nextHunk() {
         guard !hunks.isEmpty else { return }
         activeHunk = (activeHunk + 1) % hunks.count
