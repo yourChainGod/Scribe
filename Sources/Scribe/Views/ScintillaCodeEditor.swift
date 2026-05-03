@@ -616,10 +616,18 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         /// Multi-paste also gets enabled here (`SC_MULTIPASTE_EACH = 1`)
         /// so the clipboard pastes once per cursor — matches VSCode +
         /// Sublime + most modern editors.
+        ///
+        /// Phase 55 — `SETMOUSESELECTIONRECTANGULARSWITCH = 1` lets
+        /// ⌥+drag flip a stream selection into a rectangular one
+        /// mid-gesture. Scintilla ships this off; turning it on
+        /// aligns with the Notepad++ / Sublime muscle memory (hold
+        /// Option and drag → column selection) without disturbing
+        /// the `⌘⇧8` toggle or `⇧⌥+arrow` rectangle-extend verbs.
         func configureMultiSelection(to view: ScintillaView) {
             view.message(SCI.SETMULTIPLESELECTION, wParam: 1)
             view.message(SCI.SETADDITIONALSELECTIONTYPING, wParam: 1)
             view.message(SCI.SETMULTIPASTE, wParam: 1)
+            view.message(SCI.SETMOUSESELECTIONRECTANGULARSWITCH, wParam: 1)
         }
 
         /// One-time setup of indicator 0 — translucent rounded box used

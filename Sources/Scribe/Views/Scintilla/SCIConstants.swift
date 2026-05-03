@@ -155,6 +155,14 @@ enum SCI {
     static let SETMULTIPLESELECTION:        UInt32 = 2563
     static let SETADDITIONALSELECTIONTYPING:UInt32 = 2565
     static let SETMULTIPASTE:               UInt32 = 2614
+    /// Phase 55 — when ON, holding ⌥ while dragging the mouse
+    /// switches a stream selection to rectangular mid-gesture.
+    /// Scintilla's default is OFF, which means `.keyboardShortcut`
+    /// bindings are the only way to get column selection; flipping
+    /// this on makes the Notepad++ / Sublime ⌥+drag muscle-memory
+    /// just work.
+    static let SETMOUSESELECTIONRECTANGULARSWITCH: UInt32 = 2668
+    static let GETMOUSESELECTIONRECTANGULARSWITCH: UInt32 = 2669
     static let SETSELECTIONMODE:            UInt32 = 2422
     /// Phase 23 — `SCI_GETSELECTIONMODE()` returns the current
     /// SelectionMode (stream / rectangular / lines / thin).

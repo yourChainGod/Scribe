@@ -65,6 +65,24 @@ final class MultiCursorTests: XCTestCase {
         }
     }
 
+    // MARK: - Phase 55 — mouse rectangular-switch
+
+    func test_sciConstants_mouseRectangularSwitchIDsMatchScintilla() {
+        // Phase 55 wires ⌥+drag rectangular selection through
+        // `SCI_SETMOUSESELECTIONRECTANGULARSWITCH` (2668) with a
+        // matching getter at 2669. Scintilla's message numbering
+        // is load-bearing — the dispatch table inside
+        // Editor::WndProc is a giant switch on the numeric ID,
+        // so a stale constant silently routes to the wrong
+        // message and the user sees no column selection at all.
+        // Pinning the literals here catches a vendor bump in
+        // Phase-scale upgrades before it ships.
+        XCTAssertEqual(SCI.SETMOUSESELECTIONRECTANGULARSWITCH, 2668,
+                       "Scintilla.h pins SETMOUSESELECTIONRECTANGULARSWITCH at 2668")
+        XCTAssertEqual(SCI.GETMOUSESELECTIONRECTANGULARSWITCH, 2669,
+                       "Scintilla.h pins GETMOUSESELECTIONRECTANGULARSWITCH at 2669")
+    }
+
     func test_findStateCommands_orderingIsPreserved() {
         // Multi-cursor + Find commands share one subject. We assert
         // they don't reorder relative to each other so a user
