@@ -340,6 +340,13 @@ struct MarkdownPreviewPane: NSViewRepresentable {
             // Guarded because offline sessions / missing-bundle
             // builds won't have `scribeRenderMath` defined.
             + "if (window.scribeRenderMath) { scribeRenderMath(); } "
+            // Phase 53d — same for Mermaid. The `.mermaid:not(
+            // [data-mermaid-rendered])` selector inside the
+            // function already prevents re-rendering blocks that
+            // survived the swap untouched, so the cost on a
+            // diagram-free paragraph edit is one querySelectorAll
+            // that returns an empty list.
+            + "if (window.scribeRenderMermaid) { scribeRenderMermaid(); } "
             + "true; } else { false; }"
         // Capture a pre-rendered fallback html NOW (not lazily) so the
         // retry branch below doesn't have to re-enter the converter
@@ -765,6 +772,44 @@ struct MarkdownPreviewPane: NSViewRepresentable {
               } catch (e) { /* leave raw text on failure */ }
             }
           };
+          // Phase 53d — render every `<div class="mermaid">`
+          // MarkdownConverter emitted, using a unique render id
+          // per call so mermaid's SVG `<defs>` don't collide
+          // across blocks. `data-mermaid-rendered` marks each
+          // block as done so repeated calls (keystroke updates
+          // above a diagram) don't re-render it pointlessly.
+          //
+          // Mermaid's render API became async in v10. We use
+          // `.then/.catch` instead of async/await for browsers
+          // that don't ship top-level await; the .catch leaves
+          // the raw source visible so a broken diagram still
+          // shows the user what they typed.
+          window.scribeRenderMermaid = function () {
+            if (!window.mermaid || !mermaid.render) { return; }
+            var els = document.querySelectorAll(
+              '.mermaid:not([data-mermaid-rendered])');
+            var now = Date.now();
+            for (var i = 0; i < els.length; i++) {
+              (function (el, idx) {
+                var src = el.textContent || '';
+                if (!src.trim()) { return; }
+                var id = 'mermaid-svg-' + now + '-' + idx;
+                try {
+                  mermaid.render(id, src).then(function (result) {
+                    el.innerHTML = result.svg;
+                    el.setAttribute('data-mermaid-rendered', 'true');
+                    if (typeof result.bindFunctions === 'function') {
+                      try { result.bindFunctions(el); } catch (e) {}
+                    }
+                  }).catch(function (e) {
+                    // Keep the raw source visible; future calls
+                    // will re-try because we never stamped
+                    // `data-mermaid-rendered`.
+                  });
+                } catch (e) { /* sync mermaid throw: same recovery */ }
+              })(els[i], i);
+            }
+          };
           // Initial build once the shell's DOM is ready. Subsequent
           // `#md-root.innerHTML = …` swaps have to call
           // `scribeBuildBlockIndex()` themselves (the injection
@@ -869,6 +914,11 @@ struct MarkdownPreviewPane: NSViewRepresentable {
             // if `window.katex` hasn't loaded yet (offline) or if
             // the document has no math.
             if (window.scribeRenderMath) { scribeRenderMath(); }
+            // Phase 53d — same pattern for Mermaid. The renderer
+            // is async; we don't await it here because the load
+            // handler shouldn't block other side-effects (scroll
+            // restore / hljs).
+            if (window.scribeRenderMermaid) { scribeRenderMermaid(); }
           });
         </script>
         """
@@ -1054,6 +1104,30 @@ struct MarkdownPreviewPane: NSViewRepresentable {
         <script defer
                 src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js"
                 crossorigin="anonymous"></script>
+        <!-- Phase 53d — Mermaid runtime. Loaded as a classic
+             (non-module) script because the module build uses ESM
+             imports that WKWebView's `file://` + `about:blank`
+             shells mis-parse. Auto-init is disabled: we drive
+             rendering manually via `scribeRenderMermaid` so
+             incremental DOM swaps (Phase 51b) get re-rendered
+             without waiting for a full DOMContentLoaded. -->
+        <script
+            src="https://cdn.jsdelivr.net/npm/mermaid@10.9.3/dist/mermaid.min.js"
+            crossorigin="anonymous"></script>
+        <script>
+          // Mermaid reads the current theme immediately on
+          // initialize; re-running initialize with a different
+          // theme on dark/light flip is the cleanest recovery
+          // path (we already take a full reload on theme flip
+          // in MarkdownPreviewPane.updateNSView).
+          if (window.mermaid && mermaid.initialize) {
+            mermaid.initialize({
+              startOnLoad: false,
+              theme: \(isDark ? "'dark'" : "'default'"),
+              securityLevel: 'strict'
+            });
+          }
+        </script>
         \(Self.revealLineScript(headings: headings))
         </head>
         <body>

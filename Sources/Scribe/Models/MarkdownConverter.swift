@@ -245,6 +245,14 @@ enum MarkdownConverter {
         /// Phase 52a — source line the currently-open `<pre><code>`
         /// started on. Only meaningful while `fence != nil`.
         var fenceStartLine: Int = 0
+        /// Phase 53d — true while we're inside a `mermaid` fenced
+        /// code block. The body still goes through the same
+        /// no-markdown-parsing path as a regular fenced block, but
+        /// the wrapping element changes from `<pre><code>` to
+        /// `<div class="mermaid">` so the preview's JS Mermaid
+        /// runtime can pick it up. Reset on close (and on EOF
+        /// flush for malformed docs).
+        var inMermaidFence: Bool = false
         /// Phase 53c — true while we're inside a `$$\n…\n$$` display-
         /// math block. Everything between the fence lines is
         /// accumulated verbatim (no markdown parsing) so LaTeX
@@ -282,7 +290,16 @@ enum MarkdownConverter {
             // are literal source code.
             if let mark = fence {
                 if line.trimmingCharacters(in: .whitespaces) == mark {
-                    output.append("</code></pre>\n")
+                    // Phase 53d — mermaid blocks close with </div>
+                    // because they opened as `<div class="mermaid">`.
+                    // Regular fenced-code blocks keep the existing
+                    // </code></pre> close.
+                    if inMermaidFence {
+                        output.append("</div>\n")
+                        inMermaidFence = false
+                    } else {
+                        output.append("</code></pre>\n")
+                    }
                     fence = nil
                 } else {
                     output.append(htmlEscape(line))
@@ -415,6 +432,19 @@ enum MarkdownConverter {
                 flushBlockquote()
                 fence = info.mark
                 fenceStartLine = currentSourceLine
+                // Phase 53d — `mermaid` fenced blocks render as
+                // diagrams, not source code. We emit a
+                // `<div class="mermaid">` that the preview's JS
+                // Mermaid runtime picks up; the fence body still
+                // goes through the same no-markdown-parsing path
+                // as a regular fenced block (escape + append) so
+                // `>`, `|`, `*` in a sequence diagram can't get
+                // hijacked by markdown rules.
+                if info.lang.lowercased() == "mermaid" {
+                    inMermaidFence = true
+                    output.append("<div class=\"mermaid\"\(dsl(fenceStartLine))>")
+                    return
+                }
                 // Phase 52a — stamp the `<pre>` (not `<code>`) with
                 // the source line. The JS reveal helper queries
                 // `[data-source-line]` at any DOM depth, and a
@@ -602,7 +632,14 @@ enum MarkdownConverter {
             // close the tags so the preview renders something
             // useful instead of leaking the open <pre>.
             if fence != nil {
-                output.append("</code></pre>\n")
+                // Phase 53d — mermaid dangling fence closes with
+                // </div>, matching the opener we emitted above.
+                if inMermaidFence {
+                    output.append("</div>\n")
+                    inMermaidFence = false
+                } else {
+                    output.append("</code></pre>\n")
+                }
                 fence = nil
             }
             // Phase 53c — same story for an unclosed math fence.
