@@ -930,3 +930,15 @@
 "hexview.size"      = "%lld bytes";
 "hexview.truncated" = "Showing first %lld bytes";
 "palette.command.hexview" = "View as Hex…";
+
+// Phase 67 — Clipboard history retention
+"settings.tab.clipboard"                  = "Clipboard";
+"settings.clipboard.section.persistence"  = "Persistence";
+"settings.clipboard.persist.title"        = "Persist clipboard history across launches";
+"settings.clipboard.persist.help"         = "When OFF, the history lives only in memory and is cleared on quit. When ON, entries are stored under ~/Library/Application Support/Scribe/clipboard-history.json.";
+"settings.clipboard.section.retention"    = "Retention";
+"settings.clipboard.maxItems.label"       = "Maximum entries";
+"settings.clipboard.retention.label"      = "Drop entries older than";
+"settings.clipboard.retention.help"       = "Set 0 to keep entries forever. Otherwise old entries are pruned on every clipboard change.";
+"settings.clipboard.retention.forever"    = "Forever";
+"settings.clipboard.retention.days"       = "%d days";

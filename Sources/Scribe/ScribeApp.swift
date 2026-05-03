@@ -38,7 +38,13 @@ struct ScribeApp: App {
     /// so every editor / sidebar / sheet hits the same FIFO. Polling
     /// kicks off in `bootstrap()` once the window is up, so a launch
     /// that never opens the main window doesn't spin the timer.
-    @StateObject private var clipboardHistory = ClipboardHistoryStore()
+    ///
+    /// Phase 67 — constructed in `init()` so the persisted
+    /// `ClipboardHistoryPolicy` from `EditorPreferences` reaches the
+    /// store before the very first `record()` call. Subsequent
+    /// Settings toggles flow through `.onChange` modifiers in
+    /// `body` and call `updatePolicy(_:)` on this instance.
+    @StateObject private var clipboardHistory: ClipboardHistoryStore
     private let findInFilesEngine = FindInFilesEngine()
 
     init() {
@@ -54,6 +60,15 @@ struct ScribeApp: App {
 
         _prefs = StateObject(wrappedValue: preferences)
         _workspace = StateObject(wrappedValue: ws)
+        // Phase 67 — pass the persisted policy in at construction
+        // time so the store loads the on-disk FIFO (when persist is
+        // ON) and applies the TTL sweep before SwiftUI ever shows
+        // the picker. Default storage URL points at
+        // ~/Library/Application Support/Scribe/clipboard-history.json
+        // — see ClipboardHistoryStore.defaultStorageURL().
+        _clipboardHistory = StateObject(
+            wrappedValue: ClipboardHistoryStore(
+                policy: preferences.clipboardHistoryPolicy))
     }
 
     var body: some Scene {
@@ -102,6 +117,23 @@ struct ScribeApp: App {
                                                 clipboardHistory: clipboardHistory,
                                                 fileIndex: fileIndex,
                                                 workspaceSymbolIndex: workspaceSymbolIndex)
+                }
+                // Phase 67 — Settings can flip persistence /
+                // capacity / TTL independently of each other.
+                // Three onChange hooks (rather than one combined
+                // observer) keep the wiring explicit and match
+                // the Phase 36 / 56 precedent for per-pref hooks.
+                // Each call recomputes the composite snapshot
+                // through `prefs.clipboardHistoryPolicy` so the
+                // store sees a coherent value even mid-drag.
+                .onChange(of: prefs.clipboardHistoryPersistEnabled) { _, _ in
+                    clipboardHistory.updatePolicy(prefs.clipboardHistoryPolicy)
+                }
+                .onChange(of: prefs.clipboardHistoryMaxItems) { _, _ in
+                    clipboardHistory.updatePolicy(prefs.clipboardHistoryPolicy)
+                }
+                .onChange(of: prefs.clipboardHistoryRetentionDays) { _, _ in
+                    clipboardHistory.updatePolicy(prefs.clipboardHistoryPolicy)
                 }
                 .onChange(of: workspace.folderRoot?.url) { _, newRoot in
                     if let newRoot {

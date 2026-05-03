@@ -927,3 +927,15 @@
 "hexview.size"      = "%lld 字节";
 "hexview.truncated" = "仅显示前 %lld 字节";
 "palette.command.hexview" = "十六进制查看…";
+
+// Phase 67 — 剪贴板历史持久化
+"settings.tab.clipboard"                  = "剪贴板";
+"settings.clipboard.section.persistence"  = "持久化";
+"settings.clipboard.persist.title"        = "跨启动保留剪贴板历史";
+"settings.clipboard.persist.help"         = "关闭时历史仅保存在内存中，应用退出即清空；开启后会写入 ~/Library/Application Support/Scribe/clipboard-history.json。";
+"settings.clipboard.section.retention"    = "保留策略";
+"settings.clipboard.maxItems.label"       = "最大条目数";
+"settings.clipboard.retention.label"      = "丢弃早于";
+"settings.clipboard.retention.help"       = "设为 0 表示永久保留；其它值会在每次剪贴板变更时清理超期条目。";
+"settings.clipboard.retention.forever"    = "永久";
+"settings.clipboard.retention.days"       = "%d 天";

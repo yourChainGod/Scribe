@@ -77,6 +77,14 @@ final class EditorPreferences: ObservableObject {
         // next launch) sit harmlessly in the array since the
         // ranking lookup returns `nil` for missing IDs.
         static let commandPaletteMRU = "palette.commandMRU"
+        // Phase 67 — Clipboard History retention. Three separate
+        // keys (rather than a JSON-encoded ClipboardHistoryPolicy)
+        // so each surfaces directly in `defaults read` for support
+        // dumps, and downgrading to a Phase 57 build leaves the
+        // entries-on-disk side unaffected.
+        static let clipboardHistoryPersistEnabled = "clipboard.history.persistEnabled"
+        static let clipboardHistoryMaxItems       = "clipboard.history.maxItems"
+        static let clipboardHistoryRetentionDays  = "clipboard.history.retentionDays"
     }
 
     /// Phase 39a — translates raw values from the pre-39 theme
@@ -213,6 +221,55 @@ final class EditorPreferences: ObservableObject {
         didSet { defaults.set(commandPaletteMRU, forKey: Key.commandPaletteMRU) }
     }
 
+    // MARK: - Clipboard history retention (Phase 67)
+
+    /// Phase 67 — when ON, `ClipboardHistoryStore` serialises its
+    /// FIFO to `~/Library/Application Support/Scribe/clipboard-
+    /// history.json` and reloads it on launch. Default OFF so a
+    /// Phase 57 → 67 upgrade never starts writing potentially
+    /// sensitive content (passwords, tokens, secrets) to disk
+    /// without explicit opt-in. Wiring through to the store happens
+    /// at `bootstrap()` in `ScribeApp` via `updatePolicy(_:)`.
+    @Published var clipboardHistoryPersistEnabled: Bool {
+        didSet {
+            defaults.set(clipboardHistoryPersistEnabled,
+                         forKey: Key.clipboardHistoryPersistEnabled)
+        }
+    }
+
+    /// Phase 67 — FIFO ceiling for the in-memory + on-disk history.
+    /// Clamped to `[ClipboardHistoryPolicy.maxItemsMin,
+    /// ClipboardHistoryPolicy.maxItemsMax]` so a tampered defaults
+    /// blob can't force unbounded memory use.
+    @Published var clipboardHistoryMaxItems: Int {
+        didSet {
+            defaults.set(clipboardHistoryMaxItems,
+                         forKey: Key.clipboardHistoryMaxItems)
+        }
+    }
+
+    /// Phase 67 — retention window in days. `0` = keep forever.
+    /// `ClipboardHistoryStore.applyRetention` drops entries older
+    /// than `now - retentionDays`. Bounds enforced at the store
+    /// layer; the slider in Settings caps at 365.
+    @Published var clipboardHistoryRetentionDays: Int {
+        didSet {
+            defaults.set(clipboardHistoryRetentionDays,
+                         forKey: Key.clipboardHistoryRetentionDays)
+        }
+    }
+
+    /// Composite snapshot the app hands to `ClipboardHistoryStore`
+    /// on init / via `updatePolicy(_:)`. Recomputed every read
+    /// because the underlying fields are independent published
+    /// values that can mutate one at a time.
+    var clipboardHistoryPolicy: ClipboardHistoryPolicy {
+        ClipboardHistoryPolicy(
+            persistEnabled: clipboardHistoryPersistEnabled,
+            maxItems: clipboardHistoryMaxItems,
+            retentionDays: clipboardHistoryRetentionDays)
+    }
+
     /// Phase 39b — per-theme custom slot overrides. Sparse map: a
     /// missing `ThemeID` key means "no overrides for that preset",
     /// and an empty `ThemeOverrides.slots` should be cleaned up by
@@ -311,6 +368,32 @@ final class EditorPreferences: ObservableObject {
         // CommandRegistry caps + de-duplicates on seed, so a
         // tampered defaults blob can't grow the in-memory cap.
         self.commandPaletteMRU = defaults.stringArray(forKey: Key.commandPaletteMRU) ?? []
+
+        // Phase 67 — clipboard history retention. Defaults match
+        // the privacy-first Phase 57 baseline (memory only, 50-
+        // entry cap, 30-day TTL). Each key uses the
+        // `object(forKey:)` dance because `defaults.bool` /
+        // `defaults.integer` return zero on a missing key, which
+        // would mean "TTL = 0 = forever" the very first launch
+        // when the user might still expect the legacy 30-day
+        // sweep. The explicit presence check preserves the
+        // Phase 57 default until the user opens Settings.
+        if defaults.object(forKey: Key.clipboardHistoryPersistEnabled) != nil {
+            self.clipboardHistoryPersistEnabled = defaults.bool(
+                forKey: Key.clipboardHistoryPersistEnabled)
+        } else {
+            self.clipboardHistoryPersistEnabled = ClipboardHistoryPolicy.default.persistEnabled
+        }
+        let storedMax = defaults.object(forKey: Key.clipboardHistoryMaxItems) as? Int
+        self.clipboardHistoryMaxItems = min(
+            max(storedMax ?? ClipboardHistoryPolicy.default.maxItems,
+                ClipboardHistoryPolicy.maxItemsMin),
+            ClipboardHistoryPolicy.maxItemsMax)
+        let storedTTL = defaults.object(forKey: Key.clipboardHistoryRetentionDays) as? Int
+        self.clipboardHistoryRetentionDays = min(
+            max(storedTTL ?? ClipboardHistoryPolicy.default.retentionDays,
+                ClipboardHistoryPolicy.retentionDaysMin),
+            ClipboardHistoryPolicy.retentionDaysMax)
 
         // Phase 39b — load per-theme override map. Silent fall-back
         // to empty map on decode failure (corrupted blob, future

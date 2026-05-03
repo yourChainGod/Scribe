@@ -36,6 +36,14 @@ struct SettingsView: View {
                         Image(systemName: "chevron.left.forwardslash.chevron.right")
                     }
                 }
+            ClipboardSettingsPane(prefs: prefs)
+                .tabItem {
+                    Label {
+                        Text("settings.tab.clipboard", bundle: .module)
+                    } icon: {
+                        Image(systemName: "doc.on.clipboard")
+                    }
+                }
             AboutPane()
                 .tabItem {
                     Label {
@@ -807,6 +815,92 @@ private struct SnippetEditorForm: View {
             TextField(L10n.t(placeholder), text: text)
                 .textFieldStyle(.roundedBorder)
         }
+    }
+}
+
+/// Phase 67 — clipboard history retention controls. Small,
+/// dedicated tab because the three knobs all share one privacy
+/// story: nothing leaves memory unless the user explicitly opts
+/// in, and even after they do, the on-disk JSON is bounded by an
+/// item count and a TTL. Each control writes straight through
+/// `EditorPreferences`; the live store reacts via the
+/// `.onChange(of: prefs.clipboardHistory*)` hooks in `ScribeApp`.
+private struct ClipboardSettingsPane: View {
+    @ObservedObject var prefs: EditorPreferences
+
+    /// SwiftUI's `@ViewBuilder` Form/Section bodies don't accept
+    /// stray `let` bindings, so the Stepper bounds live as
+    /// computed properties. Both ranges are also referenced from
+    /// tests (Phase 67e) to assert the slider matches the policy
+    /// clamp.
+    private var maxItemsBounds: ClosedRange<Int> {
+        ClipboardHistoryPolicy.maxItemsMin...ClipboardHistoryPolicy.maxItemsMax
+    }
+    private var retentionDaysBounds: ClosedRange<Int> {
+        ClipboardHistoryPolicy.retentionDaysMin...ClipboardHistoryPolicy.retentionDaysMax
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle(isOn: $prefs.clipboardHistoryPersistEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("settings.clipboard.persist.title", bundle: .module)
+                        Text("settings.clipboard.persist.help", bundle: .module)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("settings.clipboard.section.persistence", bundle: .module)
+            }
+
+            Section {
+                HStack {
+                    Text("settings.clipboard.maxItems.label", bundle: .module)
+                    Spacer()
+                    Stepper(value: $prefs.clipboardHistoryMaxItems,
+                            in: maxItemsBounds,
+                            step: 10,
+                            label: {
+                                Text(verbatim: "\(prefs.clipboardHistoryMaxItems)")
+                                    .monospacedDigit()
+                                    .frame(minWidth: 48, alignment: .trailing)
+                            })
+                }
+                HStack {
+                    Text("settings.clipboard.retention.label", bundle: .module)
+                    Spacer()
+                    Stepper(value: $prefs.clipboardHistoryRetentionDays,
+                            in: retentionDaysBounds,
+                            step: 1,
+                            label: {
+                                Text(retentionSummary(prefs.clipboardHistoryRetentionDays))
+                                    .monospacedDigit()
+                                    .frame(minWidth: 96, alignment: .trailing)
+                            })
+                }
+                Text("settings.clipboard.retention.help", bundle: .module)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text("settings.clipboard.section.retention", bundle: .module)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    /// Human-readable summary for the retention stepper. `0 ⇒
+    /// "永久"` so the user never has to second-guess what zero
+    /// means; positive values render as "N 天" / "N day(s)".
+    private func retentionSummary(_ days: Int) -> String {
+        if days <= 0 {
+            return String(localized: "settings.clipboard.retention.forever",
+                          bundle: .module)
+        }
+        let format = String(localized: "settings.clipboard.retention.days",
+                            bundle: .module)
+        return String(format: format, days)
     }
 }
 
