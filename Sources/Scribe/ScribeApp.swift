@@ -52,11 +52,26 @@ struct ScribeApp: App {
 
         let preferences = EditorPreferences()
         let env = StartupEnvironment.current()
-        // Skip the default Untitled when SCRIBE_AUTO_OPEN already
-        // gave us something to load.
+        // Phase 67d — figure out whether the workspace should start
+        // with the default Untitled tab. Three skip conditions:
+        //   1. CLI / `SCRIBE_AUTO_OPEN` named files (env path).
+        //   2. The previous session left at least one titled tab
+        //      open AND every persisted path still exists on disk
+        //      — these will be re-opened by `SessionRestore.apply`.
+        // Falling through both leaves the legacy first-run
+        // experience: a fresh Untitled buffer.
+        let hasAutoOpen = !env.autoOpenURLs.isEmpty
+        let hasUsableSession = !hasAutoOpen
+            && SessionRestore.usableRestorePaths(prefs: preferences).isEmpty == false
         let ws = Workspace(prefs: preferences,
-                           openInitialUntitled: env.autoOpenURLs.isEmpty)
+                           openInitialUntitled: !(hasAutoOpen || hasUsableSession))
         StartupAutoOpen.apply(env, to: ws)
+        // Phase 67d — restore last session's tabs when the CLI hasn't
+        // already populated the workspace. `apply` is a no-op if the
+        // pref blob is empty or every path has gone missing on disk.
+        SessionRestore.apply(prefs: preferences,
+                             to: ws,
+                             skip: hasAutoOpen)
 
         _prefs = StateObject(wrappedValue: preferences)
         _workspace = StateObject(wrappedValue: ws)

@@ -85,6 +85,15 @@ final class EditorPreferences: ObservableObject {
         static let clipboardHistoryPersistEnabled = "clipboard.history.persistEnabled"
         static let clipboardHistoryMaxItems       = "clipboard.history.maxItems"
         static let clipboardHistoryRetentionDays  = "clipboard.history.retentionDays"
+        // Phase 67d — session restore. URL paths of every titled
+        // document the user had open at last shutdown; the active
+        // tab's path lives separately so we can restore selection
+        // even if the user shuffled the tab order between launches.
+        // Untitled docs never enter the list (no URL = nothing to
+        // re-load), and missing files are filtered at restore time
+        // so a `rm` between sessions doesn't surface a broken tab.
+        static let sessionOpenFilePaths     = "session.openFilePaths"
+        static let sessionSelectedFilePath  = "session.selectedFilePath"
     }
 
     /// Phase 39a — translates raw values from the pre-39 theme
@@ -270,6 +279,33 @@ final class EditorPreferences: ObservableObject {
             retentionDays: clipboardHistoryRetentionDays)
     }
 
+    // MARK: - Session restore (Phase 67d)
+
+    /// Phase 67d — list of URL paths the user had open as tabs at
+    /// last shutdown. Updated by `Workspace` whenever a tab opens /
+    /// closes, so even a hard kill (no clean termination) leaves a
+    /// usable snapshot. `SessionRestore.apply` filters missing
+    /// paths on the next launch.
+    @Published var sessionOpenFilePaths: [String] {
+        didSet {
+            defaults.set(sessionOpenFilePaths, forKey: Key.sessionOpenFilePaths)
+        }
+    }
+
+    /// Phase 67d — path of the active tab at last shutdown. Stored
+    /// separately so a tab reorder doesn't lose the user's
+    /// "current" cursor position. `nil` means the active tab was
+    /// Untitled (or no documents were open).
+    @Published var sessionSelectedFilePath: String? {
+        didSet {
+            if let p = sessionSelectedFilePath {
+                defaults.set(p, forKey: Key.sessionSelectedFilePath)
+            } else {
+                defaults.removeObject(forKey: Key.sessionSelectedFilePath)
+            }
+        }
+    }
+
     /// Phase 39b — per-theme custom slot overrides. Sparse map: a
     /// missing `ThemeID` key means "no overrides for that preset",
     /// and an empty `ThemeOverrides.slots` should be cleaned up by
@@ -394,6 +430,15 @@ final class EditorPreferences: ObservableObject {
             max(storedTTL ?? ClipboardHistoryPolicy.default.retentionDays,
                 ClipboardHistoryPolicy.retentionDaysMin),
             ClipboardHistoryPolicy.retentionDaysMax)
+
+        // Phase 67d — restore the open-tabs snapshot. Both keys are
+        // optional on first launch (defaults treat absence as empty
+        // / nil); `SessionRestore.apply` does the existence check
+        // before re-opening, so a stale path here is harmless.
+        self.sessionOpenFilePaths =
+            defaults.stringArray(forKey: Key.sessionOpenFilePaths) ?? []
+        self.sessionSelectedFilePath =
+            defaults.string(forKey: Key.sessionSelectedFilePath)
 
         // Phase 39b — load per-theme override map. Silent fall-back
         // to empty map on decode failure (corrupted blob, future

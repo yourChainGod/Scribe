@@ -219,6 +219,14 @@ final class Workspace: ObservableObject {
     /// internally so the engine + sink share Workspace's lifetime.
     private var selectionSink: AnyCancellable?
 
+    /// Phase 67d — sinks that mirror the live tab list / active tab
+    /// onto `EditorPreferences`. Held alongside `selectionSink` so
+    /// they share the Workspace's lifetime; SwiftUI tears Workspace
+    /// down at process exit, which lets the last update land before
+    /// `defaults` syncs.
+    private var sessionTabsSink: AnyCancellable?
+    private var sessionSelectionSink: AnyCancellable?
+
     init(prefs: EditorPreferences, openInitialUntitled: Bool = true) {
         self.prefs = prefs
         // Open one empty doc by default so the editor isn't blank on first run.
@@ -248,6 +256,64 @@ final class Workspace: ObservableObject {
         // interactive while the user reads the message.
         gitStatusEngine.onWriteFailure = { [weak self] titleKey, message in
             self?.toastCenter.error(L10n.t(titleKey), message: message)
+        }
+
+        // Phase 67d — session restore. Persist the URL path of every
+        // open titled tab on every change so the next launch can
+        // reopen exactly what the user had loaded. Untitled docs
+        // (no URL) drop out of the snapshot via `compactMap`. The
+        // sinks fire on the willChange tick, but $documents and
+        // $selectedID are willSet semantics under @Published — the
+        // closure runs *before* the new value lands, so we ignore
+        // the value passed in and read `self.documents` /
+        // `self.selectedID` after the next runloop tick.
+        sessionTabsSink = $documents
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.persistSessionTabs()
+            }
+        sessionSelectionSink = $selectedID
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.persistSessionSelection()
+            }
+    }
+
+    // MARK: - Phase 67d session-restore helpers
+
+    /// Snapshot the URL paths of every currently-open titled doc
+    /// into `EditorPreferences.sessionOpenFilePaths`. Idempotent —
+    /// rewriting the same array is cheap and the `didSet` already
+    /// gates the disk write through UserDefaults.
+    private func persistSessionTabs() {
+        let paths = documents
+            .compactMap { $0.url?.standardizedFileURL.path }
+        // Avoid bouncing the @Published when nothing changed; saves
+        // a redundant defaults write on every selectedID flip that
+        // also fires the documents sink via @Published republishing.
+        if paths != prefs.sessionOpenFilePaths {
+            prefs.sessionOpenFilePaths = paths
+        }
+    }
+
+    /// Snapshot the URL path of the active tab (if it has one) into
+    /// `EditorPreferences.sessionSelectedFilePath`. `nil` when the
+    /// active tab is Untitled or no tab is selected — both cases
+    /// surface as a missing key on the next launch and let
+    /// `SessionRestore.apply` fall back to "select the first
+    /// re-opened tab".
+    private func persistSessionSelection() {
+        guard let id = selectedID,
+              let doc = documents.first(where: { $0.id == id }),
+              let path = doc.url?.standardizedFileURL.path
+        else {
+            if prefs.sessionSelectedFilePath != nil {
+                prefs.sessionSelectedFilePath = nil
+            }
+            return
+        }
+        if prefs.sessionSelectedFilePath != path {
+            prefs.sessionSelectedFilePath = path
         }
     }
 
