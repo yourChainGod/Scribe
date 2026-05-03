@@ -788,6 +788,65 @@ final class Workspace: ObservableObject {
         return false
     }
 
+    /// Phase 60 — export the current document to a self-contained
+    /// syntax-highlighted HTML file via `SourceHTMLExporter`. The
+    /// `isDark` flag picks the github-dark vs. github-light theme
+    /// to match the user's current editor chrome; callers usually
+    /// thread through `\.colorScheme` or `AppTheme.isDarkUI`.
+    ///
+    /// Opens an `NSSavePanel` pre-filled with the document's
+    /// basename + `.html` extension. Returns `true` when the user
+    /// confirmed the save and the write succeeded, `false` on
+    /// cancel or I/O error. Errors surface through
+    /// `toastCenter.showError` rather than a modal — the export
+    /// flow is informational; the user can retry without fuss.
+    @discardableResult
+    func exportCurrentAsHTML(isDark: Bool) -> Bool {
+        guard let doc = current else { return false }
+        // Flush any throttled keystroke so `doc.text` is authoritative
+        // before we read it — same pattern saveCurrent uses.
+        doc.flushPendingEdit?()
+
+        let html = SourceHTMLExporter.renderHTML(
+            text: doc.text,
+            title: doc.title,
+            lexillaName: LexerCatalog.descriptor(for: doc).lexillaName,
+            isDark: isDark
+        )
+
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = defaultHTMLFileName(for: doc)
+        if let htmlType = UTType(filenameExtension: "html") {
+            panel.allowedContentTypes = [htmlType]
+        }
+        panel.allowsOtherFileTypes = false
+        guard panel.runModal() == .OK, let url = panel.url else {
+            return false
+        }
+        do {
+            try html.data(using: .utf8)?.write(to: url, options: .atomic)
+            return true
+        } catch {
+            toastCenter.error(
+                L10n.t("export.html.error",
+                       url.lastPathComponent as NSString,
+                       error.localizedDescription as NSString)
+            )
+            return false
+        }
+    }
+
+    /// Synthesise the pre-filled `.html` name from the doc title.
+    /// Untitled docs fall back to `"Untitled.html"`; docs whose
+    /// title already carries an extension swap it out for `.html`
+    /// so a user exporting `main.swift` gets `main.html` rather
+    /// than `main.swift.html`.
+    private func defaultHTMLFileName(for doc: Document) -> String {
+        let stem = (doc.title as NSString).deletingPathExtension
+        let fallback = stem.isEmpty ? "Untitled" : stem
+        return "\(fallback).html"
+    }
+
     private func commitSaveURLIfNeeded(_ url: URL?, for doc: Document) {
         guard let url else { return }
         doc.url = url

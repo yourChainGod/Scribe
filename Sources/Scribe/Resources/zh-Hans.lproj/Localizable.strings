@@ -815,6 +815,12 @@
 "clipboard.picker.empty.title"        = "剪贴板历史为空";
 "clipboard.picker.empty.subtitle"     = "先复制点什么再回来";
 
+// Phase 60 — Export as syntax-highlighted HTML
+"menu.file.exportHTML"               = "导出为 HTML…";
+"palette.command.exportHTML"         = "导出为 HTML";
+"export.html.defaultTitle"           = "源码导出";
+"export.html.error"                  = "无法写入 %@：%@";
+
 // Phase 59 — Character panel (special-character picker)
 "menu.edit.insertCharacter"          = "插入字符…";
 "palette.command.insertCharacter"    = "插入特殊字符";

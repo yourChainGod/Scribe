@@ -65,6 +65,26 @@ struct ScribeCommands: Commands {
         CommandGroup(after: .saveItem) {
             Button { workspace.saveCurrent() } label: { Text("menu.file.save", bundle: .module) }
                 .keyboardShortcut("s")
+
+            // Phase 60 — Export as syntax-highlighted HTML. No
+            // default shortcut: this is a destination-file
+            // operation the user invokes deliberately, not a hot-
+            // path like save. Disabled while no document is open
+            // so the menu reads truthful — matches the File ▸ Save
+            // disablement already implicit above.
+            Button {
+                // Mirror the app's *effective* appearance at export
+                // time so the emitted CSS matches what the user is
+                // currently looking at. NSApp's effectiveAppearance
+                // resolves `.system` → actual OS setting, which is
+                // the semantic Scribe's ThemeHost already uses.
+                let isDark = NSApp.effectiveAppearance
+                    .bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                workspace.exportCurrentAsHTML(isDark: isDark)
+            } label: {
+                Text("menu.file.exportHTML", bundle: .module)
+            }
+            .disabled(workspace.current == nil)
         }
 
         // — View menu —

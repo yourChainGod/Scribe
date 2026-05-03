@@ -71,6 +71,22 @@ enum CommandRegistration {
                   shortcutLabel: "⌘S") {
                 workspace.saveCurrent()
             },
+            // Phase 60 — Export as syntax-highlighted HTML. Keywords
+            // cover the two mental models ("export" / "save as HTML")
+            // plus zh-Hans aliases so discovery isn't locale-locked.
+            // Always registered; the perform closure no-ops when no
+            // doc is open (matches the menu's `.disabled`).
+            .init(id: "file.exportHTML",
+                  title: localize("palette.command.exportHTML"),
+                  subtitle: localize("menu.file"),
+                  keywords: ["export", "html", "save", "as", "web",
+                             "syntax", "highlight", "share",
+                             "导出", "网页", "高亮"]) { [weak workspace] in
+                guard let ws = workspace, ws.current != nil else { return }
+                let isDark = NSApp.effectiveAppearance
+                    .bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                ws.exportCurrentAsHTML(isDark: isDark)
+            },
             .init(id: "file.closeFolder",
                   title: localize("palette.command.closeWorkspaceFolder"),
                   subtitle: localize("menu.file"),

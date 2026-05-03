@@ -818,6 +818,12 @@
 "clipboard.picker.empty.title"        = "Clipboard history is empty";
 "clipboard.picker.empty.subtitle"     = "Copy something to start tracking";
 
+// Phase 60 — Export as syntax-highlighted HTML
+"menu.file.exportHTML"               = "Export as HTML…";
+"palette.command.exportHTML"         = "Export as HTML";
+"export.html.defaultTitle"           = "Source export";
+"export.html.error"                  = "Couldn't write %@: %@";
+
 // Phase 59 — Character panel (special-character picker)
 "menu.edit.insertCharacter"          = "Insert Character…";
 "palette.command.insertCharacter"    = "Insert Special Character";
