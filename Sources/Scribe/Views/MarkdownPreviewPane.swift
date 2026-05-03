@@ -142,6 +142,16 @@ struct MarkdownPreviewPane: NSViewRepresentable {
     static var githubLightCSSForTests: String { githubLightCSS }
     static var githubDarkCSSForTests: String { githubDarkCSS }
 
+    /// Phase 53c — exposes the private `wrap(...)` shell builder
+    /// so XCTest can pin structural invariants (KaTeX CDN
+    /// injection, the `scribeRenderMath` load-time hook, etc.)
+    /// without spinning up a WKWebView. Returns the *exact* string
+    /// production injects, so any drift between this seam and the
+    /// real shell is impossible.
+    static func wrapForTests(body: String, isDark: Bool = false) -> String {
+        return wrap(body: body, isDark: isDark, scrollY: 0)
+    }
+
     func makeNSView(context: Context) -> WKWebView {
         let cfg = WKWebViewConfiguration()
         cfg.preferences.javaScriptCanOpenWindowsAutomatically = false
@@ -324,6 +334,12 @@ struct MarkdownPreviewPane: NSViewRepresentable {
             + "try { hljs.highlightElement(b); } catch (e) {} }); "
             + "} "
             + "if (window.scribeBuildBlockIndex) { scribeBuildBlockIndex(); } "
+            // Phase 53c — the incremental innerHTML swap wipes any
+            // previously-typeset KaTeX output inside `#md-root`,
+            // so we re-run the renderer against the fresh subtree.
+            // Guarded because offline sessions / missing-bundle
+            // builds won't have `scribeRenderMath` defined.
+            + "if (window.scribeRenderMath) { scribeRenderMath(); } "
             + "true; } else { false; }"
         // Capture a pre-rendered fallback html NOW (not lazily) so the
         // retry branch below doesn't have to re-enter the converter
@@ -712,6 +728,43 @@ struct MarkdownPreviewPane: NSViewRepresentable {
             }
             window.webkit.messageHandlers.scribeToggleTask.postMessage(line);
           }, true);
+          // Phase 53c — render every KaTeX placeholder
+          // MarkdownConverter emitted. `.math-inline` and
+          // `.math-display` carry the raw LaTeX as textContent;
+          // katex.render rewrites the span/div with typeset HTML.
+          // Failures (malformed LaTeX, KaTeX not loaded yet)
+          // leave the raw text in place so the preview doesn't
+          // collapse to an empty block — users see the original
+          // `$x$` source instead of a blank spot.
+          window.scribeRenderMath = function () {
+            if (!window.katex) { return; }
+            var inlines = document.querySelectorAll('.math-inline');
+            for (var i = 0; i < inlines.length; i++) {
+              var el = inlines[i];
+              var src = el.textContent || '';
+              if (!src) { continue; }
+              try {
+                katex.render(src, el, {
+                  displayMode: false,
+                  throwOnError: false,
+                  errorColor: '#cc3333'
+                });
+              } catch (e) { /* leave raw text on failure */ }
+            }
+            var displays = document.querySelectorAll('.math-display');
+            for (var j = 0; j < displays.length; j++) {
+              var dl = displays[j];
+              var dsrc = dl.textContent || '';
+              if (!dsrc) { continue; }
+              try {
+                katex.render(dsrc, dl, {
+                  displayMode: true,
+                  throwOnError: false,
+                  errorColor: '#cc3333'
+                });
+              } catch (e) { /* leave raw text on failure */ }
+            }
+          };
           // Initial build once the shell's DOM is ready. Subsequent
           // `#md-root.innerHTML = …` swaps have to call
           // `scribeBuildBlockIndex()` themselves (the injection
@@ -808,6 +861,14 @@ struct MarkdownPreviewPane: NSViewRepresentable {
                 try { hljs.highlightElement(b); } catch (e) {}
               });
             }
+            // Phase 53c — run KaTeX against every math span/div
+            // MarkdownConverter emitted. Guarded on
+            // `scribeRenderMath` because the JS injection path
+            // (incremental innerHTML swap, Phase 51b) calls the
+            // same function on its own; the function is a no-op
+            // if `window.katex` hasn't loaded yet (offline) or if
+            // the document has no math.
+            if (window.scribeRenderMath) { scribeRenderMath(); }
           });
         </script>
         """
@@ -979,6 +1040,20 @@ struct MarkdownPreviewPane: NSViewRepresentable {
         </style>
         <style>\(hlThemeCSS)</style>
         <script>\(highlightJSAsset)</script>
+        <!-- Phase 53c — KaTeX math rendering. CDN keeps the
+             ~280 KB CSS + JS + font assets out of the app bundle;
+             `crossorigin` lets the browser cache the same copy
+             across WKWebView instances. Offline sessions simply
+             fail the script load silently — revealLineScript's
+             `scribeRenderMath` checks `window.katex` and no-ops
+             when it's missing, so the preview still renders the
+             raw `$x$` text instead of breaking. -->
+        <link rel="stylesheet"
+              href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css"
+              crossorigin="anonymous">
+        <script defer
+                src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js"
+                crossorigin="anonymous"></script>
         \(Self.revealLineScript(headings: headings))
         </head>
         <body>

@@ -245,6 +245,20 @@ enum MarkdownConverter {
         /// Phase 52a — source line the currently-open `<pre><code>`
         /// started on. Only meaningful while `fence != nil`.
         var fenceStartLine: Int = 0
+        /// Phase 53c — true while we're inside a `$$\n…\n$$` display-
+        /// math block. Everything between the fence lines is
+        /// accumulated verbatim (no markdown parsing) so LaTeX
+        /// syntax like `\begin{matrix}` survives intact for the JS
+        /// KaTeX renderer.
+        var mathFence: Bool = false
+        /// Phase 53c — accumulator for the display-math block. Each
+        /// element is one source line (no trailing newline); the
+        /// joiner puts them back together with `\n` when the fence
+        /// closes.
+        var mathFenceContent: [String] = []
+        /// Phase 53c — source line the currently-open math fence
+        /// started on. Meaningful while `mathFence == true`.
+        var mathFenceStartLine: Int = 0
         /// Phase 52a — source line the currently-open `<table>`
         /// started on (the header row, not the alignment row).
         var tableStartLine: Int = 0
@@ -277,7 +291,41 @@ enum MarkdownConverter {
                 return
             }
 
+            // Phase 53c — display-math fence (`$$\n…\n$$`) short-
+            // circuits for the same reason: LaTeX inside must not
+            // be mangled by markdown parsing. We stash each line
+            // verbatim and glue them back together on close.
+            if mathFence {
+                if line.trimmingCharacters(in: .whitespaces) == "$$" {
+                    let expr = mathFenceContent.joined(separator: "\n")
+                    output.append(
+                        "<div class=\"math-display\"\(dsl(mathFenceStartLine))>"
+                        + htmlEscape(expr)
+                        + "</div>\n"
+                    )
+                    mathFence = false
+                    mathFenceContent.removeAll(keepingCapacity: false)
+                } else {
+                    mathFenceContent.append(line)
+                }
+                return
+            }
+
             let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+            // Phase 53c — display-math fence opener. Must be its
+            // own line with exactly `$$` (allowing surrounding
+            // whitespace via the trim). Inline `$$x$$` on a
+            // content-bearing line is handled by the inline-math
+            // regex in `renderInline`.
+            if trimmed == "$$" {
+                flushParagraph()
+                flushList()
+                flushBlockquote()
+                mathFence = true
+                mathFenceStartLine = currentSourceLine
+                return
+            }
 
             // Phase 32 — table lookahead resolution. If the previous
             // call stashed a pipe row as a *candidate* header, this
@@ -556,6 +604,21 @@ enum MarkdownConverter {
             if fence != nil {
                 output.append("</code></pre>\n")
                 fence = nil
+            }
+            // Phase 53c — same story for an unclosed math fence.
+            // Emit whatever accumulated inside a `<div class=
+            // "math-display">` so the LaTeX source is at least
+            // visible; KaTeX will render what it can and leave
+            // the rest as raw text (throwOnError is off).
+            if mathFence {
+                let expr = mathFenceContent.joined(separator: "\n")
+                output.append(
+                    "<div class=\"math-display\"\(dsl(mathFenceStartLine))>"
+                    + htmlEscape(expr)
+                    + "</div>\n"
+                )
+                mathFence = false
+                mathFenceContent.removeAll(keepingCapacity: false)
             }
             // Phase 32 — a `pendingTableHeader` at EOF was a false
             // alarm: the file ended before its alignment row would
@@ -867,6 +930,17 @@ private let mdInlineEmUnderscoreRegex = try! NSRegularExpression(
     pattern: "(?<![A-Za-z0-9])_([^_\n]+)_(?![A-Za-z0-9])")
 private let mdInlineStrikeRegex = try! NSRegularExpression(
     pattern: "~~([^~\n]+)~~")
+/// Phase 53c — display-math span on a single line: `$$expr$$`.
+/// `[^$]+?` keeps the regex from greedily eating across multiple
+/// math spans on the same line. Ordered *before* the inline-math
+/// regex so `$$x$$` doesn't get parsed as `$<empty>$`+`x`+`$<empty>$`.
+private let mdInlineMathDisplayRegex = try! NSRegularExpression(
+    pattern: "\\$\\$([^$]+?)\\$\\$")
+/// Phase 53c — inline-math span: `$expr$`. Excludes `\n` so a
+/// stray `$` on one line and another two paragraphs down can't
+/// silently chew up everything between them.
+private let mdInlineMathInlineRegex = try! NSRegularExpression(
+    pattern: "\\$([^$\n]+?)\\$")
 
 /// Phase 45-B-4 — single-pass byte sweep that decides whether a
 /// line could possibly hit any inline-pattern regex. The trigger
@@ -883,7 +957,8 @@ private func inlineNeedsRewrite(_ s: String) -> Bool {
              0x5B,  // [
              0x2A,  // *
              0x5F,  // _
-             0x7E:  // ~
+             0x7E,  // ~
+             0x24:  // $  (Phase 53c — KaTeX inline / display math)
             return true
         default:
             continue
@@ -965,6 +1040,26 @@ func renderInline(_ text: String,
         // text still renders correctly. Forward the footnote map so
         // a `[link with ^[ref]](url)` inside a label still works.
         return park("<a href=\"\(url)\">\(renderInline(label, footnoteRefs: footnoteRefs, baseDirectory: baseDirectory))</a>")
+    }
+
+    // Phase 53c — math spans. Display (`$$…$$`) goes first so
+    // `$$x$$` on one line doesn't get parsed as `$<empty>$` +
+    // literal `x` + `$<empty>$` by the inline regex. Both park
+    // the *escaped* expression inside a dedicated class so the
+    // JS-side KaTeX renderer can pick it up via
+    // `document.querySelectorAll('.math-inline, .math-display')`.
+    //
+    // Running math *before* bold / em ensures `$x_i$` doesn't
+    // get its underscore hijacked by the emphasis regex, and
+    // running it *after* code / link parking ensures
+    // `` `$x$` `` stays literal inside an inline code span.
+    s = replace(s, regex: mdInlineMathDisplayRegex) { m in
+        let expr = m[1]
+        return park("<span class=\"math-display\">\(htmlEscape(expr))</span>")
+    }
+    s = replace(s, regex: mdInlineMathInlineRegex) { m in
+        let expr = m[1]
+        return park("<span class=\"math-inline\">\(htmlEscape(expr))</span>")
     }
 
     // Stage B: bold / italic / strikethrough on the remaining text.
