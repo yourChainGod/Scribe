@@ -212,6 +212,12 @@ final class Workspace: ObservableObject {
     /// change so a moving caret on an unchanged file is free.
     let gitBlameEngine = GitBlameEngine()
 
+    /// Phase 68 — scans the active doc for `<<<<<<< … >>>>>>>`
+    /// merge conflict markers and publishes the parsed blocks.
+    /// One instance per workspace; rebinds on every selection
+    /// change so only the visible tab pays the parse cost.
+    let mergeConflictEngine = MergeConflictEngine()
+
     /// Phase 43-T — non-blocking notification queue. Replaces every
     /// `NSAlert(error:).runModal()` callsite that surfaced a pure
     /// notice (file load failed, save failed, regex compile failed,
@@ -289,6 +295,11 @@ final class Workspace: ObservableObject {
                 // engines lockstep so a tab switch updates both
                 // gutter and chip in the same tick.
                 self.refreshActiveFileGitProbe()
+                // Phase 68 — merge conflict scanner follows the
+                // active tab. Idempotent rebind so a no-op
+                // selection change (same id assigned twice for
+                // MRU stamping) doesn't churn the parser.
+                self.mergeConflictEngine.bind(to: self.current)
             }
         // Phase 43-T — route GitStatusEngine write-action errors
         // (stage/unstage/commit/pull/push/…) through the toast

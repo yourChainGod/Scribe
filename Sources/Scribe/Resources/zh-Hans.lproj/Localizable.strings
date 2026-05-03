@@ -957,6 +957,12 @@
 "settings.clipboard.retention.forever"    = "永久";
 "settings.clipboard.retention.days"       = "%d 天";
 
+// Phase 68 — 合并冲突解决器
+"merge.conflict.button.acceptCurrent"  = "接受当前";
+"merge.conflict.button.acceptIncoming" = "接受传入";
+"merge.conflict.button.acceptBoth"     = "全部保留";
+"merge.conflict.button.compare"        = "对比";
+
 // Phase 69 — 自动保存暂存区 / 崩溃恢复
 "settings.tab.autoSave"                    = "自动保存";
 "settings.autoSave.section.scratch"        = "未保存内容快照";

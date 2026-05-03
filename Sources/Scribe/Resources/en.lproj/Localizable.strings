@@ -960,6 +960,12 @@
 "settings.clipboard.retention.forever"    = "Forever";
 "settings.clipboard.retention.days"       = "%d days";
 
+// Phase 68 — merge conflict resolver
+"merge.conflict.button.acceptCurrent"  = "Accept Current";
+"merge.conflict.button.acceptIncoming" = "Accept Incoming";
+"merge.conflict.button.acceptBoth"     = "Accept Both";
+"merge.conflict.button.compare"        = "Compare";
+
 // Phase 69 — auto-save scratch / crash recovery
 "settings.tab.autoSave"                    = "Auto-save";
 "settings.autoSave.section.scratch"        = "Dirty buffer snapshot";

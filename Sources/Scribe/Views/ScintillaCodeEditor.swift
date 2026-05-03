@@ -74,6 +74,11 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         context.coordinator.configureInlineBlame(in: view)
         context.coordinator.subscribeToInlineBlame(view: view)
         context.coordinator.applyInlineBlame(in: view)
+        // Phase 68 — merge conflict banner overlay. Sink + initial
+        // paint mirror the inline-blame setup; SCN_UPDATEUI later
+        // calls repositionMergeConflictBanners so a scroll keeps
+        // the strip glued to its `<<<<<<<` line.
+        context.coordinator.subscribeToMergeConflicts(view: view)
         // Suppress the built-in English right-click menu so SwiftUI's
         // .contextMenu modifier on EditorAreaView can take over. With
         // SC_POPUP_NEVER the responder chain bubbles the right-click
@@ -261,6 +266,26 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         /// Module-internal so `Coordinator+InlineBlame.swift` can
         /// install + reset it.
         var blameSink: AnyCancellable?
+
+        /// Phase 68 — Combine sink for
+        /// `mergeConflictEngine.conflicts`. Every emit drops the
+        /// existing banner views and reattaches a fresh set above
+        /// each conflict block; the resolution path also calls
+        /// `engine.refresh()` synchronously so the banner for a
+        /// just-accepted conflict disappears in the same runloop
+        /// tick as the SCI_REPLACETARGET. Lives module-internal
+        /// so `Coordinator+MergeConflict.swift` owns the sink
+        /// lifecycle alongside the banner array.
+        var mergeConflictSink: AnyCancellable?
+
+        /// Phase 68 — banner views currently overlaid on the
+        /// Scintilla NSView, one per active conflict. Held
+        /// strongly so they stay alive across SwiftUI re-renders;
+        /// `applyMergeConflictBanners` swaps them whenever
+        /// `mergeConflictEngine.conflicts` changes. Reposition on
+        /// every `SCN_UPDATEUI` (caret / selection / scroll) so a
+        /// scroll gesture pulls the strip with the source block.
+        var mergeConflictBanners: [MergeConflictBannerView] = []
 
         /// Phase 37 — native Scintilla calltips live above SwiftUI
         /// sheets, so the editor listens directly to Text Tools
@@ -838,6 +863,12 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                     // set) so unconditional re-paint is cheaper than
                     // tracking whether the line index actually moved.
                     self.applyInlineBlame(in: view)
+                    // Phase 68 — banners are positioned in
+                    // Scintilla's content coordinates so a scroll
+                    // tick (V_SCROLL is part of the UPDATEUI mask)
+                    // shifts their y. Repositioning is cheap: at
+                    // most a handful of conflicts per file.
+                    self.repositionMergeConflictBanners(in: view)
                     // Phase 62 — repaint the matched-bracket highlight
                     // on every caret / selection tick. The function is
                     // ~O(1) when the caret isn't adjacent to a bracket
