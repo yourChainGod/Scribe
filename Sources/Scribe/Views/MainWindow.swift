@@ -335,13 +335,23 @@ struct MainWindow: View {
             .help(L10n.t("toolbar.openFile") + " (⌘O)")
 
             Button { workspace.saveCurrent() } label: {
-                // Phase 67c — swap the share-sheet “download” glyph
-                // (square.and.arrow.down) for the classic floppy.
-                // SF Symbols ships `floppydisk` since macOS 14, which
-                // matches every other editor (VS Code / Sublime /
-                // Xcode legacy) and reads as Save at a glance instead
-                // of “download to…”.
-                Image(systemName: "floppydisk")
+                // Phase 67c — Save icon saga:
+                //   1. `square.and.arrow.down` (original): reads as
+                //      "download to…" not Save.
+                //   2. `floppydisk`: classic metaphor but only
+                //      resolves on SF Symbols 7 / macOS 26+ — blank
+                //      slot on Sonoma / Sequoia.
+                //   3. `internaldrive`: claims to be macOS 13+ but
+                //      SwiftUI's `Image(systemName:)` fails to
+                //      render it on Sequoia 15.7.x; toolbar shows
+                //      empty box in practice.
+                // `tray.and.arrow.down.fill` is the Mail.app
+                // "Archive" glyph — macOS 11+ guaranteed, non-empty
+                // fill that stays legible in light themes, and its
+                // "drop something into a container" gesture reads
+                // as Save without the share-sheet baggage of option
+                // 1.
+                Image(systemName: "tray.and.arrow.down.fill")
             }
             .disabled(workspace.current == nil)
             .help(L10n.t("toolbar.save") + " (⌘S)")
