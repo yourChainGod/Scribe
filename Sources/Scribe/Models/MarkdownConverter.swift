@@ -978,6 +978,12 @@ private let mdInlineMathDisplayRegex = try! NSRegularExpression(
 /// silently chew up everything between them.
 private let mdInlineMathInlineRegex = try! NSRegularExpression(
     pattern: "\\$([^$\n]+?)\\$")
+/// Phase 53e-2 — a backslash-escaped dollar sign. Matched and
+/// parked as a literal `$` *before* the two math regexes run so
+/// prose like "Cost is \\$5 and \\$10 per item" doesn't get
+/// misread as a 10-char math span from `$5 and \$10$`.
+private let mdInlineEscapedDollarRegex = try! NSRegularExpression(
+    pattern: "\\\\\\$")
 
 /// Phase 45-B-4 — single-pass byte sweep that decides whether a
 /// line could possibly hit any inline-pattern regex. The trigger
@@ -1086,6 +1092,18 @@ func renderInline(_ text: String,
         // text still renders correctly. Forward the footnote map so
         // a `[link with ^[ref]](url)` inside a label still works.
         return park("<a href=\"\(url)\">\(renderInline(label, footnoteRefs: footnoteRefs, baseDirectory: baseDirectory))</a>")
+    }
+
+    // Phase 53e-2 — escape literal dollar signs *before* any
+    // math regex runs. `\$5` / `\$10` are the obvious prose
+    // cases; without this park the inline-math regex would
+    // devour `$5 and \$10$` as a single 10-char math span. The
+    // placeholder holds a bare `$` (no HTML escaping needed —
+    // `$` isn't an entity trigger), and the math regexes
+    // below see the placeholder byte sequence which contains
+    // no `$` character at all, so they cleanly skip.
+    s = replace(s, regex: mdInlineEscapedDollarRegex) { _ in
+        park("$")
     }
 
     // Phase 53c — math spans. Display (`$$…$$`) goes first so
