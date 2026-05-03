@@ -80,7 +80,24 @@ private struct DocumentEditorPane: View {
                         // Document; MarkdownPreviewPane's
                         // updateNSView picks viewport over
                         // caret when both are present.
-                        viewportLine: doc.viewportTopLine
+                        viewportLine: doc.viewportTopLine,
+                        // Phase 52c — reverse channel. The
+                        // preview's rAF-throttled scroll
+                        // listener ships block-level source
+                        // lines here; we funnel them into
+                        // Document.previewViewportTopLine,
+                        // which the editor's updateNSView
+                        // picks up to drive SETFIRSTVISIBLELINE.
+                        // Capturing `doc` directly (no weak
+                        // Dance) is safe because the closure
+                        // lifetime matches the pane's, which
+                        // matches the Document's — one tab, one
+                        // closure.
+                        onPreviewScroll: { line in
+                            if doc.previewViewportTopLine != line {
+                                doc.previewViewportTopLine = line
+                            }
+                        }
                     )
                     .frame(minWidth: 260)
                 }

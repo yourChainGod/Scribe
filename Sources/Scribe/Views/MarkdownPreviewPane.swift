@@ -111,6 +111,13 @@ struct MarkdownPreviewPane: NSViewRepresentable {
     /// caret move that happens during typing. Optional for the same
     /// reason as `cursorLine`.
     var viewportLine: Int? = nil
+    /// Phase 52c — callback fired every time the preview's JS
+    /// scroll listener reports a new top-block line. The pane
+    /// plumbs this straight through to the Coordinator on every
+    /// updateNSView so a late-arriving Document reference is still
+    /// seen. Passing nil disables the reverse-sync leg entirely
+    /// (e.g. when rendered outside of a document context).
+    var onPreviewScroll: ((Int) -> Void)? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -133,18 +140,36 @@ struct MarkdownPreviewPane: NSViewRepresentable {
     func makeNSView(context: Context) -> WKWebView {
         let cfg = WKWebViewConfiguration()
         cfg.preferences.javaScriptCanOpenWindowsAutomatically = false
+        // Phase 52c — JS calls `webkit.messageHandlers.scribeScroll
+        // .postMessage(line)` inside its rAF-throttled scroll
+        // handler. Register the Coordinator as the receiver so
+        // those messages flow into Document.previewViewportTopLine
+        // via onPreviewScroll. The handler name is scoped to this
+        // one pane's userContentController so there's no collision
+        // with any other WKWebView in the app.
+        cfg.userContentController.add(context.coordinator, name: "scribeScroll")
         let view = WKWebView(frame: .zero, configuration: cfg)
         view.navigationDelegate = context.coordinator
         // Translucent: lets the SwiftUI parent (which owns light/dark
         // theming) bleed through if our HTML is shorter than the pane.
         view.setValue(false, forKey: "drawsBackground")
         view.allowsBackForwardNavigationGestures = false
+        // Pick up the initial callback; updateNSView keeps it fresh
+        // on every subsequent tick so a reconnect (new Document,
+        // same pane) doesn't leave the handler pointing at the old
+        // Document's state.
+        context.coordinator.onPreviewScroll = onPreviewScroll
         loadHTML(into: view, coordinator: context.coordinator)
         return view
     }
 
     func updateNSView(_ view: WKWebView, context: Context) {
         let coord = context.coordinator
+        // Phase 52c — pane is a value type; every tick rebuilds it
+        // with a freshly-closed-over callback. Refresh the
+        // Coordinator's copy so a stale Document reference can't
+        // leak across document switches.
+        coord.onPreviewScroll = onPreviewScroll
         // Phase 51e / 52b — caret- or scroll-only changes (markdown
         // unchanged, theme unchanged) take a third, even cheaper
         // path: just fire the reveal-line JS helper. No re-render,
@@ -505,7 +530,8 @@ struct MarkdownPreviewPane: NSViewRepresentable {
 
     /// Inline `<script>` that defines the `scribeRevealLine` /
     /// `scribeBuildBlockIndex` helpers the caret- + scroll-sync
-    /// paths fire on every cursor / viewport move.
+    /// paths fire on every cursor / viewport move, plus the
+    /// preview→editor scroll reporter that backs Phase 52c.
     ///
     /// Phase 52a — the block index is now sourced from the DOM by
     /// scanning every element carrying a `data-source-line`
@@ -520,6 +546,16 @@ struct MarkdownPreviewPane: NSViewRepresentable {
     /// `scrollIntoView({block:'start', behavior:'auto'})` on it.
     /// The index is rebuilt on DOMContentLoaded and on every
     /// `#md-root` innerHTML swap via the injection path.
+    ///
+    /// Phase 52c — the inverse path: a window-level `scroll`
+    /// listener computes the top-most block currently intersecting
+    /// the viewport (`getBoundingClientRect().top >= 0`) and
+    /// forwards its `data-source-line` to the Swift side via
+    /// `webkit.messageHandlers.scribeScroll.postMessage(line)`. A
+    /// programmatic-scroll guard (`__scribeProgrammaticScroll`
+    /// timestamp) prevents an editor→preview reveal from looping
+    /// back through this handler. The listener is rAF-coalesced so
+    /// a flick-scroll can't fire dozens of messages per tick.
     ///
     /// No per-render Swift data is needed anymore: the DOM *is* the
     /// source of truth. The function accepts zero arguments beyond
@@ -538,6 +574,14 @@ struct MarkdownPreviewPane: NSViewRepresentable {
           // so mid-edit innerHTML swaps stay in sync without any
           // Swift-side plumbing.
           window.__scribeBlockIndex = [];
+          // Phase 52c — epoch (ms) of the most recent programmatic
+          // scroll. The preview→editor reporter ignores scroll
+          // events within ~250 ms of this stamp so a reveal driven
+          // by the editor's V_SCROLL can't bounce back.
+          window.__scribeProgrammaticScroll = 0;
+          // rAF-coalescing flag for the scroll reporter. Flipped
+          // when a scroll event is queued, cleared inside the rAF.
+          window.__scribeScrollRAF = 0;
           window.scribeBuildBlockIndex = function () {
             var els = document.querySelectorAll('[data-source-line]');
             var idx = [];
@@ -574,9 +618,60 @@ struct MarkdownPreviewPane: NSViewRepresentable {
             // rather than doing nothing — the user expects *some*
             // visual response to a caret move.
             if (best < 0) { best = 0; }
+            // Phase 52c — stamp the programmatic-scroll epoch
+            // *before* the scroll happens so the handler that
+            // fires on the next tick can recognise it as ours.
+            window.__scribeProgrammaticScroll = Date.now();
             idx[best].el.scrollIntoView({block: 'start', behavior: 'auto'});
             return true;
           };
+          // Phase 52c — preview→editor reporter. Finds the first
+          // block whose top edge is at or below the viewport's top
+          // (i.e. the block currently "at the top of the preview")
+          // and ships its source line to Swift.
+          window.scribeTopBlockLine = function () {
+            var idx = window.__scribeBlockIndex || [];
+            if (!idx.length) return 0;
+            // Linear scan is fine: a typical README has <500 blocks
+            // and the scroll handler runs at rAF (~60 Hz), so the
+            // worst case is a few thousand op/s. A binary search on
+            // getBoundingClientRect is possible but the constant
+            // factor dwarfs the algorithmic win.
+            for (var i = 0; i < idx.length; i++) {
+              var r = idx[i].el.getBoundingClientRect();
+              // Tiny slack (2 px) so a block flush against the top
+              // counts, protecting against sub-pixel rounding that
+              // would otherwise bump us one block early.
+              if (r.top >= -2) { return idx[i].line; }
+            }
+            // Scrolled past the last block — report the final line
+            // so the editor lands on the tail of the doc.
+            return idx[idx.length - 1].line;
+          };
+          window.scribePostScroll = function () {
+            window.__scribeScrollRAF = 0;
+            if (!window.webkit || !window.webkit.messageHandlers
+                || !window.webkit.messageHandlers.scribeScroll) {
+              return;
+            }
+            // 250 ms matches macOS Cocoa's "is this a new gesture"
+            // threshold well enough for our purposes. Any genuine
+            // user-initiated scroll that happens within 250 ms of a
+            // programmatic reveal would be indistinguishable from a
+            // rebound and is (deliberately) swallowed.
+            if (Date.now() - window.__scribeProgrammaticScroll < 250) {
+              return;
+            }
+            var line = window.scribeTopBlockLine();
+            if (line > 0) {
+              window.webkit.messageHandlers.scribeScroll.postMessage(line);
+            }
+          };
+          window.addEventListener('scroll', function () {
+            if (window.__scribeScrollRAF) { return; }
+            window.__scribeScrollRAF =
+              window.requestAnimationFrame(window.scribePostScroll);
+          }, { passive: true });
           // Initial build once the shell's DOM is ready. Subsequent
           // `#md-root.innerHTML = …` swaps have to call
           // `scribeBuildBlockIndex()` themselves (the injection
@@ -854,7 +949,7 @@ struct MarkdownPreviewPane: NSViewRepresentable {
         """
     }
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         /// Last fed source markdown — used by updateNSView to skip
         /// the reload when nothing actually changed. Written by both
         /// the full-reload path and the JS-injection path so the
@@ -881,6 +976,46 @@ struct MarkdownPreviewPane: NSViewRepresentable {
         /// short-circuits when the value matches so a steady-state
         /// re-render doesn't fire a redundant scribeRevealLine call.
         var lastViewportLine: Int = -1
+        /// Phase 52c — callback the pane refreshes every tick so JS
+        /// scroll messages reach the current Document. Optional so
+        /// previews rendered outside a document context silently
+        /// drop the reverse-sync side.
+        var onPreviewScroll: ((Int) -> Void)?
+        /// Phase 52c — last line we heard from the JS scroll
+        /// reporter. Used purely for test introspection; the
+        /// ping-pong guard is the JS-side timestamp
+        /// (`__scribeProgrammaticScroll`), not this field.
+        var lastReportedPreviewLine: Int = 0
+
+        /// Phase 52c — WKScriptMessageHandler entry point. Fires
+        /// whenever the preview's `scroll` listener decides it has
+        /// something worth telling Swift about (rAF-coalesced, and
+        /// only outside the 250 ms programmatic-scroll window).
+        /// The body is always an `NSNumber` carrying a 1-based
+        /// source line; anything else means a JS bug and we
+        /// silently drop it rather than crashing.
+        @MainActor
+        func userContentController(_ userContentController: WKUserContentController,
+                                   didReceive message: WKScriptMessage) {
+            handleScrollMessage(name: message.name, body: message.body)
+        }
+
+        /// Phase 52c — decoupled body of `userContentController`.
+        /// Extracted so XCTest can drive the handler without
+        /// synthesising a `WKScriptMessage` (which is sealed and
+        /// can't be instantiated outside WebKit). All filtering
+        /// rules — wrong name, non-NSNumber body, non-positive
+        /// line — reject silently so a misbehaving JS patch can't
+        /// crash the preview.
+        @MainActor
+        func handleScrollMessage(name: String, body: Any) {
+            guard name == "scribeScroll" else { return }
+            guard let n = body as? NSNumber else { return }
+            let line = n.intValue
+            guard line > 0 else { return }
+            lastReportedPreviewLine = line
+            onPreviewScroll?(line)
+        }
 
         // The user clicked an `<a href="…">`. We never want WKWebView
         // to actually navigate (then the preview would go blank); we

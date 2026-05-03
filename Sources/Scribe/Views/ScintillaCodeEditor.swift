@@ -156,6 +156,10 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         context.coordinator.refreshHighlightsIfNeeded()
         context.coordinator.applyGitGutter(in: view)
         context.coordinator.consumePendingScroll(in: view)
+        // Phase 52c — preview→editor scroll sync. Runs every tick;
+        // self-gates on `lastAppliedPreviewLine` so steady-state
+        // (preview hasn't moved) is a single Int compare.
+        context.coordinator.consumePreviewScrollIfNeeded(in: view)
         // Phase 35c-ii-γ — doc swap (selectedID change) reuses
         // the same view; repaint so the chip tracks the new
         // file's blame instead of stale rows from the previous tab.
@@ -532,6 +536,36 @@ struct ScintillaCodeEditor: NSViewRepresentable {
             view.message(SCI.SCROLLCARET)
         }
 
+        // MARK: - Phase 52c · preview → editor scroll sync
+
+        /// Phase 52c — last 1-based doc line we wrote via
+        /// `SETFIRSTVISIBLELINE` in response to a preview-scroll
+        /// message. The V_SCROLL bit of SCN_UPDATEUI fires *after*
+        /// our programmatic set, and we want to avoid round-tripping
+        /// that fire back into `doc.viewportTopLine` — the preview
+        /// is already at that line, re-publishing it would bounce
+        /// the preview's scribeRevealLine and cause a micro-jitter.
+        /// `0` = "no preview sync has happened yet".
+        var lastAppliedPreviewLine: Int = 0
+
+        /// Phase 52c — drain the latest `doc.previewViewportTopLine`
+        /// into the editor's viewport. Runs every `updateNSView`
+        /// tick; self-gates on the last-applied value so the
+        /// steady-state cost is one Int compare. Uses
+        /// `VISIBLEFROMDOCLINE` so soft-wrap / folding (not shipped
+        /// yet but plumbed) don't silently throw off the mapping
+        /// between doc and display lines.
+        func consumePreviewScrollIfNeeded(in view: ScintillaView) {
+            let target = doc.previewViewportTopLine
+            guard target > 0, target != lastAppliedPreviewLine else { return }
+            lastAppliedPreviewLine = target
+            let docLine0 = max(0, target - 1)
+            let visible = view.message(SCI.VISIBLEFROMDOCLINE,
+                                       wParam: UInt(bitPattern: docLine0))
+            view.message(SCI.SETFIRSTVISIBLELINE,
+                         wParam: UInt(bitPattern: Int(visible)))
+        }
+
         // MARK: - Find / Replace
 
         /// Phase 20 — enable Scintilla's native multi-cursor support.
@@ -673,7 +707,18 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                         let docLine = view.message(SCI.DOCLINEFROMVISIBLE,
                                                    wParam: UInt(firstVisible))
                         let topLine1 = Int(docLine) + 1
-                        if doc.viewportTopLine != topLine1 {
+                        // Phase 52c — break the preview→editor→
+                        // preview loop: if the line the editor just
+                        // scrolled to matches the one we applied in
+                        // `consumePreviewScrollIfNeeded`, the scroll
+                        // was driven by the preview and the preview
+                        // is already at that line. Skipping the
+                        // `doc.viewportTopLine` publish stops the
+                        // round-trip; any genuinely new scroll
+                        // carries a different docLine and falls
+                        // through.
+                        if topLine1 != lastAppliedPreviewLine,
+                           doc.viewportTopLine != topLine1 {
                             doc.viewportTopLine = topLine1
                         }
                     }

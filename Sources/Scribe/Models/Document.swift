@@ -26,6 +26,16 @@ final class Document: ObservableObject, Identifiable {
     /// viewport drag gestures, which matters when the user scrolls
     /// without moving the caret.
     @Published var viewportTopLine: Int = 1
+    /// Phase 52c — reverse channel: 1-based source line of the
+    /// block currently at the top of the *preview's* viewport.
+    /// Published by MarkdownPreviewPane's JS scroll handler via a
+    /// WKScriptMessageHandler; observed by ScintillaCodeEditor to
+    /// drive SCI_SETFIRSTVISIBLELINE so the editor follows when
+    /// the user drags the preview scroll thumb. Kept distinct from
+    /// `viewportTopLine` (editor→preview) so the two directions
+    /// don't silently fight each other over a single @Published
+    /// variable.
+    @Published var previewViewportTopLine: Int = 1
     /// User-chosen Lexilla lexer name. When set, takes precedence over the
     /// extension-based detection in `LexerCatalog`. `nil` ⇒ auto.
     @Published var lexerOverride: String?

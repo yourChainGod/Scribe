@@ -85,6 +85,16 @@ enum SCI {
     /// user enables soft-wrap, we'd silently desync the preview
     /// without it.
     static let DOCLINEFROMVISIBLE:  UInt32 = 2221
+    /// Phase 52c — inverse of DOCLINEFROMVISIBLE. Translates a
+    /// document line (0-based) into the display-line index the
+    /// folding / wrap layout would give it. Required so a
+    /// preview→editor scroll can target "first visible = this doc
+    /// line" even when soft-wrap is on.
+    static let VISIBLEFROMDOCLINE:  UInt32 = 2220
+    /// Phase 52c — jump the top of the editor's viewport to a given
+    /// display line. Used on preview→editor scroll sync to follow
+    /// the block the user dragged the preview's scroll thumb past.
+    static let SETFIRSTVISIBLELINE: UInt32 = 2613
     static let LINESONSCREEN:       UInt32 = 2370
     // Search
     static let SETTARGETSTART:   UInt32 = 2190
