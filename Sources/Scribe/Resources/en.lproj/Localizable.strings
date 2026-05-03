@@ -818,6 +818,21 @@
 "clipboard.picker.empty.title"        = "Clipboard history is empty";
 "clipboard.picker.empty.subtitle"     = "Copy something to start tracking";
 
+// Phase 59 — Character panel (special-character picker)
+"menu.edit.insertCharacter"          = "Insert Character…";
+"palette.command.insertCharacter"    = "Insert Special Character";
+"character.panel.title"              = "Insert Character";
+"character.panel.search.placeholder" = "Search characters";
+"character.panel.empty"              = "No characters match this search";
+"character.panel.clearSearch"        = "Clear search";
+"character.category.greekLower"      = "Greek (lowercase)";
+"character.category.greekUpper"      = "Greek (uppercase)";
+"character.category.math"            = "Math";
+"character.category.arrows"          = "Arrows";
+"character.category.punctuation"     = "Punctuation";
+"character.category.currency"        = "Currency";
+"common.close"                       = "Close";
+
 // Phase 41b — Generator Pack (UUID / Lorem / Password / Timestamp / QR)
 "generator.menu"        = "Generate";
 "generator.uuid"        = "UUID v4";

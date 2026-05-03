@@ -75,6 +75,14 @@ final class Workspace: ObservableObject {
     /// ▸ Transform submenu (see TextTransformCommandButtons).
     @Published var isTextToolsPresented: Bool = false
 
+    /// Phase 59 — visible while the special-character picker
+    /// sheet is attached to the main window. `MainWindow` binds
+    /// it to a `.sheet(isPresented:)`; the `Edit ▸ Insert Character…`
+    /// menu + the ⌥⌘C shortcut + the palette's
+    /// `edit.insertCharacter` entry all flip it to true, and the
+    /// sheet's Close button / `Esc` flip it back to false.
+    @Published var isCharacterPanelPresented: Bool = false
+
     /// Phase 41a — non-nil ⇒ the JWT decoder sheet is presented,
     /// pre-filled with the carried text. Bound through MainWindow
     /// via `.sheet(item:)`. Cleared by the sheet's Close action.

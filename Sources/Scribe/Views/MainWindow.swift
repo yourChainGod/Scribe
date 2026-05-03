@@ -167,6 +167,14 @@ struct MainWindow: View {
                 .environmentObject(workspace)
                 .environmentObject(findState)
         }
+        // Phase 59 — special-character picker. Insertion funnels
+        // through `findState.commands.send(.insertSnippet(_:))` so
+        // multi-cursor + read-only plumbing Just Works.
+        .sheet(isPresented: $workspace.isCharacterPanelPresented) {
+            CharacterPanelSheet()
+                .environmentObject(findState)
+                .environment(\.appTheme, appTheme)
+        }
         // Phase 41a — JWT decoder sheet. Pre-filled with the
         // current selection if the right-click / palette entry
         // was invoked while text was selected; otherwise empty

@@ -191,6 +191,24 @@ enum CommandRegistration {
             )
         }
 
+        // Phase 59 — Insert Character picker. Always registered;
+        // workspace drives the sheet state through its own @Published.
+        // Gated on `workspace.current != nil` at perform time so
+        // the palette can still *surface* the entry even when no
+        // doc is open (user feedback: "why doesn't it show up?").
+        commands.append(
+            .init(id: "edit.insertCharacter",
+                  title: localize("palette.command.insertCharacter"),
+                  subtitle: localize("menu.edit"),
+                  keywords: ["character", "symbol", "special", "greek",
+                             "math", "arrow", "unicode", "emoji", "glyph",
+                             "字符", "符号", "希腊", "数学", "箭头"],
+                  shortcutLabel: "⌥⌘C") { [weak workspace] in
+                guard let ws = workspace, ws.current != nil else { return }
+                ws.isCharacterPanelPresented = true
+            }
+        )
+
         if workspace.current != nil {
             commands.append(
                 .init(id: "view.markdownPreview",

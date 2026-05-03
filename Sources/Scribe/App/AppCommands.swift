@@ -502,6 +502,19 @@ struct ScribeCommands: Commands {
             .keyboardShortcut("v", modifiers: [.command, .option])
             .disabled(clipboardHistory.entries.isEmpty)
 
+            // Phase 59 — Insert Character picker (Greek / Math /
+            // Arrows / Punctuation / Currency). ⌥⌘C is free on the
+            // modifier map; macOS uses ⌘⌥C for "Clear Formatting"
+            // in some rich-text apps but Scribe is plain-text so
+            // the collision is harmless.
+            Button {
+                workspace.isCharacterPanelPresented = true
+            } label: {
+                Text("menu.edit.insertCharacter", bundle: .module)
+            }
+            .keyboardShortcut("c", modifiers: [.command, .option])
+            .disabled(workspace.current == nil)
+
             Divider()
 
             Button {
