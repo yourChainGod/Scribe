@@ -181,6 +181,11 @@
 "toolbar.zoomOut"        = "Zoom Out";
 "toolbar.zoomIn"         = "Zoom In";
 "toolbar.zoomReset"      = "Reset Zoom";
+// Phase 67c — Tools group
+"toolbar.commandPalette"   = "Command Palette";
+"toolbar.clipboardHistory" = "Clipboard History";
+"toolbar.gotoSymbol"       = "Go to Symbol";
+"toolbar.sourceControl"    = "Source Control";
 
 // MARK: - Find bar (single document)
 

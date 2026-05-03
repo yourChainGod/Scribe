@@ -12,6 +12,16 @@ struct MainWindow: View {
     @EnvironmentObject var prefs: EditorPreferences
     @EnvironmentObject var findState: FindState
     @EnvironmentObject var findInFiles: FindInFilesState
+    /// Phase 67c — toolbar “Tools” group entry points to the
+    /// command palette, clipboard history picker, and workspace-
+    /// wide Go to Symbol palette. Owned at the app level
+    /// (`ScribeApp` injects them as environment objects), so the
+    /// toolbar buttons fire the same controllers the menu and
+    /// keyboard shortcuts already drive.
+    @EnvironmentObject var commands: CommandRegistry
+    @EnvironmentObject var clipboardHistory: ClipboardHistoryStore
+    @EnvironmentObject var workspaceSymbolIndex: WorkspaceSymbolIndex
+    @EnvironmentObject var fileIndex: FileIndex
     let findInFilesEngine: FindInFilesEngine
     @State private var dragOver = false
     @Environment(\.appTheme) private var appTheme
@@ -104,6 +114,7 @@ struct MainWindow: View {
             sidebarToggleToolbar
             fileOpsToolbar
             editOpsToolbar
+            toolsToolbar
             zoomToolbar
         }
         // Phase 36 — hide the unified toolbar's default material so
@@ -324,7 +335,13 @@ struct MainWindow: View {
             .help(L10n.t("toolbar.openFile") + " (⌘O)")
 
             Button { workspace.saveCurrent() } label: {
-                Image(systemName: "square.and.arrow.down")
+                // Phase 67c — swap the share-sheet “download” glyph
+                // (square.and.arrow.down) for the classic floppy.
+                // SF Symbols ships `floppydisk` since macOS 14, which
+                // matches every other editor (VS Code / Sublime /
+                // Xcode legacy) and reads as Save at a glance instead
+                // of “download to…”.
+                Image(systemName: "floppydisk")
             }
             .disabled(workspace.current == nil)
             .help(L10n.t("toolbar.save") + " (⌘S)")
@@ -368,6 +385,68 @@ struct MainWindow: View {
                 .disabled(!doc.isMarkdown)
                 .help(markdownHelp(for: doc))
             }
+        }
+    }
+
+    /// Phase 67c — “Tools” group: shortcuts to the four palettes /
+    /// pickers users hit dozens of times a day. Lives between the
+    /// edit-ops group and the zoom group so the file/edit/tools/zoom
+    /// reading order matches the macOS HIG (creation → manipulation
+    /// → navigation → view).
+    ///
+    /// Each button mirrors the AppCommands menu wiring 1:1 — same
+    /// controller, same disabled rule — so users get identical
+    /// behaviour whether they click the icon, hit the keyboard
+    /// shortcut, or pick the menu item.
+    @ToolbarContentBuilder
+    private var toolsToolbar: some ToolbarContent {
+        ToolbarItemGroup(placement: .principal) {
+            // Command Palette ⌘⇧P. `command` SF Symbol is the
+            // ⌘ glyph itself — maximally legible for the user's
+            // top-frequency entry point.
+            Button {
+                PaletteWindowController.shared.toggle(registry: commands)
+            } label: {
+                Image(systemName: "command")
+            }
+            .help(L10n.t("toolbar.commandPalette") + " (⌘⇧P)")
+
+            // Clipboard History ⌥⌘V. Disabled when the FIFO is
+            // empty so the toolbar reads truthful at first launch
+            // (matches the menu-item gating in AppCommands).
+            Button {
+                ClipboardHistoryController.shared.toggle(store: clipboardHistory)
+            } label: {
+                Image(systemName: "doc.on.clipboard")
+            }
+            .disabled(clipboardHistory.entries.isEmpty)
+            .help(L10n.t("toolbar.clipboardHistory") + " (⌥⌘V)")
+
+            // Go to Symbol ⌘T. Disabled until a folder is open
+            // because the workspace-wide index has nothing to scan
+            // otherwise.
+            Button {
+                GoToSymbolController.shared.toggle(
+                    workspace: workspace,
+                    symbolIndex: workspaceSymbolIndex,
+                    fileIndex: fileIndex)
+            } label: {
+                Image(systemName: "function")
+            }
+            .disabled(fileIndex.rootURL == nil)
+            .help(L10n.t("toolbar.gotoSymbol") + " (⌘T)")
+
+            // Source Control sidebar mode. The four sidebar-mode
+            // buttons inside the sidebar header are still there;
+            // this is the toolbar-level affordance for users who
+            // collapse the sidebar between sessions.
+            Button {
+                workspace.sidebarVisible = true
+                workspace.sidebarMode = .sourceControl
+            } label: {
+                Image(systemName: "arrow.triangle.branch")
+            }
+            .help(L10n.t("toolbar.sourceControl"))
         }
     }
 

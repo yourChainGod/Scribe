@@ -179,6 +179,11 @@
 "toolbar.zoomOut"        = "缩小";
 "toolbar.zoomIn"         = "放大";
 "toolbar.zoomReset"      = "重置缩放";
+// Phase 67c — Tools group
+"toolbar.commandPalette"   = "命令面板";
+"toolbar.clipboardHistory" = "剪贴板历史";
+"toolbar.gotoSymbol"       = "跳到符号";
+"toolbar.sourceControl"    = "源代码管理";
 
 // MARK: - Find bar (single document)
 
