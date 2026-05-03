@@ -773,8 +773,29 @@ struct MarkdownPreviewPane: NSViewRepresentable {
                 // WKWebView handles the scroll natively if we return
                 // `.allow`; the full-reload path would otherwise blow
                 // scrollY away.
-                if url.absoluteString.hasPrefix("#") || url.fragment != nil,
-                   url.scheme == nil || url.host == nil {
+                //
+                // Bug fix (post-51e) — the earlier heuristic
+                // ("fragment != nil" / "hasPrefix('#')") relied on
+                // Foundation parsing `about:blank#<slug>` into scheme
+                // + fragment. It doesn't: `about:` is treated as an
+                // opaque URI so `URL.fragment` stays nil and `#` shows
+                // up percent-encoded (`%23`) in `absoluteString`. The
+                // result was every TOC / heading-anchor click falling
+                // through to `NSWorkspace.open`, which promptly popped
+                // a dialog complaining there's no app registered for
+                // `about:blank#…`.
+                //
+                // The actual invariant we want is "same-document
+                // navigation": if the clicked URL differs from the
+                // live document only by its fragment, it's an intra-
+                // page anchor and WebKit can scroll it natively.
+                // `isSameDocumentAnchor` peels off both URLs'
+                // fragments and compares the remainders. This works
+                // for the `about:blank` shell we're using today and
+                // stays correct if we ever give the preview a real
+                // baseURL (e.g. `file:///…/readme.md`).
+                if Self.isSameDocumentAnchor(target: url,
+                                             current: webView.url) {
                     decisionHandler(.allow)
                     return
                 }
@@ -783,6 +804,50 @@ struct MarkdownPreviewPane: NSViewRepresentable {
                 return
             }
             decisionHandler(.allow)
+        }
+
+        /// Returns true when `target` differs from `current` only by
+        /// fragment — i.e. clicking this link is just a scroll-to-
+        /// anchor inside the currently-rendered document.
+        ///
+        /// Works in two layers because `about:blank` is an opaque
+        /// URI that Foundation refuses to split into scheme + path
+        /// + fragment:
+        ///
+        ///   1. Fast path — canonicalise both URLs as strings,
+        ///      drop everything at the first `#` / `%23`, and
+        ///      compare the heads byte-for-byte.
+        ///   2. Reject early if the scheme differs (`mailto:`,
+        ///      `http:`, `https:` clicks need to go to NSWorkspace).
+        ///
+        /// Pulled out as a `static` so unit tests can exercise the
+        /// predicate without touching WKWebView.
+        static func isSameDocumentAnchor(target: URL,
+                                         current: URL?) -> Bool {
+            guard let current else { return false }
+            // Scheme mismatch ⇒ definitely different document.
+            // We compare case-insensitively because URL schemes are
+            // defined that way in RFC 3986 and Foundation normalises
+            // input inconsistently on the round-trip.
+            let ts = target.scheme?.lowercased()
+            let cs = current.scheme?.lowercased()
+            guard ts == cs else { return false }
+            // Strip the fragment from each absoluteString. The
+            // fragment marker is `#` in the RFC form and `%23` in
+            // the opaque/about-form Foundation emits, so scan for
+            // whichever lands first.
+            func stripFragment(_ s: String) -> String {
+                let hash = s.firstIndex(of: "#")
+                let pct = s.range(of: "%23")?.lowerBound
+                switch (hash, pct) {
+                case let (h?, p?): return String(s[..<min(h, p)])
+                case let (h?, nil): return String(s[..<h])
+                case let (nil, p?): return String(s[..<p])
+                case (nil, nil): return s
+                }
+            }
+            return stripFragment(target.absoluteString)
+                == stripFragment(current.absoluteString)
         }
 
         // After each full reload, flip `hasInitialLoad` so the next
