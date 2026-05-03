@@ -124,6 +124,6 @@ final class MarkdownConverterBaseURLTests: XCTestCase {
         // (existing tests, scratch buffers) get the exact pre-fix
         // string they used to.
         let html = MarkdownConverter.render("![logo](./logo.png)")
-        XCTAssertEqual(html, "<p data-source-line=\"1\"><img src=\"./logo.png\" alt=\"logo\"/></p>\n")
+        XCTAssertEqual(html, "<p data-source-line=\"1\"><img src=\"./logo.png\" alt=\"logo\" loading=\"lazy\" decoding=\"async\"/></p>\n")
     }
 }

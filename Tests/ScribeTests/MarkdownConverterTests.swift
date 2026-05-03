@@ -221,7 +221,7 @@ final class MarkdownConverterTests: XCTestCase {
     func testImageRendersImg() {
         let html = MarkdownConverter.render("![logo](logo.png)")
         XCTAssertEqual(html,
-                       "<p data-source-line=\"1\"><img src=\"logo.png\" alt=\"logo\"/></p>\n")
+                       "<p data-source-line=\"1\"><img src=\"logo.png\" alt=\"logo\" loading=\"lazy\" decoding=\"async\"/></p>\n")
     }
 
     // MARK: Thematic break

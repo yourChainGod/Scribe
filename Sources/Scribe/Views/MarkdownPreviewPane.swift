@@ -707,6 +707,21 @@ struct MarkdownPreviewPane: NSViewRepresentable {
             window.__scribeScrollRAF =
               window.requestAnimationFrame(window.scribePostScroll);
           }, { passive: true });
+          // Phase 53e-1 — broken-image marker. The `error` event
+          // doesn't bubble, so we listen in capture phase. We
+          // tag the failing `<img>` with a class instead of
+          // mutating src/innerHTML so a) the alt text the
+          // browser draws stays visible, b) a future repaint
+          // (theme flip → full reload, network reconnect → user
+          // re-types url) starts clean. Idempotent: re-running
+          // on the same broken img just re-adds a class it
+          // already has.
+          document.addEventListener('error', function (ev) {
+            var t = ev.target;
+            if (!t || !t.tagName) { return; }
+            if (t.tagName !== 'IMG') { return; }
+            t.classList.add('scribe-img-broken');
+          }, true);
           // Phase 53b — click handler for task-list checkboxes.
           // Uses event delegation on document so checkboxes added
           // by the incremental innerHTML swap (Phase 51b) are
@@ -999,6 +1014,23 @@ struct MarkdownPreviewPane: NSViewRepresentable {
             margin: 22px 0;
           }
           img { max-width: 100%; border-radius: 4px; }
+          /* Phase 53e-1 — visible fallback for broken image refs.
+             A 404 image normally collapses to a 0×0 placeholder
+             with the alt text invisible; here we draw a dashed
+             warning box so the user sees *exactly* which image
+             failed and what its alt was. The browser still
+             renders the alt text inside the box because the
+             <img> element retains its alt attribute. */
+          img.scribe-img-broken {
+            min-width: 80px;
+            min-height: 32px;
+            padding: 8px 12px;
+            border: 1px dashed #cc3333;
+            background: rgba(204, 51, 51, 0.08);
+            color: #cc3333;
+            font-size: 12px;
+            border-radius: 4px;
+          }
           /* Phase 32 — GFM tables. The converter emits inline
              text-align styles per cell when the alignment row asks
              for them, so all we have to ship here is the chrome. */

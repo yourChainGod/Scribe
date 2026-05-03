@@ -1045,7 +1045,16 @@ func renderInline(_ text: String,
         let alt = htmlEscape(m[1])
         let resolved = resolveResourceURL(m[2], baseDirectory: baseDirectory)
         let src = htmlEscape(resolved)
-        return park("<img src=\"\(src)\" alt=\"\(alt)\"/>")
+        // Phase 53e-1 — `loading="lazy"` defers off-screen image
+        // fetches until the user scrolls toward them; `decoding=
+        // "async"` lets WebKit decode them off the main thread.
+        // Together they roughly halve first-paint time on a doc
+        // with 20+ images. Pinned by tests so a future refactor
+        // can't silently drop them.
+        return park(
+            "<img src=\"\(src)\" alt=\"\(alt)\" "
+            + "loading=\"lazy\" decoding=\"async\"/>"
+        )
     }
     // Phase 32 — footnote reference pass *before* the link parser:
     // the `[^id]` syntax would otherwise be greedily parsed as a
