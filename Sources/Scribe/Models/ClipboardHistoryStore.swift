@@ -170,7 +170,7 @@ final class ClipboardHistoryStore: ObservableObject {
     /// value — the user didn't copy while Scribe was launching,
     /// so recording it would be surprising.
     private var lastChangeCount: Int
-    private var pollTimer: Timer?
+    private nonisolated(unsafe) var pollTimer: Timer?
 
     /// Absolute location of the on-disk JSON file. Injectable so
     /// tests can write into a tmp dir without leaking into the
@@ -210,8 +210,8 @@ final class ClipboardHistoryStore: ObservableObject {
     }
 
     deinit {
-        // Deinit runs outside the main actor; stop the timer
-        // directly — `.invalidate()` is safe from any queue.
+        // The timer token may be released during nonisolated teardown;
+        // the rest of the store's mutable state remains MainActor-bound.
         pollTimer?.invalidate()
     }
 

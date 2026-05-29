@@ -64,6 +64,10 @@ struct StartupEnvironment {
     /// twice.
     let autoReadOnly: Bool
 
+    /// UI smoke-test escape hatch: skip crash recovery detection so
+    /// screenshots never touch the user's real scratch entries.
+    let skipCrashRecoveryForTesting: Bool
+
     /// Phase 54 — Lexilla lexer name passed via `SCRIBE_AUTO_LEXER`
     /// (CLI: `-L LANG` / `--lang LANG`). When non-nil, Workspace
     /// stamps `doc.lexerOverride` on each auto-opened file so the
@@ -127,6 +131,7 @@ struct StartupEnvironment {
             autoOpenLine: line,
             autoOpenColumn: column,
             autoReadOnly: readOnly,
+            skipCrashRecoveryForTesting: env["SCRIBE_TEST_SKIP_CRASH_RECOVERY"] == "1",
             autoLexer: lexer
         )
     }

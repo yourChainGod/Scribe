@@ -32,6 +32,22 @@ final class CommandGroupedSearchTests: XCTestCase {
         return (registry, ws, prefs)
     }
 
+    private func makeRegistryWithDocument(selection: String = "") -> CommandRegistry {
+        let prefs = makePrefs()
+        let ws = Workspace(prefs: prefs, openInitialUntitled: false)
+        let doc = Document(title: "scratch.txt", text: "alpha\nbeta")
+        ws.documents = [doc]
+        ws.selectedID = doc.id
+        ws.activeTextSelection = selection
+        let findState = FindState(defaults: UserDefaults(suiteName: "scribe-grouped-selection-\(UUID().uuidString)")!)
+        let registry = CommandRegistry()
+        CommandRegistration.refresh(registry: registry,
+                                    workspace: ws,
+                                    prefs: prefs,
+                                    findState: findState)
+        return registry
+    }
+
     // MARK: - empty query
 
     func test_groupedForEmptyQuery_splitsByCategory() {
@@ -92,6 +108,34 @@ final class CommandGroupedSearchTests: XCTestCase {
         // Every id from search should show up exactly once across sections.
         XCTAssertEqual(Set(flat.map(\.command.id)),
                        Set(searchResult.map(\.command.id)))
+    }
+
+    func test_groupedForEmptyQueryWithSelection_addsSelectionSectionFirst() {
+        let registry = makeRegistryWithDocument(selection: "alpha")
+        let sections = registry.grouped(for: "")
+
+        XCTAssertTrue(registry.selectionContextActive)
+        XCTAssertEqual(sections.first?.id, "selection")
+
+        let selectionIDs = sections.first?.matches.map(\.command.id) ?? []
+        XCTAssertEqual(selectionIDs.first, "text.openTools")
+        XCTAssertTrue(selectionIDs.contains("text.urlEncode"))
+        XCTAssertTrue(selectionIDs.contains("text.decodeJWT"))
+        XCTAssertTrue(selectionIDs.contains("text.gen.qr"))
+        XCTAssertTrue(selectionIDs.contains("text.regex.playground"))
+        XCTAssertTrue(selectionIDs.contains("text.hexview"))
+
+        let remainingIDs = sections.dropFirst().flatMap(\.matches).map(\.command.id)
+        XCTAssertFalse(remainingIDs.contains("text.hexview"),
+                       "selection-affine commands should not be duplicated in their category section")
+    }
+
+    func test_groupedForEmptyQueryWithoutSelection_keepsRegularSections() {
+        let registry = makeRegistryWithDocument()
+        let sections = registry.grouped(for: "")
+
+        XCTAssertFalse(registry.selectionContextActive)
+        XCTAssertNil(sections.first { $0.id == "selection" })
     }
 
     // MARK: - non-empty query

@@ -18,6 +18,11 @@ struct ScribeCommand: Identifiable {
     let title: String
     let subtitle: String?
     let keywords: [String]
+    /// Higher values mean "more relevant when text is selected".
+    /// The registry only applies this while `selectionContextActive`
+    /// is true, so regular palette ordering stays unchanged when the
+    /// editor is just showing a caret.
+    let selectionAffinity: Int
     /// Phase 46e — pre-rendered shortcut string (e.g. "⌘S", "⌘⇧T").
     /// The Command Palette row surfaces this as a chip on the
     /// trailing edge so the user can rehearse the key binding
@@ -33,12 +38,14 @@ struct ScribeCommand: Identifiable {
          subtitle: String? = nil,
          keywords: [String] = [],
          shortcutLabel: String? = nil,
+         selectionAffinity: Int = 0,
          perform: @escaping @MainActor () -> Void) {
         self.id = id
         self.title = title
         self.subtitle = subtitle
         self.keywords = keywords
         self.shortcutLabel = shortcutLabel
+        self.selectionAffinity = selectionAffinity
         self.perform = perform
     }
 }
@@ -120,6 +127,12 @@ final class CommandRegistry: ObservableObject {
     /// order, first matching prefix wins. Empty ⇒ classic single-mode
     /// registry (every Phase < 11 caller).
     @Published var prefixRoutes: [PrefixRoute] = []
+
+    /// True while the command surface should lean toward tools that
+    /// consume the active editor selection. Hosts refresh this right
+    /// before opening the palette because `Workspace.activeTextSelection`
+    /// intentionally is not published on every caret move.
+    @Published var selectionContextActive: Bool = false
 
     /// MRU stack of command IDs. Capped at `mruCap`. Phase 50b made
     /// the contents persistable — the registry itself stays in
@@ -230,6 +243,9 @@ final class CommandRegistry: ObservableObject {
         if trimmed.isEmpty {
             return commands
                 .sorted { lhs, rhs in
+                    let lp = selectionPriority(for: lhs)
+                    let rp = selectionPriority(for: rhs)
+                    if lp != rp { return lp > rp }
                     let li = mru.firstIndex(of: lhs.id) ?? .max
                     let ri = mru.firstIndex(of: rhs.id) ?? .max
                     if li != ri { return li < ri }
@@ -239,11 +255,12 @@ final class CommandRegistry: ObservableObject {
         }
         var matches: [CommandMatch] = []
         for cmd in commands {
+            let selectionBoost = Double(selectionPriority(for: cmd))
             if let hit = Self.fuzzyMatch(query: trimmed, against: cmd.title) {
                 let mruBoost = mruIndex(of: cmd.id).map { 50.0 / Double($0 + 1) } ?? 0
                 matches.append(CommandMatch(
                     command: cmd,
-                    score: hit.score + mruBoost,
+                    score: hit.score + mruBoost + selectionBoost,
                     highlightedRanges: hit.ranges
                 ))
                 continue
@@ -255,7 +272,7 @@ final class CommandRegistry: ObservableObject {
                 let mruBoost = mruIndex(of: cmd.id).map { 25.0 / Double($0 + 1) } ?? 0
                 matches.append(CommandMatch(
                     command: cmd,
-                    score: hit.score * 0.4 + mruBoost,   // de-emphasised vs title hits
+                    score: hit.score * 0.4 + mruBoost + selectionBoost,   // de-emphasised vs title hits
                     highlightedRanges: nil
                 ))
             }
@@ -265,6 +282,10 @@ final class CommandRegistry: ObservableObject {
 
     private func mruIndex(of id: String) -> Int? {
         mru.firstIndex(of: id)
+    }
+
+    private func selectionPriority(for command: ScribeCommand) -> Int {
+        selectionContextActive ? command.selectionAffinity : 0
     }
 
     // MARK: - Grouped search (Phase 46d)
@@ -297,18 +318,27 @@ final class CommandRegistry: ObservableObject {
             var matches: [CommandMatch]
         }
         var buckets: [CategorySection: [CommandMatch]] = [:]
-        for match in flatMatches {
+        var result: [CommandSection] = []
+        let selectionMatches = flatMatches.filter { selectionPriority(for: $0.command) > 0 }
+        if !selectionMatches.isEmpty {
+            result.append(CommandSection(id: "selection",
+                                         title: L10n.t("palette.section.selection"),
+                                         matches: selectionMatches))
+        }
+
+        for match in flatMatches where selectionPriority(for: match.command) == 0 {
             let section = Self.categorySection(for: match.command)
             buckets[section, default: []].append(match)
         }
-        return CategorySection.allCases.compactMap { section -> CommandSection? in
+        result.append(contentsOf: CategorySection.allCases.compactMap { section -> CommandSection? in
             guard let matches = buckets[section], !matches.isEmpty else { return nil }
             return CommandSection(
                 id: section.rawValue,
                 title: L10n.t(section.titleKey),
                 matches: matches
             )
-        }
+        })
+        return result
     }
 
     /// Phase 46d — fixed section roster shown above command rows

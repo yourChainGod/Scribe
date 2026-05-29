@@ -51,7 +51,7 @@ private struct FileRow: View {
                 Image(systemName: node.isExpanded ? "chevron.down" : "chevron.right")
                     .font(.system(size: 9, weight: .semibold))
                     .frame(width: 12)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                     .animation(.easeOut(duration: 0.15), value: node.isExpanded)
             } else {
                 Spacer().frame(width: 12)
@@ -64,7 +64,7 @@ private struct FileRow: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .font(.system(size: 12, weight: isActive ? .medium : .regular))
-                .foregroundStyle(isActive ? Color.primary : Color.primary.opacity(0.85))
+                .foregroundStyle(isActive ? appTheme.primaryText : appTheme.secondaryText)
             Spacer()
         }
         .padding(.leading, CGFloat(depth) * 12 + 6)
@@ -129,9 +129,9 @@ private struct FileRow: View {
             // Same tint family as the sidebar mode switcher's
             // active pill so the "what's selected where" reading
             // is consistent across the sidebar.
-            return appTheme.accent.opacity(0.14)
+            return appTheme.chromeActiveFill
         } else if hover {
-            return Color.primary.opacity(0.06)
+            return appTheme.chromeHoverFill
         } else {
             return Color.clear
         }

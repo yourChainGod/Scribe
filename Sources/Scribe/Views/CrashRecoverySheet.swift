@@ -57,11 +57,11 @@ struct CrashRecoverySheet: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("crashRecovery.title", bundle: .module)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(appTheme.primaryText)
                     .fixedSize(horizontal: false, vertical: true)
                 Text("crashRecovery.body", bundle: .module)
                     .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
@@ -85,7 +85,7 @@ struct CrashRecoverySheet: View {
                             "\(selectedIDs.count)" as NSString,
                             "\(prompt.items.count)" as NSString))
                     .font(.system(size: 11, weight: .regular))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
             }
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 4) {
@@ -164,7 +164,7 @@ private struct CrashRecoveryRow: View {
                 HStack(spacing: 6) {
                     Text(item.title)
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(appTheme.primaryText)
                         .lineLimit(1)
                         .truncationMode(.middle)
                     if item.externalChanged {
@@ -179,17 +179,17 @@ private struct CrashRecoveryRow: View {
                 if let path = item.originalPath {
                     Text(path)
                         .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(appTheme.secondaryText)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 } else {
                     Text("crashRecovery.untitled", bundle: .module)
                         .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(appTheme.secondaryText)
                 }
                 Text(relativeSavedAt)
                     .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.tertiaryText)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }

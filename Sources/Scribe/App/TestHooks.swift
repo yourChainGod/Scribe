@@ -75,10 +75,8 @@ enum TestHooks {
                                    ctx: TestHookContext) {
         guard env["SCRIBE_TEST_HEX"] == "1" else { return }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-            guard let doc = ctx.workspace.current else { return }
-            let data = Data(doc.text.utf8)
-            ctx.workspace.hexViewerSheet = HexViewerRequest(
-                title: doc.title, data: data)
+            ctx.workspace.hexViewerSheet = HexViewerRequest.currentDocument(
+                workspace: ctx.workspace)
         }
     }
 

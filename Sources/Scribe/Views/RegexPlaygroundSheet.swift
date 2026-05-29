@@ -37,6 +37,7 @@ struct RegexPlaygroundSheet: View {
     @State private var matches: [RegexPlayground.Match] = []
     @State private var replacementPreview: String = ""
     @State private var errorMessage: String?
+    @Environment(\.appTheme) private var appTheme
 
     init(request: RegexSheetRequest, onClose: @escaping () -> Void) {
         self.request = request
@@ -73,7 +74,8 @@ struct RegexPlaygroundSheet: View {
             statusRow
         }
         .padding(20)
-        .frame(width: 720, height: 560)
+        .frame(width: 720)
+        .background(appTheme.windowBackground)
         .onAppear { recompute() }
         .onChange(of: pattern)  { _, _ in recompute() }
         .onChange(of: subject)  { _, _ in recompute() }
@@ -117,7 +119,10 @@ struct RegexPlaygroundSheet: View {
             Text("regex.subject", bundle: .module).font(.subheadline)
             TextEditor(text: $subject)
                 .font(.system(.body, design: .monospaced))
-                .border(Color.secondary.opacity(0.3))
+                .foregroundStyle(appTheme.primaryText)
+                .scrollContentBackground(.hidden)
+                .background(appTheme.codeSurface)
+                .border(appTheme.chromeBorder)
         }
         .frame(maxWidth: .infinity)
     }
@@ -129,7 +134,7 @@ struct RegexPlaygroundSheet: View {
                 VStack(alignment: .leading, spacing: 8) {
                     if matches.isEmpty {
                         Text("regex.matches.none", bundle: .module)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(appTheme.secondaryText)
                             .padding(.vertical, 4)
                     } else {
                         ForEach(matches.indices, id: \.self) { idx in
@@ -140,8 +145,8 @@ struct RegexPlaygroundSheet: View {
                 .padding(8)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .background(Color(NSColor.textBackgroundColor))
-            .border(Color.secondary.opacity(0.3))
+            .background(appTheme.codeSurface)
+            .border(appTheme.chromeBorder)
         }
         .frame(maxWidth: .infinity)
     }
@@ -154,11 +159,12 @@ struct RegexPlaygroundSheet: View {
                 Text(verbatim: match.value)
                     .font(.system(.body, design: .monospaced))
                     .padding(.horizontal, 4)
-                    .background(Color.yellow.opacity(0.4))
+                    .foregroundStyle(appTheme.primaryText)
+                    .background(appTheme.matchHighlight)
                 Spacer()
                 Text(verbatim: "[\(match.range.location), \(match.range.length)]")
                     .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
             }
             if match.groups.count > 1 {
                 ForEach(1..<match.groups.count, id: \.self) { gi in
@@ -166,9 +172,10 @@ struct RegexPlaygroundSheet: View {
                         Text(verbatim: "$\(gi)")
                             .font(.caption.monospacedDigit())
                             .frame(width: 22, alignment: .trailing)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(appTheme.secondaryText)
                         Text(verbatim: match.groups[gi] ?? "—")
                             .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(appTheme.primaryText)
                     }
                 }
             }
@@ -188,11 +195,12 @@ struct RegexPlaygroundSheet: View {
                     .font(.system(.body, design: .monospaced))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(6)
+                    .foregroundStyle(appTheme.primaryText)
                     .textSelection(.enabled)
             }
             .frame(minHeight: 64, maxHeight: 96)
-            .background(Color(NSColor.textBackgroundColor))
-            .border(Color.secondary.opacity(0.3))
+            .background(appTheme.codeSurface)
+            .border(appTheme.chromeBorder)
         }
     }
 
@@ -205,7 +213,7 @@ struct RegexPlaygroundSheet: View {
             } else {
                 Text(L10n.t("regex.status.matchCount", matches.count))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
             }
             Spacer()
         }

@@ -481,6 +481,7 @@
 // MARK: - Command Palette section headers (Phase 46d)
 
 "palette.section.file"       = "文件";
+"palette.section.selection"  = "选区";
 "palette.section.view"       = "视图";
 "palette.section.text"       = "文本工具";
 "palette.section.tabs"       = "标签页";
@@ -941,6 +942,7 @@
 // Phase 44 — Hex Viewer
 "hexview.menu"      = "十六进制查看…";
 "hexview.title"     = "十六进制查看器";
+"hexview.selectionTitle" = "%@ 中的选区";
 "hexview.size"      = "%lld 字节";
 "hexview.truncated" = "仅显示前 %lld 字节";
 "palette.command.hexview" = "十六进制查看…";

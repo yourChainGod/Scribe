@@ -70,6 +70,23 @@ final class CommandRegistryRoutingTests: XCTestCase {
         XCTAssertEqual(allMain, ["f1"])
     }
 
+    func test_searchEmpty_prioritizesSelectionAffinityOnlyWhenSelectionContextActive() {
+        let registry = CommandRegistry()
+        let recent = ScribeCommand(id: "recent", title: "A Recent Command", perform: {})
+        let selectionTool = ScribeCommand(id: "selection.tool",
+                                          title: "Z Selection Tool",
+                                          selectionAffinity: 100,
+                                          perform: {})
+        registry.commands = [selectionTool, recent]
+        registry.seedMRU(["recent"])
+
+        XCTAssertEqual(registry.search("").map(\.command.id), ["recent", "selection.tool"])
+
+        registry.selectionContextActive = true
+
+        XCTAssertEqual(registry.search("").map(\.command.id), ["selection.tool", "recent"])
+    }
+
     // MARK: - placeholder
 
     func test_activeRoute_placeholderIsCarried() {

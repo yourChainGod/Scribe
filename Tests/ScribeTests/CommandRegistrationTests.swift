@@ -201,6 +201,53 @@ final class CommandRegistrationTests: XCTestCase {
         XCTAssertTrue(workspace.isTextToolsPresented)
     }
 
+    func test_hexViewerCommand_usesActiveSelectionWhenAvailable() {
+        let prefs = makePrefs()
+        let workspace = Workspace(prefs: prefs, openInitialUntitled: false)
+        let doc = Document(title: "scratch.txt", text: "whole document")
+        workspace.documents = [doc]
+        workspace.selectedID = doc.id
+        workspace.activeTextSelection = "selected\nbytes"
+        let findState = FindState(defaults: UserDefaults(suiteName: "scribe-command-hex-\(UUID().uuidString)")!)
+
+        let registry = CommandRegistry()
+        CommandRegistration.refresh(registry: registry,
+                                    workspace: workspace,
+                                    prefs: prefs,
+                                    findState: findState,
+                                    localize: { key in
+                                        key == "hexview.selectionTitle" ? "selection:%@" : testLocalizer(key)
+                                    })
+
+        let command = registry.commands.first { $0.id == "text.hexview" }
+        command?.perform()
+
+        XCTAssertEqual(workspace.hexViewerSheet?.title, "selection:scratch.txt")
+        XCTAssertEqual(workspace.hexViewerSheet?.data, Data("selected\nbytes".utf8))
+    }
+
+    func test_hexViewerCommand_fallsBackToDocumentWithoutSelection() {
+        let prefs = makePrefs()
+        let workspace = Workspace(prefs: prefs, openInitialUntitled: false)
+        let doc = Document(title: "scratch.txt", text: "whole document")
+        workspace.documents = [doc]
+        workspace.selectedID = doc.id
+        let findState = FindState(defaults: UserDefaults(suiteName: "scribe-command-hex-doc-\(UUID().uuidString)")!)
+
+        let registry = CommandRegistry()
+        CommandRegistration.refresh(registry: registry,
+                                    workspace: workspace,
+                                    prefs: prefs,
+                                    findState: findState,
+                                    localize: testLocalizer)
+
+        let command = registry.commands.first { $0.id == "text.hexview" }
+        command?.perform()
+
+        XCTAssertEqual(workspace.hexViewerSheet?.title, "scratch.txt")
+        XCTAssertEqual(workspace.hexViewerSheet?.data, Data("whole document".utf8))
+    }
+
     // Phase 40 retired the per-mode "Transform Workbench" palette
     // entry — line shuffle and base/encoding transforms now live
     // exclusively in the editor's right-click ▸ Transform submenu.

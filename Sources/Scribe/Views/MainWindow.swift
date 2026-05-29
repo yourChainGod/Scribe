@@ -430,7 +430,7 @@ struct MainWindow: View {
             // ⌘ glyph itself — maximally legible for the user's
             // top-frequency entry point.
             Button {
-                PaletteWindowController.shared.toggle(registry: commands)
+                toggleCommandPalette()
             } label: {
                 Image(systemName: "command")
             }
@@ -486,7 +486,7 @@ struct MainWindow: View {
 
             Text("\(Int(prefs.fontSize))")
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
                 .monospacedDigit()
                 .frame(minWidth: 22)
                 .help(L10n.t("toolbar.zoomReset"))
@@ -508,6 +508,11 @@ struct MainWindow: View {
         if session.leftURL != nil, session.rightURL != nil {
             workspace.compareSession = session
         }
+    }
+
+    private func toggleCommandPalette() {
+        commands.selectionContextActive = !workspace.activeTextSelection.isEmpty
+        PaletteWindowController.shared.toggle(registry: commands)
     }
 
     private func showFindInFiles() {
@@ -615,16 +620,18 @@ private struct ChromeToolbarButton: View {
 
     private var backgroundColor: Color {
         if isDisabled { return .clear }
-        if isActive { return appTheme.accent.opacity(0.14) }
-        if hover { return Color.primary.opacity(0.06) }
+        if isActive { return appTheme.chromeActiveFill }
+        if hover { return appTheme.chromeHoverFill }
         return .clear
     }
 }
 
 private struct ChromeToolbarDivider: View {
+    @Environment(\.appTheme) private var appTheme
+
     var body: some View {
         Rectangle()
-            .fill(Color.primary.opacity(0.12))
+            .fill(appTheme.chromeBorder)
             .frame(width: 1, height: 16)
             .padding(.horizontal, 4)
     }
@@ -653,11 +660,11 @@ private struct ExternalChangeSheet: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(L10n.t("alert.diskChanged.title", prompt.title as NSString))
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(appTheme.primaryText)
                         .fixedSize(horizontal: false, vertical: true)
                     Text("alert.diskChanged.body", bundle: .module)
                         .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(appTheme.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }

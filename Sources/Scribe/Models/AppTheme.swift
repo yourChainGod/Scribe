@@ -94,4 +94,25 @@ extension AppTheme {
     var separator: Color          { Color(rgb: ui.uiSeparator) }
     /// Subtle row / list-item highlight (hover, non-focused selection).
     var selection: Color          { Color(rgb: ui.uiSelection) }
+    /// Editor-side background exposed for SwiftUI surfaces that border the editor.
+    var editorBackground: Color   { Color(rgb: editor.background) }
+    /// Editor-side foreground for selected tabs/previews that sit on editorBackground.
+    var editorForeground: Color   { Color(rgb: editor.foreground) }
+
+    /// Hover fill used by chrome rows and icon buttons.
+    var chromeHoverFill: Color    { selection.opacity(isDarkUI ? 0.72 : 0.78) }
+    /// Very quiet fill for badges and preview wells.
+    var chromeSubtleFill: Color   { selection.opacity(isDarkUI ? 0.55 : 0.62) }
+    /// Active row/pill fill that keeps accent text readable in dark palettes.
+    var chromeActiveFill: Color   { accent.opacity(isDarkUI ? 0.22 : 0.16) }
+    /// Control borders that remain visible against both panel and editor backgrounds.
+    var chromeBorder: Color       { separator.opacity(isDarkUI ? 0.90 : 0.78) }
+    /// Disabled labels/icons; kept above the old hard-coded gray opacity in dark UI.
+    var disabledText: Color       { tertiaryText.opacity(isDarkUI ? 0.78 : 0.68) }
+    /// Code/text wells used in sheets outside Scintilla.
+    var codeSurface: Color        { editorBackground.opacity(isDarkUI ? 0.92 : 0.58) }
+    /// Inline search/match highlight that does not become neon yellow in dark themes.
+    var matchHighlight: Color {
+        isDarkUI ? accent.opacity(0.36) : Color.yellow.opacity(0.48)
+    }
 }

@@ -274,14 +274,14 @@ private struct CommandRow: View {
                 .background(
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
                         .fill(isSelected
-                              ? appTheme.accent.opacity(0.16)
-                              : Color.primary.opacity(0.05))
+                              ? appTheme.chromeActiveFill
+                              : appTheme.chromeSubtleFill)
                 )
 
             VStack(alignment: .leading, spacing: 2) {
                 highlightedTitle
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(isSelected ? Color.primary : Color.primary.opacity(0.9))
+                    .foregroundStyle(appTheme.primaryText)
                     .lineLimit(1)
                 if let detail = presentation.detail {
                     Text(detail)
@@ -301,7 +301,7 @@ private struct CommandRow: View {
                     .padding(.vertical, 3)
                     .background(
                         Capsule()
-                            .fill(Color.primary.opacity(isSelected ? 0.08 : 0.05))
+                            .fill(appTheme.chromeSubtleFill)
                     )
             }
             // Phase 46e — shortcut chip. Monospaced mini pill at
@@ -318,7 +318,7 @@ private struct CommandRow: View {
                     .padding(.vertical, 2)
                     .background(
                         RoundedRectangle(cornerRadius: 4, style: .continuous)
-                            .fill(Color.primary.opacity(isSelected ? 0.10 : 0.06))
+                            .fill(appTheme.chromeSubtleFill)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 4, style: .continuous)
@@ -336,7 +336,7 @@ private struct CommandRow: View {
             // every other "active" state in the app's chrome
             // (sidebar mode pill, file tree active row).
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(isSelected ? appTheme.accent.opacity(0.14) : Color.clear)
+                .fill(isSelected ? appTheme.chromeActiveFill : Color.clear)
                 .padding(.horizontal, 7)
         )
         .animation(.easeOut(duration: 0.12), value: isSelected)

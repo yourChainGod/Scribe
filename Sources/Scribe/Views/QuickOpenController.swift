@@ -51,6 +51,7 @@ final class QuickOpenController {
               fileIndex: FileIndex,
               outline: SymbolOutline,
               initialQuery: String = "") {
+        refreshCommandPaletteSelectionContext(workspace: workspace)
         rebuild(workspace: workspace, fileIndex: fileIndex)
         rebuildPrefixRoutes(workspace: workspace, outline: outline)
         PaletteWindowController.shared.show(
@@ -65,6 +66,7 @@ final class QuickOpenController {
     func toggle(workspace: Workspace,
                 fileIndex: FileIndex,
                 outline: SymbolOutline) {
+        refreshCommandPaletteSelectionContext(workspace: workspace)
         rebuild(workspace: workspace, fileIndex: fileIndex)
         rebuildPrefixRoutes(workspace: workspace, outline: outline)
         PaletteWindowController.shared.toggle(
@@ -76,6 +78,10 @@ final class QuickOpenController {
     private func filePlaceholder(fileIndex: FileIndex) -> String {
         Self.filePlaceholder(isIndexing: fileIndex.isIndexing,
                              rootURL: fileIndex.rootURL)
+    }
+
+    private func refreshCommandPaletteSelectionContext(workspace: Workspace) {
+        commandPaletteRegistry?.selectionContextActive = !workspace.activeTextSelection.isEmpty
     }
 
     static func filePlaceholder(isIndexing: Bool,

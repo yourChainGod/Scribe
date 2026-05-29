@@ -483,6 +483,7 @@
 // MARK: - Command Palette section headers (Phase 46d)
 
 "palette.section.file"       = "File";
+"palette.section.selection"  = "Selection";
 "palette.section.view"       = "View";
 "palette.section.text"       = "Text";
 "palette.section.tabs"       = "Tabs";
@@ -944,6 +945,7 @@
 // Phase 44 — Hex Viewer
 "hexview.menu"      = "View as Hex…";
 "hexview.title"     = "Hex Viewer";
+"hexview.selectionTitle" = "Selection in %@";
 "hexview.size"      = "%lld bytes";
 "hexview.truncated" = "Showing first %lld bytes";
 "palette.command.hexview" = "View as Hex…";

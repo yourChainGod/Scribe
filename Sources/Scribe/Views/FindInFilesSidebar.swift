@@ -35,7 +35,7 @@ struct FindInFilesSidebar: View {
             // pair shape is repeated in every row for visual rhythm.
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                     .font(.system(size: 12))
                     .frame(width: 14)
                 TextField(L10n.t("find.placeholder"), text: $find.query)
@@ -51,7 +51,7 @@ struct FindInFilesSidebar: View {
             // rectangle.stack.badge.minus, which leaned negative.
             HStack(spacing: 6) {
                 Image(systemName: "arrow.triangle.2.circlepath")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                     .font(.system(size: 12))
                     .frame(width: 14)
                 TextField(L10n.t("find.replacePlaceholder"), text: $find.replacement)
@@ -64,7 +64,7 @@ struct FindInFilesSidebar: View {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 14))
                         .foregroundStyle(replaceDisabled
-                                         ? Color.secondary.opacity(0.5)
+                                         ? appTheme.disabledText
                                          : appTheme.accent)
                 }
                 .help(L10n.t("finfiles.button.replaceAll"))
@@ -107,7 +107,7 @@ struct FindInFilesSidebar: View {
                     Image(systemName: "arrow.right.circle.fill")
                         .font(.system(size: 14))
                         .foregroundStyle(searchDisabled
-                                         ? Color.secondary.opacity(0.5)
+                                         ? appTheme.disabledText
                                          : appTheme.accent)
                 }
                 .buttonStyle(.plain)
@@ -143,7 +143,7 @@ struct FindInFilesSidebar: View {
                               text: Binding<String>) -> some View {
         HStack(spacing: 6) {
             Image(systemName: systemImage)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(appTheme.tertiaryText)
                 .font(.system(size: 11))
                 .frame(width: 14)
             TextField(placeholder, text: text)
@@ -190,7 +190,7 @@ struct FindInFilesSidebar: View {
                             find.filesWithMatches,
                             find.filesScanned))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                 // Phase 16/17: surface the selected slice when the user
                 // has deselected anything — file or individual line.
                 // Otherwise the summary stays a single line — no UI
@@ -203,7 +203,7 @@ struct FindInFilesSidebar: View {
                                   find.selectedMatchCount,
                                   find.selectedURLs.count))
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(appTheme.tertiaryText)
                 }
             }
             .padding(.horizontal, 12)
@@ -211,7 +211,7 @@ struct FindInFilesSidebar: View {
         } else if find.hasRun && !find.isSearching {
             Text("finfiles.summary.empty", bundle: .module)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
         } else {
@@ -367,6 +367,7 @@ private struct FileGroup: View {
     let isLineSelected: (Int) -> Bool
     let toggleLineSelection: (Int) -> Void
     let onPick: (LineMatch) -> Void
+    @Environment(\.appTheme) private var appTheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -392,11 +393,11 @@ private struct FileGroup: View {
                 Button(action: toggleExpanded) {
                     HStack(spacing: 4) {
                         Image(systemName: expanded ? "chevron.down" : "chevron.right")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(appTheme.secondaryText)
                             .font(.system(size: 9, weight: .semibold))
                             .frame(width: 10)
                         Image(systemName: "doc.text")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(appTheme.secondaryText)
                             .font(.system(size: 11))
                         Text(file.url.lastPathComponent)
                             .font(.system(size: 12, weight: .semibold))
@@ -404,20 +405,20 @@ private struct FileGroup: View {
                             .truncationMode(.middle)
                             // Greyed-out title gives a second visual
                             // cue that this file won't be touched.
-                            .foregroundStyle(isSelected ? .primary : .secondary)
+                            .foregroundStyle(isSelected ? appTheme.primaryText : appTheme.disabledText)
                         Text(file.url.deletingLastPathComponent().lastPathComponent)
                             .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(appTheme.tertiaryText)
                             .lineLimit(1)
                         Spacer()
                         Text("\(file.matches.count)")
                             .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(appTheme.secondaryText)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(
                                 Capsule()
-                                    .fill(Color.primary.opacity(0.08))
+                                    .fill(appTheme.chromeSubtleFill)
                             )
                     }
                     .contentShape(Rectangle())
@@ -452,6 +453,7 @@ private struct MatchRow: View {
     let isSelected: Bool
     let toggleSelection: () -> Void
     @State private var hover = false
+    @Environment(\.appTheme) private var appTheme
 
     var body: some View {
         HStack(alignment: .top, spacing: 6) {
@@ -474,12 +476,13 @@ private struct MatchRow: View {
             .frame(width: 18)
             Text("\(match.lineNumber)")
                 .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(appTheme.tertiaryText)
                 .frame(width: 24, alignment: .trailing)
             Text(highlighted)
                 .font(.system(size: 11, design: .monospaced))
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .foregroundStyle(appTheme.primaryText)
                 // Subtle dim on excluded rows so the user can scan
                 // for "what gets touched" at a glance.
                 .opacity(isSelected ? 1.0 : 0.45)
@@ -489,7 +492,7 @@ private struct MatchRow: View {
         .padding(.vertical, 3)
         .background(
             RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(hover ? Color.primary.opacity(0.06) : Color.clear)
+                .fill(hover ? appTheme.chromeHoverFill : Color.clear)
                 .padding(.horizontal, 4)
         )
         .contentShape(Rectangle())
@@ -506,7 +509,8 @@ private struct MatchRow: View {
                                                   utf16Lower: range.lowerBound,
                                                   utf16Upper: range.upperBound) else { continue }
             attributed[attrRange].font = .system(size: 11, weight: .bold, design: .monospaced)
-            attributed[attrRange].backgroundColor = .yellow.opacity(0.6)
+            attributed[attrRange].foregroundColor = appTheme.primaryText
+            attributed[attrRange].backgroundColor = appTheme.matchHighlight
         }
         return attributed
     }

@@ -163,7 +163,7 @@ struct DocumentMapPane: NSViewRepresentable {
         /// Click handler installed on the underlying NSView. Lives
         /// here (not on the SwiftUI representable) so dismantle
         /// can pull it cleanly via `monitor` removal.
-        private var clickMonitor: Any?
+        private nonisolated(unsafe) var clickMonitor: Any?
 
         init(doc: Document, prefs: EditorPreferences) {
             self.doc = doc

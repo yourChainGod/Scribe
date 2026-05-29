@@ -81,13 +81,13 @@ private struct TabItem: View {
                     ? "pin.fill"
                     : iconName(for: doc.languageGuess))
                 .font(.system(size: 11, weight: .regular))
-                .foregroundStyle(isSelected ? Color.primary.opacity(0.85) : Color.secondary)
+                .foregroundStyle(isSelected ? appTheme.editorForeground.opacity(0.88) : appTheme.secondaryText)
                 .rotationEffect(doc.isPinned ? .degrees(45) : .zero)
 
             Text(doc.title)
                 .font(.system(size: 12, weight: isSelected ? .medium : .regular))
                 .lineLimit(1)
-                .foregroundStyle(isSelected ? Color.primary : Color.secondary)
+                .foregroundStyle(isSelected ? appTheme.editorForeground : appTheme.secondaryText)
 
             // Trailing widget — either dirty dot OR close button,
             // not both at once. Dirty dot melts into the close
@@ -103,11 +103,11 @@ private struct TabItem: View {
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(closeHover ? Color.primary : Color.secondary)
+                            .foregroundStyle(closeHover ? appTheme.primaryText : appTheme.secondaryText)
                             .frame(width: 16, height: 16)
                             .background(
                                 RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                    .fill(closeHover ? Color.primary.opacity(0.10) : Color.clear)
+                                    .fill(closeHover ? appTheme.chromeHoverFill : Color.clear)
                             )
                     }
                     .buttonStyle(.plain)
@@ -265,9 +265,9 @@ private struct TabItem: View {
 
     private var backgroundFill: Color {
         if isSelected {
-            return Color(rgb: appTheme.editor.background)
+            return appTheme.editorBackground
         } else if hover {
-            return Color.primary.opacity(0.05)
+            return appTheme.chromeHoverFill
         } else {
             return Color.clear
         }
@@ -303,12 +303,13 @@ private struct TabDragPreview: View {
         HStack(spacing: 6) {
             Image(systemName: iconName)
                 .font(.system(size: 11, weight: .regular))
-                .foregroundStyle(Color.primary.opacity(0.85))
+                .foregroundStyle(appTheme.primaryText.opacity(0.88))
                 .rotationEffect(iconRotated ? .degrees(45) : .zero)
             Text(title)
                 .font(.system(size: 12, weight: .medium))
                 .lineLimit(1)
                 .truncationMode(.middle)
+                .foregroundStyle(appTheme.primaryText)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)

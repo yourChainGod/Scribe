@@ -258,16 +258,17 @@ struct FindBar: View {
     private struct CloseButton: View {
         let action: () -> Void
         @State private var hover = false
+        @Environment(\.appTheme) private var appTheme
 
         var body: some View {
             Button(action: action) {
                 Image(systemName: "xmark")
                     .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(hover ? Color.primary : Color.secondary)
+                    .foregroundStyle(hover ? appTheme.primaryText : appTheme.secondaryText)
                     .frame(width: 18, height: 18)
                     .background(
                         Circle()
-                            .fill(hover ? Color.primary.opacity(0.10) : Color.clear)
+                            .fill(hover ? appTheme.chromeHoverFill : Color.clear)
                     )
             }
             .buttonStyle(.plain)

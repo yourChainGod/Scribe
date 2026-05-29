@@ -84,6 +84,9 @@ struct ScribeApp: App {
         //      there's something to restore — quiet first launch.
         if !preferences.autoSaveScratchEnabled {
             ws.scratchStore.clearAll()
+        } else if env.skipCrashRecoveryForTesting {
+            // Screenshot/test launches should not surface or mutate
+            // the user's real crash-recovery backlog.
         } else {
             ws.scratchStore.pruneExpired(
                 retentionDays: preferences.autoSaveScratchRetentionDays)

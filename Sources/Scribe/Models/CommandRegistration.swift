@@ -40,6 +40,7 @@ enum CommandRegistration {
                                                     fileIndex: fileIndex,
                                                     workspaceSymbolIndex: workspaceSymbolIndex,
                                                     localize: localize))
+        registry.selectionContextActive = !workspace.activeTextSelection.isEmpty
         registry.commands = batch
     }
 
@@ -295,11 +296,17 @@ enum CommandRegistration {
                                      prefs: EditorPreferences,
                                      localize: (String) -> String) -> [ScribeCommand] {
         guard workspace.current != nil, let findState else { return [] }
+        let selectionWorkbenchAffinity = 140
+        let selectionSheetAffinity = 130
+        let selectionTransformAffinity = 110
+        let selectionLineAffinity = 90
+        let hexSelectionTitleFormat = localize("hexview.selectionTitle")
         var commands: [ScribeCommand] = [
             ScribeCommand(id: "text.openTools",
                           title: localize("palette.command.text.openTools"),
                           subtitle: localize("palette.badge.text"),
-                          keywords: ["text tools", "text", "tools", "split", "merge", "columns", "workbench"]) {
+                          keywords: ["text tools", "text", "tools", "split", "merge", "columns", "workbench"],
+                          selectionAffinity: selectionWorkbenchAffinity) {
                 workspace.isTextToolsPresented = true
             }
         ]
@@ -351,7 +358,8 @@ enum CommandRegistration {
             ScribeCommand(id: spec.id,
                           title: localize(spec.titleKey),
                           subtitle: localize("palette.badge.text"),
-                          keywords: spec.keywords) {
+                          keywords: spec.keywords,
+                          selectionAffinity: selectionTransformAffinity) {
                 findState.commands.send(.transformSelection(spec.action))
             }
         })
@@ -359,7 +367,8 @@ enum CommandRegistration {
             ScribeCommand(id: "text.shuffleLines",
                           title: localize("palette.command.text.shuffleLines"),
                           subtitle: localize("palette.badge.text"),
-                          keywords: ["text", "transform", "shuffle", "random", "lines", "row", "rows"]) {
+                          keywords: ["text", "transform", "shuffle", "random", "lines", "row", "rows"],
+                          selectionAffinity: selectionTransformAffinity) {
                 findState.commands.send(.transformSelection(.shuffleLines(seed: UInt64.random(in: UInt64.min...UInt64.max))))
             }
         )
@@ -370,7 +379,8 @@ enum CommandRegistration {
             ScribeCommand(id: "text.decodeJWT",
                           title: localize("palette.command.text.decodeJWT"),
                           subtitle: localize("palette.badge.text"),
-                          keywords: ["text", "transform", "jwt", "json", "web", "token", "decode", "claims"]) {
+                          keywords: ["text", "transform", "jwt", "json", "web", "token", "decode", "claims"],
+                          selectionAffinity: selectionSheetAffinity) {
                 workspace.jwtSheet = JWTSheetRequest(prefill: workspace.activeTextSelection)
             }
         )
@@ -518,7 +528,8 @@ enum CommandRegistration {
             id: "text.gen.qr",
             title: localize("palette.command.generator.qr"),
             subtitle: localize("palette.badge.text"),
-            keywords: ["qr", "qrcode", "二维码"]) {
+            keywords: ["qr", "qrcode", "二维码"],
+            selectionAffinity: selectionSheetAffinity) {
             let prefill = workspace.activeTextSelection
             workspace.qrSheet = QRSheetRequest(prefill: prefill)
         })
@@ -528,7 +539,8 @@ enum CommandRegistration {
             title: localize("palette.command.regex.playground"),
             subtitle: localize("palette.badge.text"),
             keywords: ["regex", "regexp", "regular", "expression",
-                       "match", "test", "正则"]) {
+                       "match", "test", "正则"],
+            selectionAffinity: selectionSheetAffinity) {
             let prefill = workspace.activeTextSelection
             workspace.regexSheet = RegexSheetRequest(prefillSubject: prefill)
         })
@@ -538,18 +550,19 @@ enum CommandRegistration {
             title: localize("palette.command.hexview"),
             subtitle: localize("palette.badge.text"),
             keywords: ["hex", "hexadecimal", "binary", "dump",
-                       "xxd", "hexdump", "十六进制"]) {
-            guard let doc = workspace.current else { return }
-            let data = Data(doc.text.utf8)
-            workspace.hexViewerSheet = HexViewerRequest(
-                title: doc.title, data: data)
+                       "xxd", "hexdump", "十六进制"],
+            selectionAffinity: selectionSheetAffinity) {
+            workspace.hexViewerSheet = HexViewerRequest.currentDocument(
+                workspace: workspace,
+                selectionTitleFormat: hexSelectionTitleFormat)
         })
 
         commands.append(contentsOf: lineOpSpecs.map { spec in
             ScribeCommand(id: spec.id,
                           title: localize(spec.titleKey),
                           subtitle: localize("palette.badge.text"),
-                          keywords: spec.keywords) {
+                          keywords: spec.keywords,
+                          selectionAffinity: selectionLineAffinity) {
                 findState.commands.send(.transformSelection(spec.action))
             }
         })

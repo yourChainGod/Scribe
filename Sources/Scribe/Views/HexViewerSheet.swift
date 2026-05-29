@@ -22,11 +22,24 @@ struct HexViewerRequest: Identifiable, Equatable {
         self.title = title
         self.data = data
     }
+
+    @MainActor
+    static func currentDocument(workspace: Workspace,
+                                selectionTitleFormat: String = L10n.t("hexview.selectionTitle")) -> HexViewerRequest? {
+        guard let doc = workspace.current else { return nil }
+        let selection = workspace.activeTextSelection
+        let source = selection.isEmpty ? doc.text : selection
+        let title = selection.isEmpty
+            ? doc.title
+            : String(format: selectionTitleFormat, doc.title)
+        return HexViewerRequest(title: title, data: Data(source.utf8))
+    }
 }
 
 struct HexViewerSheet: View {
     let request: HexViewerRequest
     let onClose: () -> Void
+    @Environment(\.appTheme) private var appTheme
 
     var body: some View {
         let dump = HexView.dump(request.data)
@@ -34,9 +47,10 @@ struct HexViewerSheet: View {
             HStack {
                 Text("hexview.title", bundle: .module)
                     .font(.headline)
+                    .foregroundStyle(appTheme.primaryText)
                 Text(verbatim: request.title)
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                 Spacer()
                 Button {
                     onClose()
@@ -49,7 +63,7 @@ struct HexViewerSheet: View {
             HStack(spacing: 16) {
                 Text(L10n.t("hexview.size", dump.originalByteCount))
                     .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                 if dump.truncated {
                     Text(L10n.t("hexview.truncated", dump.dumpedByteCount))
                         .font(.caption)
@@ -63,13 +77,15 @@ struct HexViewerSheet: View {
                     .font(.system(size: 12, design: .monospaced))
                     .lineSpacing(0)
                     .padding(8)
+                    .foregroundStyle(appTheme.primaryText)
                     .textSelection(.enabled)
             }
             .frame(minWidth: 720, minHeight: 360)
-            .background(Color(NSColor.textBackgroundColor))
-            .border(Color.secondary.opacity(0.3))
+            .background(appTheme.codeSurface)
+            .border(appTheme.chromeBorder)
         }
         .padding(20)
         .frame(width: 800, height: 520)
+        .background(appTheme.windowBackground)
     }
 }

@@ -179,6 +179,7 @@ struct ScribeCommands: Commands {
             .disabled(fileIndex.rootURL == nil)
 
             Button {
+                refreshCommandPaletteSelectionContext()
                 PaletteWindowController.shared.toggle(registry: commands)
             } label: { Text("menu.go.commandPalette", bundle: .module) }
             .keyboardShortcut("p", modifiers: [.command, .shift])
@@ -314,14 +315,11 @@ struct ScribeCommands: Commands {
                 Text("regex.menu", bundle: .module)
             }
 
-            // Phase 44 — Hex viewer. Captures the document text as
-            // UTF-8 bytes at click time so the dump is stable even
-            // if the user keeps typing.
+            // Phase 44 — Hex viewer. Captures selected text first,
+            // then falls back to the document, so the dump mirrors
+            // the same selection-first rule as the other text tools.
             Button {
-                guard let doc = workspace.current else { return }
-                let data = Data(doc.text.utf8)
-                workspace.hexViewerSheet = HexViewerRequest(
-                    title: doc.title, data: data)
+                workspace.hexViewerSheet = HexViewerRequest.currentDocument(workspace: workspace)
             } label: {
                 Text("hexview.menu", bundle: .module)
             }
@@ -596,6 +594,11 @@ struct ScribeCommands: Commands {
             } label: { Text("menu.edit.hideFindBar", bundle: .module) }
             .keyboardShortcut(.escape, modifiers: [])
         }
+    }
+
+    @MainActor
+    private func refreshCommandPaletteSelectionContext() {
+        commands.selectionContextActive = !workspace.activeTextSelection.isEmpty
     }
 }
 

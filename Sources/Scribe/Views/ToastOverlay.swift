@@ -66,14 +66,14 @@ struct ToastBanner: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(toast.title)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(appTheme.primaryText)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
 
                 if let msg = toast.message, !msg.isEmpty {
                     Text(msg)
                         .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(appTheme.secondaryText)
                         .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -96,7 +96,7 @@ struct ToastBanner: View {
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
                     .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                     .padding(5)
                     .contentShape(Rectangle())
             }

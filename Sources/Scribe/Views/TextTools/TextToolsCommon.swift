@@ -30,6 +30,7 @@ enum TextToolsMetrics {
 struct TextToolsPanelTitle: View {
     let titleKey: LocalizedStringKey
     let systemImage: String
+    @Environment(\.appTheme) private var appTheme
 
     init(_ titleKey: LocalizedStringKey, systemImage: String) {
         self.titleKey = titleKey
@@ -40,11 +41,11 @@ struct TextToolsPanelTitle: View {
         HStack(spacing: 7) {
             Image(systemName: systemImage)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
                 .frame(width: 16)
             Text(titleKey, bundle: .module)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.primary)
+                .foregroundStyle(appTheme.primaryText)
         }
     }
 }
@@ -57,6 +58,7 @@ struct TextToolsEditorFrame: View {
     @Binding var text: String
     var minHeight: CGFloat = 120
     var editable: Bool = true
+    @Environment(\.appTheme) private var appTheme
 
     var body: some View {
         Group {
@@ -67,13 +69,14 @@ struct TextToolsEditorFrame: View {
             }
         }
         .font(.system(size: 12, design: .monospaced))
+        .foregroundStyle(appTheme.primaryText)
         .frame(minHeight: minHeight)
         .scrollContentBackground(.hidden)
-        .background(Color(nsColor: .textBackgroundColor))
+        .background(appTheme.codeSurface)
         .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .stroke(Color.primary.opacity(0.10))
+                .stroke(appTheme.chromeBorder)
         }
     }
 }
@@ -162,11 +165,12 @@ struct TextToolsOutputButtons: View {
 struct TextToolsRowMismatchBadge: View {
     let primary: Int
     let imported: Int
+    @Environment(\.appTheme) private var appTheme
 
     var body: some View {
         Text(L10n.t("textTools.source.rowMismatch", primary, imported))
             .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(appTheme.secondaryText)
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
             .background(Color.orange.opacity(0.13),

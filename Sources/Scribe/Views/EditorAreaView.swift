@@ -273,12 +273,13 @@ private struct WelcomeView: View {
         VStack(spacing: 14) {
             Image(systemName: "square.and.pencil")
                 .font(.system(size: 56, weight: .ultraLight))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(appTheme.tertiaryText)
             Text("welcome.title", bundle: .module)
                 .font(.system(size: 28, weight: .light))
+                .foregroundStyle(appTheme.primaryText)
             Text("welcome.subtitle", bundle: .module)
                 .font(.callout)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
             HStack(spacing: 10) {
                 Button {
                     workspace.newDocument()
@@ -306,7 +307,7 @@ private struct WelcomeView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("welcome.recent.header", bundle: .module)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
                 .padding(.leading, 4)
             VStack(spacing: 1) {
                 ForEach(prefs.recentFiles.prefix(8), id: \.self) { url in
@@ -318,7 +319,7 @@ private struct WelcomeView: View {
             .padding(8)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.primary.opacity(0.04))
+                    .fill(appTheme.chromeSubtleFill)
             )
         }
         .frame(maxWidth: 380)
@@ -329,23 +330,24 @@ private struct RecentFileRow: View {
     let url: URL
     let tap: () -> Void
     @State private var hover = false
+    @Environment(\.appTheme) private var appTheme
 
     var body: some View {
         Button(action: tap) {
             HStack(spacing: 8) {
                 Image(systemName: iconName(for: url))
                     .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                     .frame(width: 16)
                 Text(url.lastPathComponent)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(appTheme.primaryText)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: 8)
                 Text(url.deletingLastPathComponent().path)
                     .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(appTheme.tertiaryText)
                     .lineLimit(1)
                     .truncationMode(.head)
             }
@@ -353,7 +355,7 @@ private struct RecentFileRow: View {
             .padding(.vertical, 5)
             .background(
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(hover ? Color.primary.opacity(0.06) : Color.clear)
+                    .fill(hover ? appTheme.chromeHoverFill : Color.clear)
             )
         }
         .buttonStyle(.plain)

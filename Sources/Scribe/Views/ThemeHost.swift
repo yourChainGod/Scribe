@@ -30,7 +30,11 @@ struct ThemedModifier: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
-        content.environment(\.appTheme, resolved)
+        let theme = resolved
+        content
+            .environment(\.appTheme, theme)
+            .preferredColorScheme(theme.isDarkUI ? .dark : .light)
+            .tint(theme.accent)
     }
 
     /// Re-resolved on every body invocation. `colorScheme` is read

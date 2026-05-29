@@ -123,7 +123,7 @@ struct SidebarView: View {
                                 Text("sidebar.action.openFolder", bundle: .module)
                             }
                             .font(.callout)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(appTheme.secondaryText)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 4)
                         }
@@ -189,9 +189,9 @@ private struct ModeSwitcherButton: View {
 
     private var backgroundFill: Color {
         if isActive {
-            return appTheme.accent.opacity(SidebarModeSwitcherMetrics.activeBackgroundOpacity)
+            return appTheme.chromeActiveFill
         } else if hover {
-            return Color.primary.opacity(0.06)
+            return appTheme.chromeHoverFill
         } else {
             return Color.clear
         }
@@ -201,6 +201,8 @@ private struct ModeSwitcherButton: View {
 private struct SectionHeader: View {
     let titleKey: LocalizedStringKey
     let systemImage: String
+    @Environment(\.appTheme) private var appTheme
+
     var body: some View {
         Label {
             Text(titleKey, bundle: .module)
@@ -208,7 +210,7 @@ private struct SectionHeader: View {
             Image(systemName: systemImage)
         }
         .font(.caption.weight(.semibold))
-        .foregroundStyle(.secondary)
+        .foregroundStyle(appTheme.secondaryText)
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
     }
@@ -230,6 +232,7 @@ private struct DocRow: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .font(.system(size: 12))
+                .foregroundStyle(isSelected ? appTheme.primaryText : appTheme.secondaryText)
             Spacer()
             if doc.isDirty {
                 Circle()
@@ -242,8 +245,8 @@ private struct DocRow: View {
         .background(
             RoundedRectangle(cornerRadius: 4)
                 .fill(isSelected
-                      ? appTheme.accent.opacity(0.18)
-                      : (hover ? Color.gray.opacity(0.12) : Color.clear))
+                      ? appTheme.chromeActiveFill
+                      : (hover ? appTheme.chromeHoverFill : Color.clear))
                 .padding(.horizontal, 4)
         )
         .contentShape(Rectangle())

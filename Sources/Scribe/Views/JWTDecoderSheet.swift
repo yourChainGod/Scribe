@@ -58,7 +58,7 @@ struct JWTDecoderSheet: View {
                 } icon: {
                     Image(systemName: "info.circle")
                 }
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
                 .font(.system(size: 12))
             }
             Spacer(minLength: 0)
@@ -66,6 +66,7 @@ struct JWTDecoderSheet: View {
         }
         .padding(20)
         .frame(width: 720, height: 560)
+        .background(appTheme.windowBackground)
         .onAppear { reparse() }
         .onChange(of: token) { _, _ in reparse() }
     }
@@ -82,7 +83,7 @@ struct JWTDecoderSheet: View {
                     .font(.system(size: 15, weight: .semibold))
                 Text("jwt.subtitle", bundle: .module)
                     .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
             }
             Spacer()
         }
@@ -92,18 +93,19 @@ struct JWTDecoderSheet: View {
         VStack(alignment: .leading, spacing: 4) {
             Text("jwt.input.label", bundle: .module)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
             TextEditor(text: $token)
                 .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(appTheme.primaryText)
                 .frame(height: 88)
                 .padding(6)
                 .background {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color(rgb: appTheme.editor.background).opacity(0.5))
+                        .fill(appTheme.codeSurface)
                 }
                 .overlay {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .strokeBorder(Color.secondary.opacity(0.18), lineWidth: 0.5)
+                        .strokeBorder(appTheme.chromeBorder, lineWidth: 0.5)
                 }
                 .scrollContentBackground(.hidden)
         }
@@ -132,7 +134,7 @@ struct JWTDecoderSheet: View {
                 Circle().fill(tint).frame(width: 6, height: 6)
                 Text(titleKey, bundle: .module)
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                 Spacer()
                 Button {
                     NSPasteboard.general.clearContents()
@@ -142,13 +144,14 @@ struct JWTDecoderSheet: View {
                         .font(.system(size: 10, weight: .medium))
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
                 .help(Text("jwt.copy.help", bundle: .module))
             }
             ScrollView {
                 Text(body)
                     .font(.system(size: 11, design: .monospaced))
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .foregroundStyle(appTheme.primaryText)
                     .textSelection(.enabled)
             }
             .padding(8)
