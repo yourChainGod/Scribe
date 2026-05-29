@@ -81,7 +81,7 @@ struct SourceControlSidebar: View {
         HStack(spacing: 6) {
             Image(systemName: "arrow.triangle.branch")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
             // Phase 35b-4-a — branch name is a Menu so clicking it
             // pops the picker. We pre-load branches when the
             // sidebar mounts and reload whenever `engine.branch`
@@ -96,7 +96,7 @@ struct SourceControlSidebar: View {
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1)
                     .truncationMode(.middle)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(appTheme.primaryText)
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
@@ -202,7 +202,7 @@ struct SourceControlSidebar: View {
                 Text(branch.name)
                 if let upstream = branch.upstream {
                     Text("→ \(upstream)")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(appTheme.secondaryText)
                 }
             }
         }
@@ -224,11 +224,11 @@ struct SourceControlSidebar: View {
             }
         }
         .font(.system(size: 10, weight: .medium))
-        .foregroundStyle(.secondary)
+        .foregroundStyle(appTheme.secondaryText)
         .padding(.horizontal, 5)
         .padding(.vertical, 1)
         .background(
-            Capsule().fill(Color.secondary.opacity(0.12))
+            Capsule().fill(appTheme.chromeSubtleFill)
         )
     }
 
@@ -264,11 +264,11 @@ struct SourceControlSidebar: View {
             HStack(spacing: 6) {
                 Text("sourceControl.commit.section", bundle: .module)
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                 if stagedCount > 0 {
                     Text("\(stagedCount)")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(appTheme.secondaryText)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
                         .background(
@@ -293,7 +293,7 @@ struct SourceControlSidebar: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .strokeBorder(Color.secondary.opacity(0.18))
+                        .strokeBorder(appTheme.chromeBorder)
                 )
                 .overlay(alignment: .topLeading) {
                     if commitMessage.isEmpty {
@@ -384,7 +384,7 @@ struct SourceControlSidebar: View {
             appTheme.sidebarBackground
                 .overlay(alignment: .top) {
                     Rectangle()
-                        .fill(Color.white.opacity(0.18))
+                        .fill(appTheme.chromeBorder)
                         .frame(height: 1)
                 }
         )
@@ -463,10 +463,10 @@ struct SourceControlSidebar: View {
         HStack(spacing: 6) {
             Text(titleKey, bundle: .module)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
             Text("\(count)")
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
                 .padding(.horizontal, 5)
                 .padding(.vertical, 1)
                 .background(
@@ -511,10 +511,10 @@ struct SourceControlSidebar: View {
         VStack(spacing: 8) {
             Image(systemName: system)
                 .font(.system(size: 28, weight: .light))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
             Text(titleKey, bundle: .module)
                 .font(.system(size: 12))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
         }
@@ -536,6 +536,7 @@ private struct SourceControlRow: View {
     let row: GitFileStatus
     let engine: GitStatusEngine
     let hunkSource: HunkSource?
+    @Environment(\.appTheme) private var appTheme
     @State private var hover = false
     @State private var expanded = false
     @State private var hunks: [GitClient.Hunk] = []
@@ -556,7 +557,7 @@ private struct SourceControlRow: View {
                               ? "chevron.down"
                               : "chevron.right")
                             .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(appTheme.secondaryText)
                             .frame(width: 12, height: 12)
                             .contentShape(Rectangle())
                     }
@@ -576,19 +577,19 @@ private struct SourceControlRow: View {
                             .fill(statusTint.opacity(0.12))
                     )
                 Image(systemName: "doc.text")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                     .font(.system(size: 11))
                     .frame(width: 13)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(displayName)
                         .font(.system(size: 12))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(appTheme.primaryText)
                         .lineLimit(1)
                         .truncationMode(.middle)
                     if !parentHint.isEmpty {
                         Text(parentHint)
                             .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(appTheme.secondaryText)
                             .lineLimit(1)
                             .truncationMode(.head)
                     }
@@ -604,7 +605,7 @@ private struct SourceControlRow: View {
             .contentShape(Rectangle())
             .background(
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(hover ? Color.primary.opacity(0.06) : Color.clear)
+                    .fill(hover ? appTheme.chromeHoverFill : Color.clear)
                     .padding(.horizontal, 4)
             )
             .onHover { hover = $0 }
@@ -659,7 +660,7 @@ private struct SourceControlRow: View {
                     .frame(width: 12, height: 12)
                 Text("sourceControl.hunk.loading", bundle: .module)
                     .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
             }
             .padding(.leading, 38)
             .padding(.vertical, 2)
@@ -669,7 +670,7 @@ private struct SourceControlRow: View {
             // file that diff suppresses.
             Text("sourceControl.hunk.none", bundle: .module)
                 .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
                 .padding(.leading, 38)
                 .padding(.vertical, 2)
         } else {
@@ -819,6 +820,7 @@ private struct HunkRow: View {
     let source: SourceControlRow.HunkSource
     let path: String
     let engine: GitStatusEngine
+    @Environment(\.appTheme) private var appTheme
     @State private var hover = false
 
     var body: some View {
@@ -828,19 +830,19 @@ private struct HunkRow: View {
             Color.clear.frame(width: 38, height: 1)
             Text(headerLabel)
                 .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
                 .lineLimit(1)
                 .truncationMode(.tail)
             if let section = hunk.section {
                 Text("· \(section)")
                     .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
             Text(countsLabel)
                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
             Spacer(minLength: 4)
             if hover {
                 Button(action: applyHunk) {
@@ -865,7 +867,7 @@ private struct HunkRow: View {
         .contentShape(Rectangle())
         .background(
             RoundedRectangle(cornerRadius: 3, style: .continuous)
-                .fill(hover ? Color.primary.opacity(0.04) : Color.clear)
+                .fill(hover ? appTheme.chromeHoverFill : Color.clear)
                 .padding(.horizontal, 4)
         )
         .onHover { hover = $0 }

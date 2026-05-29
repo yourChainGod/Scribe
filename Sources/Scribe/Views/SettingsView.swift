@@ -73,6 +73,7 @@ struct SettingsView: View {
 }
 
 private struct EditorSettingsPane: View {
+    @Environment(\.appTheme) private var appTheme
     @ObservedObject var prefs: EditorPreferences
 
     var body: some View {
@@ -133,7 +134,7 @@ private struct EditorSettingsPane: View {
             } footer: {
                 Text("settings.display.colorSwatchesFooter", bundle: .module)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
             }
 
             Section {
@@ -151,7 +152,7 @@ private struct EditorSettingsPane: View {
             } footer: {
                 Text("settings.inlineBlame.footer", bundle: .module)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
             }
 
             Section {
@@ -160,7 +161,7 @@ private struct EditorSettingsPane: View {
                         count: prefs.recentFiles.count,
                         maxCount: EditorPreferences.recentFilesMax
                     ))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(appTheme.secondaryText)
                     Spacer()
                     Button {
                         prefs.clearRecent()
@@ -191,6 +192,7 @@ private struct EditorSettingsPane: View {
 /// browse menus can still find it. Lives in its own tab because
 /// the Editor tab is already busy with font + indentation.
 private struct AppearanceSettingsPane: View {
+    @Environment(\.appTheme) private var appTheme
     @ObservedObject var prefs: EditorPreferences
 
     var body: some View {
@@ -231,7 +233,7 @@ private struct AppearanceSettingsPane: View {
             } footer: {
                 Text("settings.appearance.themeFooter", bundle: .module)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
             }
 
             // Live preview: sidebar mock (left) + editor mock (right).
@@ -253,7 +255,7 @@ private struct AppearanceSettingsPane: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .strokeBorder(Color(nsColor: .separatorColor).opacity(0.5),
+                            .strokeBorder(appTheme.separator.opacity(0.5),
                                           lineWidth: 0.5)
                     )
             } header: {
@@ -295,6 +297,7 @@ private struct AppearanceSettingsPane: View {
 /// slots target `uiThemeID`'s — the headers spell out which theme
 /// each disclosure is currently editing so the user isn't guessing.
 private struct ThemeCustomizationSection: View {
+    @Environment(\.appTheme) private var appTheme
     @ObservedObject var prefs: EditorPreferences
 
     var body: some View {
@@ -306,19 +309,19 @@ private struct ThemeCustomizationSection: View {
                 Text(L10n.t("settings.appearance.customize.editingUI",
                             prefs.uiThemeID.displayName))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                 if prefs.editorFollowsUITheme {
                     Text(L10n.t("settings.appearance.customize.editingEditor",
                                 prefs.uiThemeID.displayName)
                          + " "
                          + L10n.t("settings.appearance.customize.followsUI"))
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(appTheme.secondaryText)
                 } else {
                     Text(L10n.t("settings.appearance.customize.editingEditor",
                                 prefs.editorThemeID.displayName))
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(appTheme.secondaryText)
                 }
             }
 
@@ -615,6 +618,7 @@ private struct ThemePreviewSwatch: View {
 /// pushes every keystroke through `catalog.update(_:)` so the JSON
 /// store on disk stays in lock-step with the UI.
 private struct SnippetsSettingsPane: View {
+    @Environment(\.appTheme) private var appTheme
     @ObservedObject var catalog: SnippetCatalog
 
     /// Currently-edited snippet, by id. nil ⇒ no selection (e.g.
@@ -627,7 +631,7 @@ private struct SnippetsSettingsPane: View {
         HStack(spacing: 0) {
             sidebar
                 .frame(width: 220)
-                .background(Color(nsColor: .windowBackgroundColor))
+                .background(appTheme.windowBackground)
             Divider()
             detail
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -668,7 +672,7 @@ private struct SnippetsSettingsPane: View {
             if catalog.snippets.isEmpty {
                 Text("settings.snippets.empty", bundle: .module)
                     .font(.callout)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                     .multilineTextAlignment(.center)
                     .padding()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -682,7 +686,7 @@ private struct SnippetsSettingsPane: View {
                             if !snippet.prefix.isEmpty {
                                 Text(snippet.prefix)
                                     .font(.system(size: 11, design: .monospaced))
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(appTheme.secondaryText)
                                     .lineLimit(1)
                             }
                         }
@@ -748,7 +752,7 @@ private struct SnippetsSettingsPane: View {
         } else {
             Text("settings.snippets.empty", bundle: .module)
                 .font(.callout)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
@@ -780,6 +784,7 @@ private struct SnippetsSettingsPane: View {
 /// through the supplied binding so SnippetCatalog.update fires on
 /// every keystroke; persistence is automatic.
 private struct SnippetEditorForm: View {
+    @Environment(\.appTheme) private var appTheme
     @Binding var snippet: Snippet
 
     var body: some View {
@@ -799,13 +804,13 @@ private struct SnippetEditorForm: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("settings.snippets.field.body", bundle: .module)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                 TextEditor(text: $snippet.body)
                     .font(.system(size: 12, design: .monospaced))
                     .frame(maxWidth: .infinity, minHeight: 200)
                     .overlay(
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .strokeBorder(Color(nsColor: .separatorColor)
+                            .strokeBorder(appTheme.separator
                                             .opacity(0.5), lineWidth: 0.5)
                     )
             }
@@ -819,7 +824,7 @@ private struct SnippetEditorForm: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label, bundle: .module)
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
             TextField(L10n.t(placeholder), text: text)
                 .textFieldStyle(.roundedBorder)
         }
@@ -834,6 +839,7 @@ private struct SnippetEditorForm: View {
 /// `EditorPreferences`; the live store reacts via the
 /// `.onChange(of: prefs.clipboardHistory*)` hooks in `ScribeApp`.
 private struct ClipboardSettingsPane: View {
+    @Environment(\.appTheme) private var appTheme
     @ObservedObject var prefs: EditorPreferences
 
     /// SwiftUI's `@ViewBuilder` Form/Section bodies don't accept
@@ -856,7 +862,7 @@ private struct ClipboardSettingsPane: View {
                         Text("settings.clipboard.persist.title", bundle: .module)
                         Text("settings.clipboard.persist.help", bundle: .module)
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(appTheme.secondaryText)
                     }
                 }
             } header: {
@@ -890,7 +896,7 @@ private struct ClipboardSettingsPane: View {
                 }
                 Text("settings.clipboard.retention.help", bundle: .module)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
             } header: {
                 Text("settings.clipboard.section.retention", bundle: .module)
             }
@@ -921,6 +927,7 @@ private struct ClipboardSettingsPane: View {
 /// debounce window on every per-doc sink construction so a Tab
 /// switch picks up the new value immediately.
 private struct AutoSaveSettingsPane: View {
+    @Environment(\.appTheme) private var appTheme
     @ObservedObject var prefs: EditorPreferences
 
     private var debounceBounds: ClosedRange<Double> { 0.5...60 }
@@ -934,7 +941,7 @@ private struct AutoSaveSettingsPane: View {
                         Text("settings.autoSave.enabled.title", bundle: .module)
                         Text("settings.autoSave.enabled.help", bundle: .module)
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(appTheme.secondaryText)
                     }
                 }
             } header: {
@@ -972,7 +979,7 @@ private struct AutoSaveSettingsPane: View {
 
                 Text("settings.autoSave.retention.help", bundle: .module)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
             } header: {
                 Text("settings.autoSave.section.retention", bundle: .module)
             }
@@ -998,6 +1005,7 @@ private struct AutoSaveSettingsPane: View {
 }
 
 private struct AboutPane: View {
+    @Environment(\.appTheme) private var appTheme
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "square.and.pencil")
@@ -1008,7 +1016,7 @@ private struct AboutPane: View {
                     .font(.system(size: 24, weight: .light))
                 Text("about.tagline", bundle: .module)
                     .font(.callout)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
             }
             VStack(spacing: 2) {
                 Text("about.version", bundle: .module)

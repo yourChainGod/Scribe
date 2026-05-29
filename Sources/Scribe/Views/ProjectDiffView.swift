@@ -32,6 +32,7 @@
 import SwiftUI
 
 struct ProjectDiffView: View {
+    @Environment(\.appTheme) private var appTheme
     @ObservedObject var engine: GitStatusEngine
     @EnvironmentObject var workspace: Workspace
 
@@ -69,7 +70,7 @@ struct ProjectDiffView: View {
             Divider()
             content
         }
-        .background(Color(nsColor: .textBackgroundColor))
+        .background(appTheme.editorBackground)
         .task(id: engine.rows) {
             // Re-run whenever the engine's rows change (e.g. an
             // outside refresh after a save) so the multibuffer
@@ -88,12 +89,12 @@ struct ProjectDiffView: View {
         HStack(spacing: 10) {
             Image(systemName: "rectangle.split.3x1")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
             Text("projectDiff.title", bundle: .module)
                 .font(.headline)
             Text(entryCountLabel)
                 .font(.callout)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
             Spacer()
             // Phase 35b-4-e — search toggle. Click or ⌘F to flip
             // visibility; clicking when already visible collapses
@@ -127,7 +128,7 @@ struct ProjectDiffView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(Color(nsColor: .controlBackgroundColor))
+        .background(appTheme.barBackground)
     }
 
     /// Phase 35b-4-e — search bar shown below the header when
@@ -138,7 +139,7 @@ struct ProjectDiffView: View {
     private var searchBar: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
                 .font(.system(size: 12))
             TextField(L10n.t("projectDiff.search.placeholder"),
                       text: $searchQuery)
@@ -166,7 +167,7 @@ struct ProjectDiffView: View {
                     searchFocused = true
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(appTheme.secondaryText)
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.borderless)
@@ -199,13 +200,13 @@ struct ProjectDiffView: View {
             .help(L10n.t("projectDiff.action.searchNext"))
             Text(searchCountLabel)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
                 .lineLimit(1)
                 .frame(minWidth: 80, alignment: .trailing)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(Color(nsColor: .controlBackgroundColor))
+        .background(appTheme.barBackground)
     }
 
     /// Toggle the search bar. Opening focuses the field; closing
@@ -393,16 +394,16 @@ struct ProjectDiffView: View {
             VStack(spacing: 8) {
                 ProgressView()
                 Text("projectDiff.loading", bundle: .module)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if entries.isEmpty {
             VStack(spacing: 12) {
                 Image(systemName: "checkmark.seal")
                     .font(.system(size: 36, weight: .ultraLight))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                 Text("projectDiff.empty", bundle: .module)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if filteredEntries.isEmpty {
@@ -413,10 +414,10 @@ struct ProjectDiffView: View {
             VStack(spacing: 12) {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 36, weight: .ultraLight))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                 Text("projectDiff.search.noMatches.detail",
                      bundle: .module)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
@@ -501,7 +502,7 @@ struct ProjectDiffView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Image(systemName: "doc.text")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                 Text(entry.path)
                     .font(.system(.body, design: .monospaced)
                               .weight(.semibold))
@@ -552,7 +553,7 @@ struct ProjectDiffView: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(Color.secondary.opacity(0.08))
+            .background(appTheme.chromeSubtleFill)
 
             if !entry.stagedHunks.isEmpty {
                 hunkGroup(entry.stagedHunks,
@@ -567,11 +568,11 @@ struct ProjectDiffView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(Color(nsColor: .windowBackgroundColor))
+                .fill(appTheme.windowBackground)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .stroke(Color.secondary.opacity(0.20), lineWidth: 1)
+                .stroke(appTheme.chromeBorder, lineWidth: 1)
         )
     }
 
@@ -587,7 +588,7 @@ struct ProjectDiffView: View {
                           : "projectDiff.section.changes",
                  bundle: .module)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
                 .padding(.horizontal, 12)
                 .padding(.top, 8)
             ForEach(hunks.indices, id: \.self) { idx in
@@ -623,7 +624,7 @@ struct ProjectDiffView: View {
             HStack {
                 Text(hunk.headerLine)
                     .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                 Spacer()
                 if !isStaged {
                     Button {
@@ -654,7 +655,7 @@ struct ProjectDiffView: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
-            .background(Color.secondary.opacity(0.06))
+            .background(appTheme.chromeSubtleFill)
 
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(hunk.bodyLines.indices, id: \.self) { lineIdx in
@@ -702,11 +703,11 @@ struct ProjectDiffView: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(Color(nsColor: .textBackgroundColor))
+                .fill(appTheme.codeSurface)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .stroke(Color.secondary.opacity(0.15), lineWidth: 1)
+                .stroke(appTheme.chromeBorder, lineWidth: 1)
         )
     }
 

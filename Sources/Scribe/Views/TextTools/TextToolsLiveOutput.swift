@@ -13,6 +13,7 @@
 import SwiftUI
 
 struct TextToolsLiveOutput: View {
+    @Environment(\.appTheme) private var appTheme
     @ObservedObject var model: TextToolsModel
 
     var body: some View {
@@ -37,7 +38,7 @@ struct TextToolsLiveOutput: View {
                         totalLineCount,
                         formattedByteSize))
                 .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
                 .monospacedDigit()
         }
     }

@@ -17,6 +17,7 @@
 import SwiftUI
 
 struct CharacterPanelSheet: View {
+    @Environment(\.appTheme) private var appTheme
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var findState: FindState
 
@@ -62,7 +63,7 @@ struct CharacterPanelSheet: View {
             VStack(spacing: 12) {
                 Spacer()
                 Text("character.panel.empty", bundle: .module)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                 Button {
                     query = ""
                 } label: {
@@ -98,6 +99,7 @@ struct CharacterPanelSheet: View {
 // MARK: - Section
 
 private struct CharacterPanelSection: View {
+    @Environment(\.appTheme) private var appTheme
     let category: CharacterCategory
     let onTap: (SpecialCharacter) -> Void
 
@@ -109,7 +111,7 @@ private struct CharacterPanelSection: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(category.titleKey.localizedFromBundle())
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
             LazyVGrid(columns: columns, spacing: 8) {
                 ForEach(category.characters) { ch in
                     CharacterTile(character: ch, onTap: onTap)
@@ -122,6 +124,7 @@ private struct CharacterPanelSection: View {
 // MARK: - Tile
 
 private struct CharacterTile: View {
+    @Environment(\.appTheme) private var appTheme
     let character: SpecialCharacter
     let onTap: (SpecialCharacter) -> Void
     @State private var hovered = false
@@ -138,7 +141,7 @@ private struct CharacterTile: View {
                     RoundedRectangle(cornerRadius: 6)
                         .fill(hovered
                               ? Color.accentColor.opacity(0.18)
-                              : Color.secondary.opacity(0.08))
+                              : appTheme.chromeSubtleFill)
                 )
         }
         .buttonStyle(.plain)

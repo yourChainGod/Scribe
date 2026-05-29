@@ -112,7 +112,7 @@ struct DiffView: View {
                 ProgressView().controlSize(.small).scaleEffect(0.7)
                 Text("diff.status.diffing", bundle: .module)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
             }
         } else if let result = session.result {
             let stats = result.stats
@@ -121,7 +121,7 @@ struct DiffView: View {
                 : L10n.t("diff.summary.diffOf", session.activeHunk + 1, session.hunks.count)
             Text("+\(stats.added)  -\(stats.removed)  ~\(stats.changed)  ·  \(hunkLabel)")
                 .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
                 .monospacedDigit()
         } else if let err = session.error {
             Text(err)
@@ -175,11 +175,11 @@ struct DiffView: View {
     private func paneHeader(title: String, path: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: "doc")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
                 .font(.system(size: 11))
             Text(title)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.primary)
+                .foregroundStyle(appTheme.primaryText)
             if !path.isEmpty {
                 Text(path)
                     .font(.system(size: 10))
@@ -213,7 +213,7 @@ struct DiffView: View {
                     .font(.system(size: 22, weight: .light))
                 Text("diff.empty.subtitle", bundle: .module)
                     .font(.system(size: 13))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                     .multilineTextAlignment(.center)
                     .lineSpacing(2)
                     .frame(maxWidth: 380)

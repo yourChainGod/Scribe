@@ -87,11 +87,11 @@ struct OutlineSidebar: View {
     private var header: some View {
         HStack(spacing: 6) {
             Image(systemName: "list.bullet.indent")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
                 .font(.system(size: 11))
             Text("sidebar.outline.header", bundle: .module)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
             if outline.isParsing {
                 ProgressView()
                     .controlSize(.small)
@@ -101,12 +101,12 @@ struct OutlineSidebar: View {
             if !outline.symbols.isEmpty {
                 Text(symbolCountLabel)
                     .font(.caption2.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 2)
                     .background(
                         Capsule()
-                            .fill(Color.primary.opacity(0.08))
+                            .fill(appTheme.chromeSubtleFill)
                     )
             }
         }
@@ -133,7 +133,7 @@ struct OutlineSidebar: View {
     private var filterRow: some View {
         HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
                 .font(.system(size: 10))
             TextField(L10n.t("sidebar.outline.filter.placeholder"),
                       text: $filterQuery)
@@ -144,7 +144,7 @@ struct OutlineSidebar: View {
                     filterQuery = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(appTheme.secondaryText)
                         .font(.system(size: 10))
                 }
                 .buttonStyle(.plain)
@@ -213,7 +213,7 @@ struct OutlineSidebar: View {
             Spacer(minLength: 24)
             Text(text)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 16)
@@ -304,7 +304,7 @@ private struct OutlineRow: View {
                 .frame(width: 14)
             Text(symbol.name)
                 .font(.system(size: 12, weight: isActive ? .medium : .regular))
-                .foregroundStyle(isActive ? Color.primary : Color.primary.opacity(0.85))
+                .foregroundStyle(isActive ? appTheme.primaryText : appTheme.primaryText.opacity(0.85))
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: 0)
@@ -333,7 +333,7 @@ private struct OutlineRow: View {
             // language consistent across the sidebar.
             return appTheme.accent.opacity(0.14)
         } else if hover {
-            return Color.primary.opacity(0.06)
+            return appTheme.chromeHoverFill
         } else {
             return Color.clear
         }

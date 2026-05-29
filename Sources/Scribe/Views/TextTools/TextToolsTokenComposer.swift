@@ -33,6 +33,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct TextToolsTokenComposer: View {
+    @Environment(\.appTheme) private var appTheme
     @ObservedObject var model: TextToolsModel
     @FocusState private var focusedLiteralID: UUID?
     @State private var addPopoverOpen = false
@@ -54,7 +55,7 @@ struct TextToolsTokenComposer: View {
                         model.tokens.filter(\.isColumn).count,
                         model.tokens.count))
                 .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
             Spacer()
 
             // Add (+▾) — opens the column / literal picker popover.
@@ -85,7 +86,7 @@ struct TextToolsTokenComposer: View {
                 } label: {
                     Image(systemName: "trash")
                         .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(appTheme.secondaryText)
                         .frame(width: 22, height: 22)
                 }
                 .buttonStyle(.borderless)
@@ -116,7 +117,7 @@ struct TextToolsTokenComposer: View {
 
                 Text("textTools.composer.addMenu.columns", bundle: .module)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                     .padding(.top, 2)
 
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -134,13 +135,13 @@ struct TextToolsTokenComposer: View {
             } else {
                 Text("textTools.palette.empty", bundle: .module)
                     .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                     .padding(.vertical, 4)
             }
 
             Text("textTools.composer.addMenu.literals", bundle: .module)
                 .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
 
             Button {
                 let id = model.appendEmptyLiteral()
@@ -181,7 +182,7 @@ struct TextToolsTokenComposer: View {
                      ? L10n.t("textTools.column.noSample")
                      : sample)
                     .font(.system(size: 9, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: 70, alignment: .leading)
@@ -235,7 +236,7 @@ struct TextToolsTokenComposer: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(model.tokens.isEmpty
                       ? Color.accentColor.opacity(0.04)
-                      : Color.primary.opacity(0.04))
+                      : appTheme.chromeSubtleFill)
         )
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -243,7 +244,7 @@ struct TextToolsTokenComposer: View {
                                                  dash: model.tokens.isEmpty ? [4, 3] : []))
                 .foregroundStyle(model.tokens.isEmpty
                                  ? Color.accentColor.opacity(0.4)
-                                 : Color.primary.opacity(0.10))
+                                 : appTheme.chromeBorder)
         }
         .overlay(alignment: .center) {
             if model.tokens.isEmpty {
@@ -319,7 +320,7 @@ struct TextToolsTokenComposer: View {
         HStack(spacing: 8) {
             Text("textTools.composer.missing", bundle: .module)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
             TextField(L10n.t("textTools.composer.missing.placeholder"),
                       text: $model.missingCellPlaceholder)
                 .textFieldStyle(.roundedBorder)
@@ -336,6 +337,7 @@ struct TextToolsTokenComposer: View {
 /// chip can react to its own dragging state without retriggering
 /// the parent's `body` recomputation.
 private struct ColumnChipView: View {
+    @Environment(\.appTheme) private var appTheme
     let id: UUID
     let index: Int
     @ObservedObject var model: TextToolsModel
@@ -351,12 +353,12 @@ private struct ColumnChipView: View {
                      ? L10n.t("textTools.column.noSample")
                      : model.sample(forColumn: index))
                     .font(.system(size: 9, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: 60, alignment: .leading)
             }
-            removeButton(model: model, id: id)
+            removeButton(model: model, id: id, appTheme: appTheme)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
@@ -389,6 +391,7 @@ private struct ColumnChipView: View {
 /// edit mode (which there was no way to do other than tabbing
 /// out — a hidden affordance).
 private struct LiteralChipView: View {
+    @Environment(\.appTheme) private var appTheme
     let id: UUID
     let text: String
     @ObservedObject var model: TextToolsModel
@@ -404,19 +407,19 @@ private struct LiteralChipView: View {
             } else {
                 displayLabel
             }
-            removeButton(model: model, id: id)
+            removeButton(model: model, id: id, appTheme: appTheme)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(Color.primary.opacity(isEditing ? 0.10 : 0.06))
+                .fill(isEditing ? appTheme.chromeActiveFill : appTheme.chromeHoverFill)
         )
         .overlay {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
                 .stroke(isEditing
                         ? Color.accentColor.opacity(0.55)
-                        : Color.primary.opacity(0.18),
+                        : appTheme.chromeBorder,
                         lineWidth: 1)
         }
         .opacity(dragging ? 0.45 : 1)
@@ -432,7 +435,7 @@ private struct LiteralChipView: View {
     private var displayLabel: some View {
         Text(displayText)
             .font(.system(size: 12, design: .monospaced))
-            .foregroundStyle(text.isEmpty ? Color.secondary : Color.primary)
+            .foregroundStyle(text.isEmpty ? appTheme.secondaryText : appTheme.primaryText)
             .lineLimit(1)
             .frame(minWidth: 24, idealWidth: 60, maxWidth: 120, alignment: .leading)
             .fixedSize(horizontal: true, vertical: false)
@@ -451,7 +454,7 @@ private struct LiteralChipView: View {
                   ))
             .textFieldStyle(.plain)
             .font(.system(size: 12, design: .monospaced))
-            .foregroundStyle(.primary)
+            .foregroundStyle(appTheme.primaryText)
             .focused($focusedLiteralID, equals: id)
             .frame(minWidth: 24, idealWidth: 60, maxWidth: 120)
             .fixedSize(horizontal: true, vertical: false)
@@ -501,15 +504,15 @@ private struct ConditionalDrag: ViewModifier {
 
 @MainActor
 @ViewBuilder
-private func removeButton(model: TextToolsModel, id: UUID) -> some View {
+private func removeButton(model: TextToolsModel, id: UUID, appTheme: AppTheme) -> some View {
     Button {
         model.removeToken(id: id)
     } label: {
         Image(systemName: "xmark")
             .font(.system(size: 8, weight: .semibold))
-            .foregroundStyle(.secondary)
+            .foregroundStyle(appTheme.secondaryText)
             .frame(width: 14, height: 14)
-            .background(Color.primary.opacity(0.08), in: Circle())
+            .background(appTheme.chromeSubtleFill, in: Circle())
     }
     .buttonStyle(.plain)
     .help(L10n.t("textTools.composer.remove"))

@@ -27,6 +27,7 @@
 import SwiftUI
 
 struct TextToolsWorkbench: View {
+    @Environment(\.appTheme) private var appTheme
     @EnvironmentObject private var workspace: Workspace
     @StateObject private var model = TextToolsModel()
 
@@ -48,7 +49,7 @@ struct TextToolsWorkbench: View {
         }
         .frame(width: TextToolsMetrics.frameWidth,
                height: TextToolsMetrics.frameHeight)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(appTheme.windowBackground)
         .onAppear {
             model.seedInitialText(workspace: workspace)
         }
@@ -69,7 +70,7 @@ struct TextToolsWorkbench: View {
                     .font(.system(size: 13, weight: .semibold))
                 Text("textTools.subtitle", bundle: .module)
                     .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(appTheme.secondaryText)
                     .lineLimit(1)
             }
             Spacer()

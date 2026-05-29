@@ -131,6 +131,7 @@ struct PasswordGeneratorSheet: View {
 // MARK: - QR sheet
 
 struct QRCodeGeneratorSheet: View {
+    @Environment(\.appTheme) private var appTheme
     let request: QRSheetRequest
     let onInsert: (String) -> Void
     let onClose: () -> Void
@@ -159,7 +160,7 @@ struct QRCodeGeneratorSheet: View {
             TextEditor(text: $payload)
                 .font(.system(.body, design: .monospaced))
                 .frame(minHeight: 64, maxHeight: 96)
-                .border(Color.secondary.opacity(0.4))
+                .border(appTheme.chromeBorder)
 
             HStack {
                 Button {
@@ -183,8 +184,8 @@ struct QRCodeGeneratorSheet: View {
                     .textSelection(.enabled)
             }
             .frame(minHeight: 220, maxHeight: 320)
-            .background(Color(NSColor.textBackgroundColor))
-            .border(Color.secondary.opacity(0.3))
+            .background(appTheme.codeSurface)
+            .border(appTheme.chromeBorder)
 
             HStack {
                 Spacer()

@@ -22,6 +22,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct TextToolsSourcePanel: View {
+    @Environment(\.appTheme) private var appTheme
     @ObservedObject var model: TextToolsModel
     @EnvironmentObject private var workspace: Workspace
     var showsSplitControls: Bool = false
@@ -50,7 +51,7 @@ struct TextToolsSourcePanel: View {
             Text(L10n.t("textTools.source.summary",
                         lineCount, byteCountString))
                 .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
                 .monospacedDigit()
             Spacer()
             Button {
@@ -145,7 +146,7 @@ struct TextToolsSourcePanel: View {
                 } label: {
                     Text("textTools.source.keyColumn", bundle: .module)
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(appTheme.secondaryText)
                 }
             }
 
@@ -159,7 +160,7 @@ struct TextToolsSourcePanel: View {
             ForEach(model.importedSources) { source in
                 HStack(spacing: 8) {
                     Image(systemName: "doc.text")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(appTheme.secondaryText)
                         .frame(width: 14)
                     Text(source.name)
                         .font(.system(size: 12, weight: .medium))
@@ -169,7 +170,7 @@ struct TextToolsSourcePanel: View {
                     Text(L10n.t("textTools.source.rows",
                                 TextTableSplitter.split(source.text, strategy: model.splitStrategy).rowCount))
                         .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(appTheme.secondaryText)
                     Button {
                         model.importedSources.removeAll { $0.id == source.id }
                         model.includeImportedText = model.hasImportedSources
@@ -183,7 +184,7 @@ struct TextToolsSourcePanel: View {
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
-                .background(Color.primary.opacity(0.045),
+                .background(appTheme.chromeSubtleFill,
                             in: RoundedRectangle(cornerRadius: 6, style: .continuous))
             }
         }
@@ -195,7 +196,7 @@ struct TextToolsSourcePanel: View {
         HStack(spacing: 8) {
             Text("textTools.split.kind", bundle: .module)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
             Picker("", selection: $model.splitMode) {
                 Text("textTools.split.csv", bundle: .module).tag(TextToolsSplitMode.csv)
                 Text("textTools.split.tsv", bundle: .module).tag(TextToolsSplitMode.tsv)
@@ -239,7 +240,7 @@ struct TextToolsSourcePanel: View {
         HStack(spacing: 6) {
             Text(label, bundle: .module)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(appTheme.secondaryText)
             TextField("", text: text)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: width)
