@@ -259,6 +259,15 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         /// without the file collapsing back into one giant blob.
         var currentLexer: String = ""
 
+        /// Audit — last (theme, lexer) that `applyTheme` actually
+        /// pushed. applyTheme runs STYLECLEARALL + ~30 STYLESET; on the
+        /// updateNSView hot path (per keystroke / caret move) the
+        /// resolved theme + active lexer are unchanged, so gate the
+        /// full re-push (mirrors `currentLexer` lexer-gating + C1's
+        /// minimap `lastStyledIsDark` guard). `Theme` is `Equatable`.
+        var lastAppliedTheme: Theme?
+        var lastAppliedThemeLexer: String?
+
         private var appearanceObserver: NSKeyValueObservation?
 
         /// Combine sink for FindState.commands (Find Next, Replace All, …).

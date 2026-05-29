@@ -68,6 +68,18 @@ extension ScintillaCodeEditor.Coordinator {
         let baseTheme = editorID.resolve(appearance: NSApp.effectiveAppearance)
         let theme = baseTheme.applying(prefs.overrides(for: editorID))
 
+        // Audit — applyTheme runs on every updateNSView tick (per
+        // keystroke / caret move) plus the KVO appearance observer.
+        // Its output depends only on the resolved theme + active lexer;
+        // skip the STYLECLEARALL + ~30 STYLESET re-push when neither
+        // changed. Without this the editor discards and rebuilds its
+        // entire 256-slot style table on every caret move (the only
+        // apply* that lacked a signature gate). Mirrors applyLexer's
+        // `currentLexer` gate + the minimap's `lastStyledIsDark` guard.
+        guard theme != lastAppliedTheme || currentLexer != lastAppliedThemeLexer else { return }
+        lastAppliedTheme = theme
+        lastAppliedThemeLexer = currentLexer
+
         // STYLE_DEFAULT first — STYLECLEARALL copies it to every other style.
         view.message(SCI.STYLESETBACK, wParam: UInt(SC.STYLE_DEFAULT), lParam: sciColor(theme.background))
         view.message(SCI.STYLESETFORE, wParam: UInt(SC.STYLE_DEFAULT), lParam: sciColor(theme.foreground))
