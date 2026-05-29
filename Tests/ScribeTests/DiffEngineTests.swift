@@ -199,4 +199,54 @@ final class DiffEngineTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(s.added, 1)
         XCTAssertGreaterThanOrEqual(s.removed + s.changed, 1)
     }
+
+    // MARK: - Memory guard (Phase 74 — OOM 防护)
+
+    /// With a tiny trace budget the guard trips on the very first snapshot
+    /// and degrades to a single coarse replace covering both sides in full,
+    /// instead of building the O((n+m)²) backtrack trace that would OOM the
+    /// process on a large, highly-divergent pair.
+    func test_diff_traceBudgetExceeded_degradesToCoarseReplace() {
+        let left  = (0..<200).map { "left \($0)" }
+        let right = (0..<200).map { "right \($0)" }
+        let ops = DiffEngine.diff(left: left, right: right, maxTraceInts: 1)
+        XCTAssertEqual(ops.count, 1)
+        XCTAssertEqual(ops[0].kind, .replace)
+        XCTAssertEqual(ops[0].leftRange, 0..<200)
+        XCTAssertEqual(ops[0].rightRange, 0..<200)
+    }
+
+    /// One-sided inputs degrade to a pure delete / insert (not a replace),
+    /// so the coarse fallback still distinguishes the two shapes.
+    func test_diff_traceBudgetExceeded_oneSidedDegradesToDeleteOrInsert() {
+        let onlyLeft = DiffEngine.diff(left: ["a", "b", "c"], right: [],
+                                       maxTraceInts: 1)
+        XCTAssertEqual(onlyLeft.map(\.kind), [.delete])
+        XCTAssertEqual(onlyLeft[0].leftRange, 0..<3)
+
+        let onlyRight = DiffEngine.diff(left: [], right: ["x", "y"],
+                                        maxTraceInts: 1)
+        XCTAssertEqual(onlyRight.map(\.kind), [.insert])
+        XCTAssertEqual(onlyRight[0].rightRange, 0..<2)
+    }
+
+    /// The default budget is large enough that ordinary diffs are never
+    /// degraded — identical exact result to the un-guarded algorithm.
+    func test_diff_defaultBudget_leavesNormalDiffExact() {
+        let ops = DiffEngine.diff(left: ["a", "B", "c"], right: ["a", "bb", "c"])
+        XCTAssertEqual(ops.map(\.kind), [.equal, .replace, .equal])
+        let r = DiffEngine.compare("a\nB\nc", "a\nbb\nc")
+        assertCoverage(r)
+    }
+
+    /// The degraded coarse replace is still structurally valid: its ranges
+    /// tile both inputs without gaps, so DiffResult consumers (scroll-map,
+    /// stats, word-diff) don't trip on it.
+    func test_diff_degradedReplace_isStructurallyValid() {
+        let left  = (0..<50).map { "L\($0)" }
+        let right = (0..<70).map { "R\($0)" }
+        let ops = DiffEngine.diff(left: left, right: right, maxTraceInts: 1)
+        let r = DiffResult(leftLines: left, rightLines: right, ops: ops)
+        assertCoverage(r)
+    }
 }

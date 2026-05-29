@@ -226,10 +226,18 @@ public enum DiffEngine {
 
     // MARK: - Myers core
 
+    /// Default memory budget for the Myers `trace` (cumulative V-array
+    /// snapshots), in Ints. 32M Ints ≈ 256 MB. Sized so normal diffs never
+    /// trip it, but a pathological large / highly-divergent pair degrades
+    /// gracefully instead of OOMing the process. Overridable via the
+    /// `maxTraceInts:` parameter for tests.
+    static let defaultMaxTraceInts = 32_000_000
+
     /// Returns a flat list of ops covering every line in both inputs in order.
     /// Adjacent delete + insert pairs are merged into a single `.replace` so
     /// the UI can show change blocks as one unit.
-    static func diff(left a: [String], right b: [String]) -> [DiffOp] {
+    static func diff(left a: [String], right b: [String],
+                     maxTraceInts: Int = defaultMaxTraceInts) -> [DiffOp] {
         // Trace ('V's) of the forward Myers walk so we can backtrack a path.
         let n = a.count
         let m = b.count
@@ -243,10 +251,22 @@ public enum DiffEngine {
         var v = [Int](repeating: 0, count: 2 * max_ + 1)
         let offset = max_
 
+        // Memory guard. `trace` keeps one snapshot of the size-(2·max_+1)
+        // V array per edit-distance step, so a large + highly-divergent
+        // pair grows it to O((n+m)²) Ints and can OOM the process. Tally
+        // the cumulative snapshot size; if it crosses the budget, bail to
+        // a single coarse replace rather than crash. Normal diffs (small
+        // D) never come close.
+        var traceInts = 0
+
         var foundD = 0
         outer: for d in 0...max_ {
             // Snapshot before mutation so backtracking can replay each step.
             trace.append(v)
+            traceInts += v.count
+            if traceInts > maxTraceInts {
+                return coarseReplace(n: n, m: m)
+            }
             var k = -d
             while k <= d {
                 let kIdx = k + offset
@@ -312,6 +332,24 @@ public enum DiffEngine {
         // The script was built tail-first; reverse + reduce.
         script.reverse()
         return anchorEmptyRanges(reduce(ops: script))
+    }
+
+    /// Degraded fallback when the Myers `trace` would exceed its memory
+    /// budget (see `defaultMaxTraceInts`). Emits a single coarse op that
+    /// replaces the whole left side with the whole right side — exact
+    /// line correspondence is lost, but the result is still structurally
+    /// valid and the process stays alive. Empty ranges are anchored so
+    /// consumers can iterate either side uniformly.
+    private static func coarseReplace(n: Int, m: Int) -> [DiffOp] {
+        let op: DiffOp
+        if n > 0 && m > 0 {
+            op = DiffOp(kind: .replace, leftRange: 0..<n, rightRange: 0..<m)
+        } else if n > 0 {
+            op = DiffOp(kind: .delete, leftRange: 0..<n, rightRange: 0..<0)
+        } else {
+            op = DiffOp(kind: .insert, leftRange: 0..<0, rightRange: 0..<m)
+        }
+        return anchorEmptyRanges([op])
     }
 
     /// `.insert` / `.delete` ops have one empty range; the builders left

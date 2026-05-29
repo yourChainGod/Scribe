@@ -955,6 +955,11 @@ func resolveResourceURL(_ raw: String, baseDirectory: URL?) -> String {
 }
 private let mdInlineFootnoteRefRegex = try! NSRegularExpression(
     pattern: "\\[\\^([^\\]\\s]+)\\]")
+/// `[^id]: text` footnote *definition* line. Module-level so it compiles
+/// once instead of per `extractFootnotes` call. The reference scan reuses
+/// `mdInlineFootnoteRefRegex` above — its pattern is identical.
+private let mdFootnoteDefRegex = try! NSRegularExpression(
+    pattern: "^\\s*\\[\\^([^\\]\\s]+)\\]:\\s*(.*)$")
 private let mdInlineLinkRegex = try! NSRegularExpression(
     pattern: "\\[([^\\]]+)\\]\\(([^)\\s]+)(?:\\s+\"[^\"]*\")?\\)")
 private let mdInlineBoldStarRegex = try! NSRegularExpression(
@@ -1391,17 +1396,22 @@ fileprivate struct FootnoteExtraction {
 /// machines stay happy), then number every `[^id]` reference
 /// pointing at a parsed definition in encounter order.
 fileprivate func extractFootnotes(from text: String) -> FootnoteExtraction {
+    // Gate: footnote syntax — both `[^id]: def` lines and `[^id]` refs —
+    // requires a literal `[^`. With none in the document there is nothing
+    // to extract, so skip the per-line def scan and the full-body ref scan
+    // entirely. `split("\n").joined("\n")` is an identity transform on a
+    // `[^`-free body, so returning `text` verbatim matches the full path.
+    guard text.contains("[^") else {
+        return FootnoteExtraction(body: text, defs: [:], refs: [:], orderedRefs: [])
+    }
     var defs: [String: String] = [:]
     var bodyLines: [String] = []
-    let defRegex = try! NSRegularExpression(  // swiftlint:disable:this force_try
-        pattern: "^\\s*\\[\\^([^\\]\\s]+)\\]:\\s*(.*)$"
-    )
     for raw in text.split(separator: "\n",
                           omittingEmptySubsequences: false) {
         let line = String(raw)
         let nsLine = line as NSString
         let range = NSRange(location: 0, length: nsLine.length)
-        if let match = defRegex.firstMatch(in: line, options: [], range: range) {
+        if let match = mdFootnoteDefRegex.firstMatch(in: line, options: [], range: range) {
             let id   = nsLine.substring(with: match.range(at: 1))
             let txt  = nsLine.substring(with: match.range(at: 2))
             defs[id] = txt
@@ -1421,11 +1431,8 @@ fileprivate func extractFootnotes(from text: String) -> FootnoteExtraction {
     // stays literal in renderInline).
     var refs: [String: Int] = [:]
     var ordered: [(id: String, num: Int)] = []
-    let refRegex = try! NSRegularExpression(  // swiftlint:disable:this force_try
-        pattern: "\\[\\^([^\\]\\s]+)\\]"
-    )
     let nsBody = body as NSString
-    refRegex.enumerateMatches(in: body, options: [],
+    mdInlineFootnoteRefRegex.enumerateMatches(in: body, options: [],
                               range: NSRange(location: 0, length: nsBody.length)) { m, _, _ in
         guard let m else { return }
         let id = nsBody.substring(with: m.range(at: 1))

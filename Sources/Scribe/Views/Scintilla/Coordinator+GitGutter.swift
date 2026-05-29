@@ -19,10 +19,11 @@
 //    1. `lastAppliedGitGutter` cache — SwiftUI calls `updateNSView`
 //       on every prefs / cursor tick. If `doc.gitGutter` is byte-
 //       identical to the last apply we skip the entire path.
-//    2. Wipe-and-add — when the dictionary did change we delete our
-//       three marker numbers from every line, then add the new set.
-//       Per-marker counts are tens-to-hundreds in normal use, so
-//       full-buffer wipe is cheaper than tracking incremental deltas.
+//    2. Incremental wipe-and-add — when the dictionary changed we delete
+//       only the markers recorded by the *previous* apply (one MARKERDELETE
+//       per prior entry), then add the new set. This is O(marker count)
+//       rather than O(buffer line count): a one-line edit in a 100k-line
+//       file no longer fires 300k MARKERDELETE messages.
 //
 //  Marker number choice
 //    21 / 22 / 23 sits in the user-available range (0–24; 25–31 are
@@ -90,45 +91,45 @@ extension ScintillaCodeEditor.Coordinator {
     /// no-ops cheaply when the dictionary hasn't changed.
     func applyGitGutter(in view: ScintillaView) {
         let map = doc.gitGutter
-        if map == lastAppliedGitGutter { return }
+        let previous = lastAppliedGitGutter
+        if map == previous { return }
         lastAppliedGitGutter = map
 
-        // Wipe our three marker numbers from every line. We use
-        // `MARKERDELETE(line, marker)` per-line because the bulk
-        // `SCI_MARKERDELETEALL(marker)` would also drop markers we
-        // didn't set (in case the lexer ever wires its own glyph
-        // into the same number — unlikely but defensive).
-        let lineCount = Int(view.message(SCI.GETLINECOUNT))
-        if lineCount > 0 {
-            for line in 0..<lineCount {
-                let lineParam = UInt(line)
-                view.message(SCI.MARKERDELETE,
-                             wParam: lineParam,
-                             lParam: GitGutterMarker.added)
-                view.message(SCI.MARKERDELETE,
-                             wParam: lineParam,
-                             lParam: GitGutterMarker.modified)
-                view.message(SCI.MARKERDELETE,
-                             wParam: lineParam,
-                             lParam: GitGutterMarker.deletedAbove)
-            }
+        // Incremental wipe: delete only the markers we set on the
+        // *previous* apply, instead of scanning every line in the buffer.
+        // Each prior entry records which one marker number it set, so we
+        // delete exactly that — O(previous markers) rather than
+        // O(line count). (We never used `SCI_MARKERDELETEALL`: it would
+        // also drop markers the lexer might wire into the same number.)
+        for (line1, status) in previous {
+            let line0 = line1 - 1
+            guard line0 >= 0 else { continue }
+            view.message(SCI.MARKERDELETE,
+                         wParam: UInt(line0),
+                         lParam: markerNumber(for: status))
         }
 
         // Paint the new state. `line0 = line1 - 1` because Scintilla
         // is 0-based but `GitDiffParser` emits 1-based working-tree
         // line numbers (matches what every other tool reports).
+        let lineCount = Int(view.message(SCI.GETLINECOUNT))
         for (line1, status) in map {
             let line0 = line1 - 1
             guard line0 >= 0, line0 < lineCount else { continue }
-            let marker: Int
-            switch status {
-            case .added:        marker = GitGutterMarker.added
-            case .modified:     marker = GitGutterMarker.modified
-            case .deletedAbove: marker = GitGutterMarker.deletedAbove
-            }
             view.message(SCI.MARKERADD,
                          wParam: UInt(line0),
-                         lParam: marker)
+                         lParam: markerNumber(for: status))
+        }
+    }
+
+    /// Maps a gutter status to its stable Scintilla marker number.
+    /// Shared by the incremental wipe and the repaint pass so the two
+    /// can't drift out of sync.
+    fileprivate func markerNumber(for status: GitGutterStatus) -> Int {
+        switch status {
+        case .added:        return GitGutterMarker.added
+        case .modified:     return GitGutterMarker.modified
+        case .deletedAbove: return GitGutterMarker.deletedAbove
         }
     }
 
