@@ -952,6 +952,8 @@
 
 // Phase 67 — Clipboard history retention
 "settings.tab.clipboard"                  = "Clipboard";
+"settings.clipboard.enabled.title"        = "Enable clipboard history";
+"settings.clipboard.enabled.help"         = "When OFF, Scribe stops polling the clipboard entirely — no background wake-ups. Existing entries stay until you quit.";
 "settings.clipboard.section.persistence"  = "Persistence";
 "settings.clipboard.persist.title"        = "Persist clipboard history across launches";
 "settings.clipboard.persist.help"         = "When OFF, the history lives only in memory and is cleared on quit. When ON, entries are stored under ~/Library/Application Support/Scribe/clipboard-history.json.";

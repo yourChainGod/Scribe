@@ -36,7 +36,7 @@ struct OutlineSidebar: View {
     /// in low hundreds, well below the threshold where this matters.
     private var activeSymbolID: SymbolEntry.ID? {
         guard let doc = workspace.current else { return nil }
-        let line = doc.cursorLine
+        let line = doc.viewport.cursorLine
         // Pick the deepest symbol whose start ≤ caret. Tie-break by
         // line so a symbol declared on the same line as the caret
         // takes precedence over the file's enclosing scope.

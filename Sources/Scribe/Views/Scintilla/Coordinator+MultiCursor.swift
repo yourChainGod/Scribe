@@ -556,24 +556,30 @@ extension ScintillaCodeEditor.Coordinator {
     func currentFullSelectionText(in view: ScintillaView) -> String {
         let s = Int(view.message(SCI.GETSELECTIONSTART))
         let e = Int(view.message(SCI.GETSELECTIONEND))
-        guard e > s, let raw = view.string() else { return "" }
-        let bytes = Array(raw.utf8)
-        guard e <= bytes.count else { return "" }
-        let slice = Array(bytes[s..<e])
-        return String(data: Data(slice), encoding: .utf8) ?? ""
+        guard e > s else { return "" }
+        // Audit C4 — read just the selected byte range through the
+        // Scintilla bridge (SCI_GETTEXTRANGEFULL) instead of copying
+        // the whole buffer with `view.string()` and slicing. This sits
+        // on the SCN_UPDATEUI path (every caret move / scroll tick);
+        // the old full-buffer copy + utf8 array allocated the entire
+        // document per call and risked OOM on multi-MB files.
+        guard let data = ScribeReadTextRange(
+                Unmanaged.passUnretained(view).toOpaque(), s, e - s)
+        else { return "" }
+        return String(data: data, encoding: .utf8) ?? ""
     }
 
     func adoptSelectionAsQuery(from view: ScintillaView) {
         let s = Int(view.message(SCI.GETSELECTIONSTART))
         let e = Int(view.message(SCI.GETSELECTIONEND))
-        guard e > s, let raw = view.string() else { return }
-        let bytes = Array(raw.utf8)
-        guard e <= bytes.count else { return }
-        let slice = Array(bytes[s..<e])
-        if let str = String(data: Data(slice), encoding: .utf8) {
-            findState.query = str
-            findState.show(replaceMode: findState.isReplaceMode)
-        }
+        guard e > s else { return }
+        // Audit C4 — byte-range read instead of whole-buffer copy.
+        guard let data = ScribeReadTextRange(
+                Unmanaged.passUnretained(view).toOpaque(), s, e - s),
+              let str = String(data: data, encoding: .utf8)
+        else { return }
+        findState.query = str
+        findState.show(replaceMode: findState.isReplaceMode)
     }
 
     // Phase 43-T — pulled this back inside the extension. It was

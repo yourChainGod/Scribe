@@ -141,9 +141,12 @@ final class ClipboardHistoryStore: ObservableObject {
     /// `policy.maxItems`, which defaults to this same value.
     static let capacity = 50
 
-    /// Polling cadence. 500 ms is the Alfred / Paste.app default
-    /// and plays nicely with macOS's power management.
-    static let pollInterval: TimeInterval = 0.5
+    /// Polling cadence. 1 s keeps wake-ups in the power-noise floor
+    /// while staying well under human copy-then-switch latency; the
+    /// 1 s record granularity is imperceptible in the picker. (Was
+    /// 500 ms — halving the wake rate is the cheap half of audit C3;
+    /// the `clipboardHistoryEnabled` master opt-out is the other half.)
+    static let pollInterval: TimeInterval = 1.0
 
     /// Minimum text length to consider "interesting enough" to
     /// record. Empty strings (which the pasteboard produces after

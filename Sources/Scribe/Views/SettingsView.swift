@@ -856,6 +856,21 @@ private struct ClipboardSettingsPane: View {
 
     var body: some View {
         Form {
+            // Audit C3 — master switch. When OFF the app never arms
+            // the pasteboard poll timer (see ScribeApp bootstrap +
+            // the onChange hook), so the whole feature costs zero
+            // background wake-ups; existing entries survive until quit.
+            Section {
+                Toggle(isOn: $prefs.clipboardHistoryEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("settings.clipboard.enabled.title", bundle: .module)
+                        Text("settings.clipboard.enabled.help", bundle: .module)
+                            .font(.caption)
+                            .foregroundStyle(appTheme.secondaryText)
+                    }
+                }
+            }
+
             Section {
                 Toggle(isOn: $prefs.clipboardHistoryPersistEnabled) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -868,6 +883,7 @@ private struct ClipboardSettingsPane: View {
             } header: {
                 Text("settings.clipboard.section.persistence", bundle: .module)
             }
+            .disabled(!prefs.clipboardHistoryEnabled)
 
             Section {
                 HStack {
@@ -900,6 +916,7 @@ private struct ClipboardSettingsPane: View {
             } header: {
                 Text("settings.clipboard.section.retention", bundle: .module)
             }
+            .disabled(!prefs.clipboardHistoryEnabled)
         }
         .formStyle(.grouped)
     }

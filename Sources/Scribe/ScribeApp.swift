@@ -171,6 +171,17 @@ struct ScribeApp: App {
                 .onChange(of: prefs.clipboardHistoryRetentionDays) { _, _ in
                     clipboardHistory.updatePolicy(prefs.clipboardHistoryPolicy)
                 }
+                // Audit C3 — master switch toggled from Settings. Arm
+                // / disarm the pasteboard poll timer live so the change
+                // takes effect without a relaunch (mirrors the launch-
+                // time conditional `start()` in `bootstrap()`).
+                .onChange(of: prefs.clipboardHistoryEnabled) { _, enabled in
+                    if enabled {
+                        clipboardHistory.start()
+                    } else {
+                        clipboardHistory.stop()
+                    }
+                }
                 // Phase 69 — user flipped the master switch off from
                 // Settings. Match the launch-time "off means off"
                 // behaviour: wipe every existing scratch so the next
@@ -268,11 +279,14 @@ struct ScribeApp: App {
         }
         outline.update(for: workspace.current)
 
-        // Phase 57 — kick off clipboard-history polling now that
-        // the main window is up. Idempotent (the store guards
-        // re-entry), so a SwiftUI re-bootstrap never spins a
-        // second timer.
-        clipboardHistory.start()
+        // Phase 57 / audit C3 — kick off clipboard-history polling
+        // now that the main window is up, but only if the user hasn't
+        // opted out. Idempotent (the store guards re-entry), so a
+        // SwiftUI re-bootstrap never spins a second timer; the
+        // `onChange` hook above arms/disarms it live on a flip.
+        if prefs.clipboardHistoryEnabled {
+            clipboardHistory.start()
+        }
 
         // Drive every SCRIBE_TEST_* hook. Production users never
         // hit any of these because every variable defaults to

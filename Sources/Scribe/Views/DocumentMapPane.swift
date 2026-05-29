@@ -59,6 +59,11 @@ import Lexilla
 struct DocumentMapPane: NSViewRepresentable {
     @ObservedObject var doc: Document
     @ObservedObject var prefs: EditorPreferences
+    /// Audit H1 — observe the viewport state so `updateNSView` (and
+    /// thus the overlay-rectangle repaint) still fires when the
+    /// editor's `viewportTopLine` / `viewportBottomLine` change, now
+    /// that they live off `Document` on `EditorViewportState`.
+    @ObservedObject var viewport: EditorViewportState
     @Environment(\.appTheme) private var appTheme
     @Environment(\.colorScheme) private var colorScheme
 
@@ -160,6 +165,17 @@ struct DocumentMapPane: NSViewRepresentable {
         /// when the resolved lexer matches what we last set.
         private var currentLexer: String = ""
 
+        /// Last `isDark` actually styled. `applyMinimapStyling`
+        /// resets all 256 style slots (STYLECLEARALL) and re-sets
+        /// the font on every call, but its output depends only on
+        /// the dark/light appearance. Gate it the same way as
+        /// `currentLexer`: per-keystroke / per-scroll ticks arrive
+        /// with an unchanged appearance, so without this guard the
+        /// minimap discards its style + line-layout caches on every
+        /// caret move, forcing a full re-style + redraw (Phase 56
+        /// perf — audit C1).
+        private var lastStyledIsDark: Bool?
+
         /// Click handler installed on the underlying NSView. Lives
         /// here (not on the SwiftUI representable) so dismantle
         /// can pull it cleanly via `monitor` removal.
@@ -218,6 +234,16 @@ struct DocumentMapPane: NSViewRepresentable {
         /// thumbnail rather than a normal editor crammed into a
         /// narrow column.
         func applyMinimapStyling(to view: ScintillaView, isDark: Bool) {
+            // Per-keystroke / per-scroll ticks call this with an
+            // unchanged appearance; everything below only depends
+            // on `isDark`, so no-op when it matches what we last
+            // applied (mirrors the `currentLexer` lexer-gating
+            // above). The STYLECLEARALL + setFontName otherwise run
+            // on every caret move, invalidating the minimap's style
+            // and line-layout caches and forcing a full redraw.
+            guard lastStyledIsDark != isDark else { return }
+            lastStyledIsDark = isDark
+
             // Reach directly for the two canonical built-in themes
             // — the minimap doesn't honour user theme overrides in
             // v1 because the tiny font size renders custom colours
@@ -272,7 +298,7 @@ struct DocumentMapPane: NSViewRepresentable {
         /// roughly centered — gives the user enough orientation
         /// to confirm "yes, the minimap follows me".
         func applyViewportHighlight(to view: ScintillaView) {
-            let mainTopLine0 = max(0, doc.viewportTopLine - 1)
+            let mainTopLine0 = max(0, doc.viewport.viewportTopLine - 1)
             let totalLines = view.message(SCI.GETLINECOUNT)
             // Scroll only when the main editor is past the
             // minimap's last fully visible line by enough that the
@@ -308,14 +334,14 @@ struct DocumentMapPane: NSViewRepresentable {
             // document line indices the Scintilla messages expect.
             let mainTop0 = max(0,
                                min(totalLines - 1,
-                                   doc.viewportTopLine - 1))
+                                   doc.viewport.viewportTopLine - 1))
             // `viewportBottomLine` defaults to 1 before the first
             // V_SCROLL fires; treat that as "same as top" so the
             // overlay starts as a thin caret-line strip rather
             // than spanning the whole minimap.
             let rawBottom0 = max(0,
                                  min(totalLines - 1,
-                                     doc.viewportBottomLine - 1))
+                                     doc.viewport.viewportBottomLine - 1))
             let mainBottom0 = max(rawBottom0, mainTop0)
             // POINTYFROMPOSITION returns Y relative to the
             // *visible* viewport with origin at the top. If the

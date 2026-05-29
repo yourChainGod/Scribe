@@ -82,6 +82,7 @@ final class EditorPreferences: ObservableObject {
         // so each surfaces directly in `defaults read` for support
         // dumps, and downgrading to a Phase 57 build leaves the
         // entries-on-disk side unaffected.
+        static let clipboardHistoryEnabled        = "clipboard.history.enabled"
         static let clipboardHistoryPersistEnabled = "clipboard.history.persistEnabled"
         static let clipboardHistoryMaxItems       = "clipboard.history.maxItems"
         static let clipboardHistoryRetentionDays  = "clipboard.history.retentionDays"
@@ -248,6 +249,19 @@ final class EditorPreferences: ObservableObject {
     /// sensitive content (passwords, tokens, secrets) to disk
     /// without explicit opt-in. Wiring through to the store happens
     /// at `bootstrap()` in `ScribeApp` via `updatePolicy(_:)`.
+    /// Phase 57 / audit C3 — master opt-out for clipboard history.
+    /// When `false` the app never arms the pasteboard poll timer, so
+    /// users who don't use the feature pay zero wake-ups. Defaults
+    /// `true` to preserve the historical Phase 57 always-on behaviour
+    /// on upgrade. Wired to `ClipboardHistoryStore.start()` / `stop()`
+    /// at `bootstrap()` + an `onChange` hook in `ScribeApp`.
+    @Published var clipboardHistoryEnabled: Bool {
+        didSet {
+            defaults.set(clipboardHistoryEnabled,
+                         forKey: Key.clipboardHistoryEnabled)
+        }
+    }
+
     @Published var clipboardHistoryPersistEnabled: Bool {
         didSet {
             defaults.set(clipboardHistoryPersistEnabled,
@@ -462,6 +476,15 @@ final class EditorPreferences: ObservableObject {
         // when the user might still expect the legacy 30-day
         // sweep. The explicit presence check preserves the
         // Phase 57 default until the user opens Settings.
+        // Audit C3 — clipboard polling master switch. Same presence-
+        // check dance: an absent key ⇒ legacy Phase 57 always-on
+        // (true), not `defaults.bool`'s false-on-missing.
+        if defaults.object(forKey: Key.clipboardHistoryEnabled) != nil {
+            self.clipboardHistoryEnabled = defaults.bool(
+                forKey: Key.clipboardHistoryEnabled)
+        } else {
+            self.clipboardHistoryEnabled = true
+        }
         if defaults.object(forKey: Key.clipboardHistoryPersistEnabled) != nil {
             self.clipboardHistoryPersistEnabled = defaults.bool(
                 forKey: Key.clipboardHistoryPersistEnabled)

@@ -450,7 +450,7 @@ final class GitStatusEngine: ObservableObject {
     /// behind counts in the same detached pass so the sidebar
     /// indicators track checkouts/commits/fetches without extra
     /// refresh hooks.
-    func refresh() {
+    func refresh(includeBranchMeta: Bool = true) {
         currentTask?.cancel()
         guard let repo else {
             // No bound repo ⇒ idle empty state. We zero out rows so
@@ -467,13 +467,20 @@ final class GitStatusEngine: ObservableObject {
             let (result, branchName, ab) = await Task.detached(priority: .userInitiated) {
                 () -> (GitClient.StatusResult, String?, GitClient.AheadBehind?) in
                 let status = GitClient.status(repo: repo)
-                let br = GitClient.currentBranch(repo: repo)
-                let ab = GitClient.aheadBehind(repo: repo)
+                // Audit H2 — branch name + upstream divergence only
+                // change on checkout / commit / fetch / pull / push,
+                // never on a plain content save. Callers that know only
+                // file bytes changed pass `includeBranchMeta: false` to
+                // skip these two extra subprocess forks.
+                let br = includeBranchMeta ? GitClient.currentBranch(repo: repo) : nil
+                let ab = includeBranchMeta ? GitClient.aheadBehind(repo: repo) : nil
                 return (status, br, ab)
             }.value
             guard !Task.isCancelled, let self else { return }
-            if self.branch != branchName { self.branch = branchName }
-            if self.aheadBehind != ab { self.aheadBehind = ab }
+            if includeBranchMeta {
+                if self.branch != branchName { self.branch = branchName }
+                if self.aheadBehind != ab { self.aheadBehind = ab }
+            }
             switch result {
             case .rows(let parsed):
                 if self.rows != parsed { self.rows = parsed }

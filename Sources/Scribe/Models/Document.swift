@@ -10,39 +10,32 @@ import SwiftUI
 final class Document: ObservableObject, Identifiable {
     let id = UUID()
     @Published var title: String
-    @Published var text: String
+    @Published var text: String {
+        didSet { cachedCharCount = nil }
+    }
+    /// Audit C2 — cached grapheme count. `StatusBarView` renders the
+    /// char count and is re-evaluated on every cursor move / scroll
+    /// tick (Document's cursor/viewport are `@Published`), so a raw
+    /// `text.count` there was an O(N) grapheme walk per frame on mid-
+    /// sized files. Cache it; the next `text` write invalidates it.
+    private var cachedCharCount: Int?
+    var charCount: Int {
+        if let cachedCharCount { return cachedCharCount }
+        let c = text.count
+        cachedCharCount = c
+        return c
+    }
     @Published var url: URL?
     @Published var encoding: TextEncoding = .utf8
     @Published var lineEnding: LineEnding = .lf
     @Published var isDirty: Bool = false
-    @Published var cursorLine: Int = 1
-    @Published var cursorColumn: Int = 1
-    /// Phase 52b — 1-based source line at the top of the editor's
-    /// visible viewport. Written by ScintillaCodeEditor's
-    /// V_SCROLL handler after every vertical scroll event; read by
-    /// MarkdownPreviewPane to drive the editor→preview scroll-sync
-    /// path. A dedicated signal (rather than repurposing
-    /// `cursorLine`) keeps the caret-driven reveal independent of
-    /// viewport drag gestures, which matters when the user scrolls
-    /// without moving the caret.
-    @Published var viewportTopLine: Int = 1
-    /// Phase 64 — 1-based source line at the *bottom* of the
-    /// editor's visible viewport (the last fully or partially
-    /// visible row). Published alongside `viewportTopLine` on
-    /// every V_SCROLL tick. The Document Map's viewport overlay
-    /// reads both to size the translucent rectangle that shows
-    /// where the user is in the buffer.
-    @Published var viewportBottomLine: Int = 1
-    /// Phase 52c — reverse channel: 1-based source line of the
-    /// block currently at the top of the *preview's* viewport.
-    /// Published by MarkdownPreviewPane's JS scroll handler via a
-    /// WKScriptMessageHandler; observed by ScintillaCodeEditor to
-    /// drive SCI_SETFIRSTVISIBLELINE so the editor follows when
-    /// the user drags the preview scroll thumb. Kept distinct from
-    /// `viewportTopLine` (editor→preview) so the two directions
-    /// don't silently fight each other over a single @Published
-    /// variable.
-    @Published var previewViewportTopLine: Int = 1
+    /// Audit H1 — caret + viewport signals live on a dedicated
+    /// `EditorViewportState` so their many-per-second SCN_UPDATEUI /
+    /// V_SCROLL writes don't fire `Document.objectWillChange` and
+    /// churn every tab / sidebar / status observer. Only the status-
+    /// bar line:col label, the minimap overlay, and the editor↔preview
+    /// scroll-sync observe `viewport`. (Was 5 `@Published` here.)
+    let viewport = EditorViewportState()
     /// User-chosen Lexilla lexer name. When set, takes precedence over the
     /// extension-based detection in `LexerCatalog`. `nil` ⇒ auto.
     @Published var lexerOverride: String?

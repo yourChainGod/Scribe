@@ -32,7 +32,7 @@ final class MarkdownPreviewScrollSyncTests: XCTestCase {
         // yet" so the reveal fast path stays dormant until the
         // editor actually fires its first V_SCROLL.
         let doc = Document(title: "t")
-        XCTAssertEqual(doc.viewportTopLine, 1)
+        XCTAssertEqual(doc.viewport.viewportTopLine, 1)
     }
 
     func test_document_viewportTopLineIsPublished() {
@@ -42,8 +42,8 @@ final class MarkdownPreviewScrollSyncTests: XCTestCase {
         // the Document/View boundary.
         let doc = Document(title: "t")
         var tickCount = 0
-        let cancellable = doc.$viewportTopLine.sink { _ in tickCount += 1 }
-        doc.viewportTopLine = 42
+        let cancellable = doc.viewport.$viewportTopLine.sink { _ in tickCount += 1 }
+        doc.viewport.viewportTopLine = 42
         // Combine delivers the initial value + the new one.
         XCTAssertEqual(tickCount, 2)
         cancellable.cancel()

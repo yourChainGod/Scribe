@@ -36,6 +36,14 @@ struct CommandPalette: View {
 
     @State private var query: String
     @State private var selection: Int = 0
+    /// Memoised `registry.grouped(for: query)`. Recomputed only when
+    /// `query` changes / on appear, instead of the previous two full
+    /// `grouped` passes per body eval (`matches` + `sectionsSnapshot`,
+    /// ≈120 commands × 2 fuzzy passes / frame, re-run on every hover /
+    /// arrow-key tick). Keyed on `query` alone: the palette is a
+    /// transient modal, so `registry.commands` / `prefixRoutes` /
+    /// `selectionContextActive` stay frozen while it's on screen.
+    @State private var cachedSections: [CommandSection] = []
     @FocusState private var queryFocused: Bool
     @Environment(\.appTheme) private var appTheme
 
@@ -57,19 +65,19 @@ struct CommandPalette: View {
     }
 
     /// Phase 46d — flat ranked result list used by keyboard navigation
-    /// and the pick action. `sections` below is the grouped view onto
-    /// the exact same matches (it just splits them by category).
+    /// and the pick action. Reads the memoised `cachedSections` so a
+    /// body re-eval (hover / arrow key) doesn't re-run the ranking.
     private var matches: [CommandMatch] {
-        sections.flatMap(\.matches)
+        cachedSections.flatMap(\.matches)
     }
 
-    /// Phase 46d — grouped view. Empty query ⇒ category sections;
-    /// non-empty query ⇒ a single anonymous section so the flat fuzzy
-    /// ranking still reads as one list. Prefix routes (`@`, `:`, `>`)
-    /// also collapse to a single section because their result space
-    /// is already scoped.
-    private var sections: [CommandSection] {
-        registry.grouped(for: query)
+    /// Recompute the grouped/ranked result once per query change.
+    /// Empty query ⇒ category sections; non-empty query ⇒ a single
+    /// anonymous section so the flat fuzzy ranking still reads as one
+    /// list. Prefix routes (`@`, `:`, `>`) also collapse to a single
+    /// section. Was a plain computed property hit twice per body eval.
+    private func recomputeSections() {
+        cachedSections = registry.grouped(for: query)
     }
 
     /// Placeholder text for the search field. Falls back to the
@@ -123,7 +131,10 @@ struct CommandPalette: View {
                         onCancel()
                         return .handled
                     }
-                    .onChange(of: query) { _, _ in selection = 0 }
+                    .onChange(of: query) { _, _ in
+                        selection = 0
+                        recomputeSections()
+                    }
                 Button(action: onCancel) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 13, weight: .medium))
@@ -172,7 +183,7 @@ struct CommandPalette: View {
                             // keeps the ForEach bodies pure (no
                             // mutating captures — SwiftUI's ViewBuilder
                             // rejects those).
-                            let sectionsSnapshot = sections
+                            let sectionsSnapshot = cachedSections
                             let sectionOffsets = Self.flatOffsets(for: sectionsSnapshot)
                             ForEach(Array(sectionsSnapshot.enumerated()),
                                     id: \.element.id) { sIdx, section in
@@ -229,7 +240,10 @@ struct CommandPalette: View {
                 .stroke(appTheme.separator.opacity(0.5), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.16), radius: 14, y: 7)
-        .onAppear { queryFocused = true }
+        .onAppear {
+            queryFocused = true
+            recomputeSections()
+        }
     }
 
     private func invokeSelected() {

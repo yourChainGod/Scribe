@@ -88,44 +88,50 @@ struct TextToolsEditorFrame: View {
 struct TextToolsOutputButtons: View {
     @EnvironmentObject private var workspace: Workspace
     @EnvironmentObject private var findState: FindState
-    let result: String
+    /// Audit (text-tools) — `hasResult` drives the `.disabled` state in
+    /// `body` (cheap), while `makeResult` defers the O(rows×tokens)
+    /// render to the moment a button is actually clicked. The old
+    /// `let result: String` forced a full render on every parent
+    /// `body` eval just to test `.isEmpty`.
+    let hasResult: Bool
+    let makeResult: () -> String
 
     var body: some View {
         HStack(spacing: 8) {
             Button {
-                copyToClipboard(result)
+                copyToClipboard(makeResult())
             } label: {
                 Label(L10n.t("textTools.output.copy"),
                       systemImage: "doc.on.doc")
             }
-            .disabled(result.isEmpty)
+            .disabled(!hasResult)
 
             Button {
-                openResultInNewTab(result)
+                openResultInNewTab(makeResult())
             } label: {
                 Label(L10n.t("textTools.output.newTab"),
                       systemImage: "plus.square.on.square")
             }
-            .disabled(result.isEmpty)
+            .disabled(!hasResult)
 
             Button {
-                replaceCurrentSelection(with: result)
+                replaceCurrentSelection(with: makeResult())
             } label: {
                 Label(L10n.t("textTools.output.replaceSelection"),
                       systemImage: "text.cursor")
             }
-            .disabled(workspace.activeTextSelection.isEmpty || result.isEmpty)
+            .disabled(workspace.activeTextSelection.isEmpty || !hasResult)
 
             Spacer()
 
             Button {
-                replaceCurrentDocument(with: result)
+                replaceCurrentDocument(with: makeResult())
             } label: {
                 Label(L10n.t("textTools.output.replaceDocument"),
                       systemImage: "doc.text")
             }
             .buttonStyle(.borderedProminent)
-            .disabled(workspace.current == nil || result.isEmpty)
+            .disabled(workspace.current == nil || !hasResult)
         }
         .controlSize(.small)
     }

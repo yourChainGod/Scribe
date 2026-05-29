@@ -25,6 +25,12 @@ struct ScintillaCodeEditor: NSViewRepresentable {
     @ObservedObject var doc: Document
     @ObservedObject var prefs: EditorPreferences
     @ObservedObject var findState: FindState
+    /// Audit H1 — observe the editor's caret/viewport state so the
+    /// preview→editor scroll drain (`consumePreviewScrollIfNeeded`)
+    /// still fires on `previewViewportTopLine` writes now that they
+    /// live off `Document`. The Coordinator writes the editor-side
+    /// signals (cursor + viewport top/bottom) directly via `doc.viewport`.
+    @ObservedObject var viewport: EditorViewportState
     /// Phase 18 — Workspace receives the live selection text on every
     /// SCN_UPDATEUI tick so the "Find in Files" command can prefill
     /// the query from whatever the user just highlighted. We don't
@@ -638,7 +644,7 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         /// yet but plumbed) don't silently throw off the mapping
         /// between doc and display lines.
         func consumePreviewScrollIfNeeded(in view: ScintillaView) {
-            let target = doc.previewViewportTopLine
+            let target = doc.viewport.previewViewportTopLine
             guard target > 0, target != lastAppliedPreviewLine else { return }
             lastAppliedPreviewLine = target
             let docLine0 = max(0, target - 1)
@@ -806,8 +812,8 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                     let col = view.message(SCI.GETCOLUMN, wParam: UInt(pos))
                     let line1 = Int(line) + 1   // Scintilla is 0-based
                     let col1  = Int(col)  + 1
-                    if doc.cursorLine != line1 { doc.cursorLine = line1 }
-                    if doc.cursorColumn != col1 { doc.cursorColumn = col1 }
+                    if doc.viewport.cursorLine != line1 { doc.viewport.cursorLine = line1 }
+                    if doc.viewport.cursorColumn != col1 { doc.viewport.cursorColumn = col1 }
                     // Phase 52b — viewport scroll drives the
                     // markdown-preview scroll sync. SCN_UPDATEUI's
                     // `updated` bitmask carries `SC_UPDATE.V_SCROLL`
@@ -841,8 +847,8 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                         // carries a different docLine and falls
                         // through.
                         if topLine1 != lastAppliedPreviewLine,
-                           doc.viewportTopLine != topLine1 {
-                            doc.viewportTopLine = topLine1
+                           doc.viewport.viewportTopLine != topLine1 {
+                            doc.viewport.viewportTopLine = topLine1
                         }
                         // Phase 64 — also publish the bottom-of-
                         // viewport line so the Document Map's
@@ -854,8 +860,8 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                         let docLineBottom = view.message(SCI.DOCLINEFROMVISIBLE,
                                                          wParam: UInt(lastVisible))
                         let bottomLine1 = Int(docLineBottom) + 1
-                        if doc.viewportBottomLine != bottomLine1 {
-                            doc.viewportBottomLine = bottomLine1
+                        if doc.viewport.viewportBottomLine != bottomLine1 {
+                            doc.viewport.viewportBottomLine = bottomLine1
                         }
                     }
                     // Phase 35c-ii-γ — caret moved to a new line:
@@ -884,8 +890,17 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                     // line truncation matches what users intuitively
                     // expect (the Find bar isn't multi-line).
                     if let workspace {
-                        workspace.activeSelection = currentSelectionText(in: view)
-                        workspace.activeTextSelection = currentFullSelectionText(in: view)
+                        // Audit C4 — one byte-range read per frame, not
+                        // two. Derive the single-line Find-bar value from
+                        // the full selection instead of a second buffer
+                        // read on this SCN_UPDATEUI hot path.
+                        let full = currentFullSelectionText(in: view)
+                        workspace.activeTextSelection = full
+                        if let nl = full.firstIndex(where: { $0.isNewline }) {
+                            workspace.activeSelection = String(full[..<nl])
+                        } else {
+                            workspace.activeSelection = full
+                        }
                     }
                 }
             case SCN.DWELLSTART:

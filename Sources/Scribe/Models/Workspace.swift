@@ -1158,8 +1158,9 @@ final class Workspace: ObservableObject {
                     }
                     // Phase 35b-1 — refresh Source Control rows;
                     // chunked save just rewrote the on-disk bytes
-                    // git compares against.
-                    self?.gitStatusEngine.refresh()
+                    // git compares against. Audit H2 — an internal save
+                    // can't change branch/upstream, so skip those forks.
+                    self?.gitStatusEngine.refresh(includeBranchMeta: false)
                     // Phase 48b — same trigger keeps the single-
                     // file branch chip's ahead/behind fresh.
                     self?.refreshActiveFileGitProbe()
@@ -1211,7 +1212,9 @@ final class Workspace: ObservableObject {
             // circuits, and only this call actually drives the gutter.
             if doc.id == selectedID { gitGutterEngine.refresh() }
             // Phase 35b-1 — Source Control sidebar same trigger.
-            gitStatusEngine.refresh()
+            // Audit H2 — an internal save can't change branch/upstream;
+            // skip the currentBranch + aheadBehind forks.
+            gitStatusEngine.refresh(includeBranchMeta: false)
             // Phase 48b — single-file branch chip mirrors save.
             refreshActiveFileGitProbe()
             // Phase 35c-ii-β — inline blame catches up to the

@@ -26,7 +26,7 @@ struct EditorAreaView: View {
             // markdown preview) and re-evaluates body without us
             // having to mark every doc property as a workspace-level
             // dependency.
-            DocumentEditorPane(doc: doc)
+            DocumentEditorPane(doc: doc, viewport: doc.viewport)
                 .environmentObject(workspace)
                 .environmentObject(prefs)
                 .environmentObject(findState)
@@ -42,6 +42,11 @@ struct EditorAreaView: View {
 /// though Workspace.documents itself didn't change identity.
 private struct DocumentEditorPane: View {
     @ObservedObject var doc: Document
+    /// Audit H1 — observe caret/viewport directly so the editor→
+    /// preview scroll sync (cursorLine / viewportTopLine passed to
+    /// MarkdownPreviewPane) still updates now that these signals
+    /// live off `Document` on a dedicated `EditorViewportState`.
+    @ObservedObject var viewport: EditorViewportState
     @EnvironmentObject var workspace: Workspace
     @EnvironmentObject var prefs: EditorPreferences
     @EnvironmentObject var findState: FindState
@@ -73,14 +78,14 @@ private struct DocumentEditorPane: View {
                         // line numbers; preview agrees on that
                         // convention with MarkdownConverter's
                         // data-source-line stamps.
-                        cursorLine: doc.cursorLine,
+                        cursorLine: viewport.cursorLine,
                         // Phase 52b — the viewport-top line
                         // drives the editor→preview scroll sync.
                         // Both signals flow through
                         // Document; MarkdownPreviewPane's
                         // updateNSView picks viewport over
                         // caret when both are present.
-                        viewportLine: doc.viewportTopLine,
+                        viewportLine: viewport.viewportTopLine,
                         // Phase 52c — reverse channel. The
                         // preview's rAF-throttled scroll
                         // listener ships block-level source
@@ -94,8 +99,8 @@ private struct DocumentEditorPane: View {
                         // matches the Document's — one tab, one
                         // closure.
                         onPreviewScroll: { line in
-                            if doc.previewViewportTopLine != line {
-                                doc.previewViewportTopLine = line
+                            if viewport.previewViewportTopLine != line {
+                                viewport.previewViewportTopLine = line
                             }
                         },
                         // Phase 53b — preview checkbox click. The
@@ -117,7 +122,7 @@ private struct DocumentEditorPane: View {
     }
 
     private var editor: some View {
-        ScintillaCodeEditor(doc: doc, prefs: prefs, findState: findState)
+        ScintillaCodeEditor(doc: doc, prefs: prefs, findState: findState, viewport: viewport)
             .id(doc.id)
             .background(Color(rgb: appTheme.editor.background))
             .contextMenu {
@@ -144,7 +149,7 @@ private struct DocumentEditorPane: View {
                 // than "editor with weird tail". Matches the vibe of
                 // Scintilla's fold / git-gutter margins.
                 Divider()
-                DocumentMapPane(doc: doc, prefs: prefs)
+                DocumentMapPane(doc: doc, prefs: prefs, viewport: viewport)
                     .id(doc.id)
                     .frame(width: DocumentMapPane.preferredWidth)
             }

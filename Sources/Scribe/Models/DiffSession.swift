@@ -105,21 +105,31 @@ final class DiffSession: ObservableObject {
     /// right, the convention every other diff tool uses).
     /// Errors set `self.error` and leave the panes empty.
     func loadGitHEAD(file: URL) {
-        let result = GitClient.headBlob(of: file)
-        switch result {
-        case .untracked:
-            self.error = "“\(file.lastPathComponent)” is not tracked by git."
-            return
-        case .notInRepo:
-            self.error = "“\(file.lastPathComponent)” is not inside a git repository."
-            return
-        case .error(let message):
-            self.error = "git: \(message)"
-            return
-        case .success(let blob, let shortSHA):
-            do {
-                let workingData = try Data(contentsOf: file)
-                let workingDecoded = TextFormatDetector.decode(data: workingData)
+        // Audit H4 — `headBlob` forks three git subprocesses
+        // (ls-files / show / rev-parse) and we then read + decode the
+        // working file. This all used to run synchronously on the main
+        // actor, freezing the UI for the duration on large tracked
+        // files or a cold git. Resolve it off-main and apply the
+        // outcome back here; mirrors `recompute()`'s detach pattern.
+        isComputing = true
+        Task {
+            let outcome = await Task.detached(priority: .userInitiated) {
+                Self.resolveGitHEAD(file: file)
+            }.value
+            switch outcome {
+            case .untracked:
+                error = "“\(file.lastPathComponent)” is not tracked by git."
+                isComputing = false
+            case .notInRepo:
+                error = "“\(file.lastPathComponent)” is not inside a git repository."
+                isComputing = false
+            case .error(let message):
+                error = "git: \(message)"
+                isComputing = false
+            case .readError(let message):
+                error = "Couldn't read working file: \(message)"
+                isComputing = false
+            case .loaded(let blob, let shortSHA, let working):
                 leftURL = nil
                 rightURL = file
                 leftLabel = file.lastPathComponent
@@ -127,13 +137,44 @@ final class DiffSession: ObservableObject {
                 leftSubtitle = "HEAD@\(shortSHA)"
                 rightSubtitle = "Working tree"
                 leftText = blob
-                rightText = workingDecoded.text
+                rightText = working
                 error = nil
-                Task { await recompute() }
-            } catch {
-                self.error = "Couldn't read working file: \(error.localizedDescription)"
+                await recompute()   // flips isComputing true→false itself
             }
         }
+    }
+
+    /// Off-main resolution for `loadGitHEAD` (audit H4). `nonisolated`
+    /// so it runs on the detached executor: forks the git subprocesses
+    /// and reads + decodes the working file without touching any
+    /// `@MainActor` state. Returns a `Sendable` outcome the caller
+    /// applies back on the main actor.
+    private nonisolated static func resolveGitHEAD(file: URL) -> GitHEADOutcome {
+        switch GitClient.headBlob(of: file) {
+        case .untracked:          return .untracked
+        case .notInRepo:          return .notInRepo
+        case .error(let message): return .error(message)
+        case .success(let blob, let shortSHA):
+            do {
+                let workingData = try Data(contentsOf: file)
+                let workingDecoded = TextFormatDetector.decode(data: workingData)
+                return .loaded(blob: blob,
+                               shortSHA: shortSHA,
+                               working: workingDecoded.text)
+            } catch {
+                return .readError(error.localizedDescription)
+            }
+        }
+    }
+
+    /// Result of the off-main `resolveGitHEAD` pass. `Sendable` so it
+    /// crosses the detached-task boundary back to the main actor.
+    private enum GitHEADOutcome: Sendable {
+        case untracked
+        case notInRepo
+        case error(String)
+        case readError(String)
+        case loaded(blob: String, shortSHA: String, working: String)
     }
 
     /// Phase 68b — load two raw strings (no URLs) and trigger a

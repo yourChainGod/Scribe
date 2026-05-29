@@ -25,7 +25,8 @@ struct TextToolsLiveOutput: View {
             if isTruncated {
                 truncationFooter
             }
-            TextToolsOutputButtons(result: model.columnResult)
+            TextToolsOutputButtons(hasResult: model.hasColumnResult,
+                                   makeResult: { model.columnResult })
         }
     }
 

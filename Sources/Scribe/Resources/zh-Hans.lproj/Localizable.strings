@@ -949,6 +949,8 @@
 
 // Phase 67 — 剪贴板历史持久化
 "settings.tab.clipboard"                  = "剪贴板";
+"settings.clipboard.enabled.title"        = "启用剪贴板历史";
+"settings.clipboard.enabled.help"         = "关闭后 Scribe 将完全停止轮询剪贴板，不再有后台唤醒；已有条目保留至退出。";
 "settings.clipboard.section.persistence"  = "持久化";
 "settings.clipboard.persist.title"        = "跨启动保留剪贴板历史";
 "settings.clipboard.persist.help"         = "关闭时历史仅保存在内存中，应用退出即清空；开启后会写入 ~/Library/Application Support/Scribe/clipboard-history.json。";

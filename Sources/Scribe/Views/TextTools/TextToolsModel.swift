@@ -133,8 +133,37 @@ final class TextToolsModel: ObservableObject {
             .filter { $0 > 0 }
     }
 
+    /// Audit (text-tools) — memoise the split. `primaryTable` feeds
+    /// `table`, which is read 6-8× per render (columnCount, `sample`
+    /// per chip, columnResultPreview, totalRowCount); re-splitting
+    /// `inputText` each time is O(n) and dominates on large pastes.
+    /// Keyed on the five split inputs — the `input ==` check is O(1)
+    /// when the buffer is unchanged (COW), so a cache hit is cheap and
+    /// a miss costs exactly the split it was going to do anyway.
+    private var cachedPrimaryTable: TextTable?
+    private var primaryTableKey: PrimaryTableKey?
+
+    private struct PrimaryTableKey: Equatable {
+        let input: String
+        let mode: TextToolsSplitMode
+        let delimiter: String
+        let regex: String
+        let widths: String
+    }
+
     var primaryTable: TextTable {
-        TextTableSplitter.split(inputText, strategy: splitStrategy)
+        let key = PrimaryTableKey(input: inputText,
+                                  mode: splitMode,
+                                  delimiter: delimiter,
+                                  regex: regexPattern,
+                                  widths: fixedWidths)
+        if primaryTableKey == key, let cachedPrimaryTable {
+            return cachedPrimaryTable
+        }
+        let fresh = TextTableSplitter.split(inputText, strategy: splitStrategy)
+        cachedPrimaryTable = fresh
+        primaryTableKey = key
+        return fresh
     }
 
     var importedTables: [TextTable] {
@@ -185,6 +214,14 @@ final class TextToolsModel: ObservableObject {
 
     var recipeParts: [ColumnRecipePart] {
         tokens.map(\.asRecipePart)
+    }
+
+    /// Cheap predicate for enabling the output buttons without
+    /// rendering the full result. The buttons used to bind to the
+    /// O(rows×tokens) `columnResult` string in `body` purely to test
+    /// `.isEmpty`; this keeps them lazy (audit text-tools).
+    var hasColumnResult: Bool {
+        tokens.contains(where: { $0.isColumn })
     }
 
     /// Full rendering — used by Copy / Replace Document / etc.

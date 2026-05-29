@@ -25,7 +25,7 @@ final class DocumentMapViewportTests: XCTestCase {
 
     func test_document_hasDefaultViewportBottomLine() {
         let doc = Document(title: "x.swift", text: "")
-        XCTAssertEqual(doc.viewportBottomLine, 1,
+        XCTAssertEqual(doc.viewport.viewportBottomLine, 1,
                        "default must be 1 so the overlay can start as a thin strip before V_SCROLL fires")
     }
 
@@ -35,10 +35,10 @@ final class DocumentMapViewportTests: XCTestCase {
     func test_document_viewportBottomLine_isPublished() {
         let doc = Document(title: "x.swift", text: "")
         var observed: [Int] = []
-        let sub = doc.$viewportBottomLine.sink { observed.append($0) }
-        doc.viewportBottomLine = 1        // initial publish
-        doc.viewportBottomLine = 42       // changed publish
-        doc.viewportBottomLine = 42       // same value
+        let sub = doc.viewport.$viewportBottomLine.sink { observed.append($0) }
+        doc.viewport.viewportBottomLine = 1        // initial publish
+        doc.viewport.viewportBottomLine = 42       // changed publish
+        doc.viewport.viewportBottomLine = 42       // same value
         // First publish mirrors the @Published default; the 42
         // assignment has to land at least once for SwiftUI to pick
         // up the change.

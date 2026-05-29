@@ -233,6 +233,20 @@ private struct FindMatchesIndicator: View {
     }
 }
 
+/// Audit H1 — caret position, split into its own view so it observes
+/// `EditorViewportState` (which churns on every caret move / scroll)
+/// instead of forcing the whole `DocumentStatusItems` body — char
+/// count, language / encoding / line-ending menus — to re-evaluate on
+/// cursor movement. `DocumentStatusItems` no longer observes the
+/// viewport, so a caret move repaints only this tiny label.
+private struct CursorPositionLabel: View {
+    @ObservedObject var viewport: EditorViewportState
+    var body: some View {
+        Text(L10n.t("status.lineCol", viewport.cursorLine, viewport.cursorColumn))
+            .monospacedDigit()
+    }
+}
+
 private struct DocumentStatusItems: View {
     @ObservedObject var doc: Document
     @EnvironmentObject var workspace: Workspace
@@ -244,8 +258,7 @@ private struct DocumentStatusItems: View {
         StatusBarSeparator()
         lineEndingMenu
         StatusBarSeparator()
-        Text(L10n.t("status.lineCol", doc.cursorLine, doc.cursorColumn))
-            .monospacedDigit()
+        CursorPositionLabel(viewport: doc.viewport)
         StatusBarSeparator()
         // Phase 34c — large-file documents have an empty `doc.text`
         // (the bytes live on the C++ side via SCI_SETDOCPOINTER), so
@@ -257,7 +270,7 @@ private struct DocumentStatusItems: View {
             Text(largeFileSizeLabel(for: url))
                 .monospacedDigit()
         } else {
-            Text(L10n.t("status.charCount", doc.text.count))
+            Text(L10n.t("status.charCount", doc.charCount))
                 .monospacedDigit()
         }
     }

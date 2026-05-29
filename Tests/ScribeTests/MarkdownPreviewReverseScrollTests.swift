@@ -33,7 +33,7 @@ final class MarkdownPreviewReverseScrollTests: XCTestCase {
         // distinct publish as the first real sync, not the
         // constructor's seed value.
         let doc = Document(title: "t")
-        XCTAssertEqual(doc.previewViewportTopLine, 1)
+        XCTAssertEqual(doc.viewport.previewViewportTopLine, 1)
     }
 
     func test_previewViewportTopLineIsPublished() {
@@ -43,8 +43,8 @@ final class MarkdownPreviewReverseScrollTests: XCTestCase {
         // silently at the Document boundary.
         let doc = Document(title: "t")
         var tickCount = 0
-        let cancellable = doc.$previewViewportTopLine.sink { _ in tickCount += 1 }
-        doc.previewViewportTopLine = 17
+        let cancellable = doc.viewport.$previewViewportTopLine.sink { _ in tickCount += 1 }
+        doc.viewport.previewViewportTopLine = 17
         // Combine delivers initial + new.
         XCTAssertEqual(tickCount, 2)
         cancellable.cancel()
