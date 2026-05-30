@@ -699,6 +699,8 @@
 "diff.button.openPair"  = "Open Pair…";
 "diff.button.swap"      = "Swap";
 "diff.button.close"     = "Close";
+"diff.picker.title"     = "Select two files to compare";
+"diff.picker.message"   = "Pick two files. Older first by convention.";
 "diff.empty.title"      = "Compare Files";
 "diff.empty.subtitle"   = "Pick two files to see a side-by-side diff\nwith synchronized scrolling.";
 "diff.empty.button"     = "Choose Files…";
@@ -873,7 +875,6 @@
 "character.category.arrows"          = "Arrows";
 "character.category.punctuation"     = "Punctuation";
 "character.category.currency"        = "Currency";
-"common.close"                       = "Close";
 
 // Phase 41b — Generator Pack (UUID / Lorem / Password / Timestamp / QR)
 "generator.menu"        = "Generate";

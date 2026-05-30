@@ -5,7 +5,7 @@
 
 import Foundation
 
-final class FileNode: ObservableObject, Identifiable, @unchecked Sendable {
+final class FileNode: ObservableObject, Identifiable {
     let url: URL
     let isDirectory: Bool
     @Published var children: [FileNode]?

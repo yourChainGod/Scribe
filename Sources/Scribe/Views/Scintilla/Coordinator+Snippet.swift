@@ -270,7 +270,7 @@ extension ScintillaCodeEditor.Coordinator {
         }
     }
 
-    private func removeSnippetKeyMonitor() {
+    func removeSnippetKeyMonitor() {
         if let monitor = snippetKeyMonitor {
             NSEvent.removeMonitor(monitor)
             snippetKeyMonitor = nil

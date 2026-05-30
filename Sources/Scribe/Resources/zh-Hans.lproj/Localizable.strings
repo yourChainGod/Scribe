@@ -694,6 +694,8 @@
 // MARK: - Diff view
 
 "diff.button.openPair"  = "打开文件对…";
+"diff.picker.title"     = "选择两个文件进行对比";
+"diff.picker.message"   = "选择两个文件，按惯例较旧的在前。";
 "diff.button.swap"      = "交换";
 "diff.button.close"     = "关闭";
 "diff.empty.title"      = "对比文件";
@@ -870,7 +872,6 @@
 "character.category.arrows"          = "箭头";
 "character.category.punctuation"     = "标点";
 "character.category.currency"        = "货币";
-"common.close"                       = "关闭";
 
 // Phase 41b — Generator Pack (UUID / Lorem / Password / Timestamp / QR)
 "generator.menu"        = "生成";

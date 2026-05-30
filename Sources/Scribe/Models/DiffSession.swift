@@ -50,16 +50,27 @@ final class DiffSession: ObservableObject {
         result?.ops.filter { $0.kind != .equal } ?? []
     }
 
+    /// Phase 80 — bumped on every recompute; the detached diff bails
+    /// before writing back if a newer recompute superseded it (stale-write
+    /// guard, mirroring SymbolOutline / FileIndex generation tokens).
+    private var recomputeGeneration = 0
+
     /// Compute a diff between `leftText` and `rightText`. Off-main; flips
     /// `isComputing` while it runs. Idempotent — calling twice with the
     /// same input is fine.
     func recompute() async {
+        recomputeGeneration &+= 1
+        let generation = recomputeGeneration
         let left = leftText
         let right = rightText
         isComputing = true
         let computed = await Task.detached(priority: .userInitiated) {
             DiffEngine.compare(left, right)
         }.value
+        // Phase 80 — a newer recompute superseded us while the detached
+        // diff ran; drop this stale result rather than clobbering the
+        // fresher one. The newer run owns isComputing from here.
+        guard generation == recomputeGeneration else { return }
         result = computed
         activeHunk = 0
         isComputing = false
@@ -68,11 +79,11 @@ final class DiffSession: ObservableObject {
     /// Pick two files via NSOpenPanel and load + diff.
     func chooseAndCompare() {
         let panel = NSOpenPanel()
-        panel.title = "Select two files to compare"
+        panel.title = L10n.t("diff.picker.title")
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = true
-        panel.message = "Pick two files. Older first by convention."
+        panel.message = L10n.t("diff.picker.message")
         guard panel.runModal() == .OK, panel.urls.count == 2 else { return }
         load(left: panel.urls[0], right: panel.urls[1])
     }

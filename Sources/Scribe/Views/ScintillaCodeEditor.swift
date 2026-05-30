@@ -130,6 +130,11 @@ struct ScintillaCodeEditor: NSViewRepresentable {
     /// upgrade.
     static func dismantleNSView(_ view: ScintillaView, coordinator: Coordinator) {
         view.delegate = nil
+        // Phase 80 — tear down the snippet key monitor if a session was
+        // active when the view went away (tab / window close). The normal
+        // path is endSnippetSession; this covers close-mid-session, which
+        // would otherwise leak one local NSEvent monitor.
+        coordinator.removeSnippetKeyMonitor()
     }
 
     func updateNSView(_ view: ScintillaView, context: Context) {
