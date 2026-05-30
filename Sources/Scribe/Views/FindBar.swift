@@ -47,6 +47,7 @@ struct FindBar: View {
             .toggleStyle(.button)
             .buttonStyle(.borderless)
             .help(L10n.t("findbar.toggleReplace"))
+            .accessibilityLabel(Text("findbar.toggleReplace", bundle: .module))
 
             historyMenu(
                 history: state.queryHistory,
@@ -108,18 +109,21 @@ struct FindBar: View {
             optionToggle(
                 "Aa",
                 help: L10n.t("find.option.matchCase") + FindOptionShortcuts.helpSuffix(for: .matchCase),
+                accessibilityKey: "find.option.matchCase",
                 binding: $state.matchCase
             )
             .findOptionShortcut(for: .matchCase)
             optionToggle(
                 "ab\u{2009}|",
                 help: L10n.t("find.option.wholeWord") + FindOptionShortcuts.helpSuffix(for: .wholeWord),
+                accessibilityKey: "find.option.wholeWord",
                 binding: $state.wholeWord
             )
             .findOptionShortcut(for: .wholeWord)
             optionToggle(
                 ".*",
                 help: L10n.t("find.option.regex") + FindOptionShortcuts.helpSuffix(for: .regex),
+                accessibilityKey: "find.option.regex",
                 binding: $state.regex
             )
             .findOptionShortcut(for: .regex)
@@ -140,6 +144,7 @@ struct FindBar: View {
             .buttonStyle(.borderless)
             .keyboardShortcut("g", modifiers: [.command, .shift])
             .help(L10n.t("findbar.action.previous") + " (⇧⌘G)")
+            .accessibilityLabel(Text("findbar.action.previous", bundle: .module))
 
             Button {
                 state.commands.send(.findNext)
@@ -149,6 +154,7 @@ struct FindBar: View {
             .buttonStyle(.borderless)
             .keyboardShortcut("g", modifiers: .command)
             .help(L10n.t("findbar.action.next") + " (⌘G)")
+            .accessibilityLabel(Text("findbar.action.next", bundle: .module))
 
             CloseButton(action: state.hide)
                 .keyboardShortcut(.escape, modifiers: [])
@@ -236,12 +242,13 @@ struct FindBar: View {
         .menuIndicator(.hidden)
         .frame(width: 18)
         .help(L10n.t("findbar.history"))
+        .accessibilityLabel(Text("findbar.history", bundle: .module))
     }
 
     // MARK: - Pieces
 
     @ViewBuilder
-    private func optionToggle(_ label: String, help: String, binding: Binding<Bool>) -> some View {
+    private func optionToggle(_ label: String, help: String, accessibilityKey: LocalizedStringKey, binding: Binding<Bool>) -> some View {
         Toggle(isOn: binding) {
             Text(label)
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
@@ -250,6 +257,7 @@ struct FindBar: View {
         .toggleStyle(.button)
         .buttonStyle(.borderless)
         .help(help)
+        .accessibilityLabel(Text(accessibilityKey, bundle: .module))
     }
 
     /// Compact circular close button with an explicit hover ring.
@@ -274,6 +282,7 @@ struct FindBar: View {
             .buttonStyle(.plain)
             .onHover { hover = $0 }
             .help(L10n.t("findbar.action.close") + " (Esc)")
+            .accessibilityLabel(Text("findbar.action.close", bundle: .module))
         }
     }
 
