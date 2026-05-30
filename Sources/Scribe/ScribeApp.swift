@@ -84,10 +84,20 @@ struct ScribeApp: App {
         //      there's something to restore — quiet first launch.
         if !preferences.autoSaveScratchEnabled {
             ws.scratchStore.clearAll()
+            // Phase 75 — also sweep any orphaned payloads a prior
+            // "on" session may have stranded before the user turned
+            // the policy off, so disabling the feature truly empties
+            // the scratch directory.
+            ws.scratchStore.reconcileOrphans()
         } else if env.skipCrashRecoveryForTesting {
             // Screenshot/test launches should not surface or mutate
             // the user's real crash-recovery backlog.
         } else {
+            // Phase 75 — reclaim torn-write orphans (payload written
+            // but index never refreshed for a brand-new id) before
+            // anything reads the catalogue, so they can't accumulate
+            // without bound across repeated crashes.
+            ws.scratchStore.reconcileOrphans()
             ws.scratchStore.pruneExpired(
                 retentionDays: preferences.autoSaveScratchRetentionDays)
             ws.crashRecoveryPrompt = CrashRecovery.detectPending(

@@ -309,6 +309,17 @@ final class Workspace: ObservableObject {
             self?.toastCenter.error(L10n.t(titleKey), message: message)
         }
 
+        // Phase 75 — surface a persistent scratch-write failure (disk
+        // full / permission denied / read-only home) once per session.
+        // Crash recovery has silently stopped protecting unsaved work,
+        // and Untitled buffers have no ⌘S toast to fall back on, so the
+        // user needs to know to save manually.
+        self.scratchStore.onPersistentFailure = { [weak self] in
+            self?.toastCenter.warning(
+                L10n.t("toast.scratch.degraded.title"),
+                message: L10n.t("toast.scratch.degraded.message"))
+        }
+
         // Phase 67d — session restore. Persist the URL path of every
         // open titled tab on every change so the next launch can
         // reopen exactly what the user had loaded. Untitled docs

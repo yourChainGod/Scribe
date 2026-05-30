@@ -720,6 +720,8 @@
 "toast.encoding.cannotEncode"  = "所选编码无法保存";
 "toast.git.failed"       = "Git 命令失败";
 "toast.regex.invalid"    = "正则表达式无效";
+"toast.scratch.degraded.title"   = "崩溃恢复不可用";
+"toast.scratch.degraded.message" = "Scribe 无法写入崩溃恢复快照——磁盘可能已满或权限被拒。未保存的修改在崩溃后将无法恢复，请用 ⌘S 保存你的工作。";
 "toast.action.retry"     = "重试";
 "toast.action.openFinder" = "在 Finder 中显示";
 

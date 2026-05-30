@@ -723,6 +723,8 @@
 "toast.encoding.cannotEncode"  = "Cannot save with chosen encoding";
 "toast.git.failed"       = "Git command failed";
 "toast.regex.invalid"    = "Invalid regular expression";
+"toast.scratch.degraded.title"   = "Crash recovery unavailable";
+"toast.scratch.degraded.message" = "Scribe can't write crash-recovery snapshots — the disk may be full or permission denied. Unsaved changes won't survive a crash, so save your work with ⌘S.";
 "toast.action.retry"     = "Retry";
 "toast.action.openFinder" = "Show in Finder";
 

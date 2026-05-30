@@ -79,12 +79,28 @@ final class ScratchBufferStore: ObservableObject {
     private let indexURL: URL?
     private let now: @Sendable () -> Date
 
+    /// Phase 75 — invoked once per session when scratch writes have
+    /// failed `maxConsecutiveFailures` times in a row (disk full,
+    /// permission denied, read-only home). Lets the UI layer warn the
+    /// user that crash recovery has silently stopped protecting their
+    /// unsaved work; the store itself stays UI-agnostic.
+    var onPersistentFailure: (@MainActor () -> Void)?
+
+    /// Consecutive `record` write failures, reset to 0 on the first
+    /// success. Crossing `maxConsecutiveFailures` fires
+    /// `onPersistentFailure` exactly once per session.
+    private let maxConsecutiveFailures: Int
+    private var consecutiveFailures = 0
+    private var didReportPersistentFailure = false
+
     init(root: URL? = ScratchBufferStore.defaultRoot(),
-         now: @escaping @Sendable () -> Date = { Date() }) {
+         now: @escaping @Sendable () -> Date = { Date() },
+         maxConsecutiveFailures: Int = 3) {
         self.root = root
         self.indexURL = root?.appendingPathComponent("index.json",
                                                      isDirectory: false)
         self.now = now
+        self.maxConsecutiveFailures = max(1, maxConsecutiveFailures)
         self.entries = Self.loadIndex(from: indexURL)
     }
 
@@ -130,6 +146,7 @@ final class ScratchBufferStore: ObservableObject {
             let data = text.data(using: .utf8) ?? Data()
             try data.write(to: textURL, options: [.atomic])
         } catch {
+            noteWriteFailure()
             return
         }
 
@@ -138,7 +155,11 @@ final class ScratchBufferStore: ObservableObject {
         } else {
             entries.append(entry)
         }
-        persistIndex()
+        if persistIndex() {
+            noteWriteSuccess()
+        } else {
+            noteWriteFailure()
+        }
     }
 
     /// Remove the scratch payload + index entry for `id`. Called on
@@ -208,6 +229,25 @@ final class ScratchBufferStore: ObservableObject {
         }
     }
 
+    /// Phase 75 — delete `<uuid>.txt` payloads on disk that no index
+    /// entry points at. `record` writes the text payload *before*
+    /// `persistIndex`, so a crash in that window — for a brand-new id
+    /// the index never knew about — strands an orphan file that the
+    /// index-driven cleanup paths (drop / clearAll / pruneExpired) can
+    /// never reclaim, accumulating without bound across repeated
+    /// crashes. Run once per launch from ScribeApp. Only `.txt`
+    /// payloads are swept; index.json and anything else are left alone.
+    func reconcileOrphans() {
+        guard let root,
+              let names = try? FileManager.default.contentsOfDirectory(
+                atPath: root.path) else { return }
+        let live = Set(entries.map { "\($0.id.uuidString).txt" })
+        for name in names where name.hasSuffix(".txt") && !live.contains(name) {
+            try? FileManager.default.removeItem(
+                at: root.appendingPathComponent(name, isDirectory: false))
+        }
+    }
+
     // MARK: - Storage plumbing
 
     /// `~/Library/Application Support/Scribe/scratch/` — shares the
@@ -239,8 +279,9 @@ final class ScratchBufferStore: ObservableObject {
         return (try? decoder.decode([ScratchEntry].self, from: data)) ?? []
     }
 
-    private func persistIndex() {
-        guard let indexURL else { return }
+    @discardableResult
+    private func persistIndex() -> Bool {
+        guard let indexURL else { return true }
         do {
             try FileManager.default.createDirectory(
                 at: indexURL.deletingLastPathComponent(),
@@ -250,10 +291,32 @@ final class ScratchBufferStore: ObservableObject {
             encoder.outputFormatting = [.sortedKeys]
             let data = try encoder.encode(entries)
             try data.write(to: indexURL, options: [.atomic])
+            return true
         } catch {
-            // Silent; a failed index write means the next launch
-            // sees an older (or missing) catalogue. We'd rather
-            // under-restore than over-restore, so no surface UI.
+            // Silent at the call site; a failed index write means the
+            // next launch sees an older (or missing) catalogue — we'd
+            // rather under-restore than over-restore. `record` folds
+            // this into the consecutive-failure tally so a *persistent*
+            // failure (disk full / read-only home) still surfaces a
+            // one-shot warning via `onPersistentFailure`.
+            return false
         }
+    }
+
+    /// Phase 75 — write-failure tally feeding `onPersistentFailure`.
+    /// A single transient hiccup stays silent (the original Phase 69
+    /// contract); only a sustained streak — the disk-full / read-only
+    /// signature — trips the one-shot warning.
+    private func noteWriteFailure() {
+        consecutiveFailures += 1
+        if consecutiveFailures >= maxConsecutiveFailures,
+           !didReportPersistentFailure {
+            didReportPersistentFailure = true
+            onPersistentFailure?()
+        }
+    }
+
+    private func noteWriteSuccess() {
+        consecutiveFailures = 0
     }
 }

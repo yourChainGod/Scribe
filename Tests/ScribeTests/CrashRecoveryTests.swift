@@ -209,6 +209,113 @@ final class CrashRecoveryTests: XCTestCase {
         XCTAssertEqual(contents, [], "scratch dir should be wiped")
     }
 
+    // MARK: - Phase 75 — orphan reconciliation
+
+    /// A crash between `record`'s payload write and `persistIndex`
+    /// (for a brand-new id) strands a `<uuid>.txt` the index never
+    /// references. `reconcileOrphans` must sweep it while leaving
+    /// every indexed payload — and the index itself — intact.
+    func test_reconcileOrphans_removesUnindexedPayload() throws {
+        let root = try makeStoreRoot()
+        let store = ScratchBufferStore(root: root)
+        let keep = UUID()
+        store.record(id: keep, text: "keep me", originalPath: nil, title: "u",
+                     encoding: "utf8", lineEnding: "lf",
+                     diskMTime: nil, diskSize: nil)
+        // Hand-write an orphan payload with no matching index entry.
+        let orphanID = UUID()
+        let orphanURL = root.appendingPathComponent("\(orphanID.uuidString).txt")
+        try "stranded".data(using: .utf8)!.write(to: orphanURL, options: [.atomic])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: orphanURL.path))
+
+        store.reconcileOrphans()
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: orphanURL.path),
+                       "orphan payload must be swept")
+        let keepURL = root.appendingPathComponent("\(keep.uuidString).txt")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: keepURL.path),
+                      "indexed payload must survive")
+        XCTAssertEqual(store.entries.count, 1, "index untouched by sweep")
+        XCTAssertEqual(store.entries.first?.id, keep)
+    }
+
+    func test_reconcileOrphans_preservesIndexJsonAndNonTxt() throws {
+        let root = try makeStoreRoot()
+        let store = ScratchBufferStore(root: root)
+        store.record(id: UUID(), text: "x", originalPath: nil, title: "u",
+                     encoding: "utf8", lineEnding: "lf",
+                     diskMTime: nil, diskSize: nil)
+        // index.json now exists; drop a non-.txt sidecar beside it.
+        let sidecar = root.appendingPathComponent("notes.md")
+        try "keep".data(using: .utf8)!.write(to: sidecar, options: [.atomic])
+
+        store.reconcileOrphans()
+
+        let indexURL = root.appendingPathComponent("index.json")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: indexURL.path),
+                      "index.json must never be swept")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: sidecar.path),
+                      "non-.txt files must be left alone")
+    }
+
+    func test_reconcileOrphans_noPersistenceIsNoOp() {
+        let store = ScratchBufferStore(root: nil)
+        store.reconcileOrphans() // must not crash on a nil root
+        XCTAssertTrue(store.entries.isEmpty)
+    }
+
+    func test_reconcileOrphans_missingDirectoryIsNoOp() {
+        // Root points at a dir that was never created (no record yet).
+        let root = tmpDir.appendingPathComponent(UUID().uuidString,
+                                                  isDirectory: true)
+        let store = ScratchBufferStore(root: root)
+        store.reconcileOrphans() // contentsOfDirectory fails → guard returns
+        XCTAssertTrue(store.entries.isEmpty)
+    }
+
+    // MARK: - Phase 75 — persistent write-failure warning
+
+    /// A sustained streak of failed scratch writes (disk full /
+    /// permission denied) must fire `onPersistentFailure` exactly
+    /// once — a single transient hiccup stays silent.
+    func test_record_persistentWriteFailure_firesCallbackOnce() throws {
+        // A root whose parent is a regular file makes createDirectory
+        // — and therefore every record — fail deterministically.
+        let blocker = tmpDir.appendingPathComponent("blocker-\(UUID().uuidString)")
+        try "x".data(using: .utf8)!.write(to: blocker, options: [.atomic])
+        let deadRoot = blocker.appendingPathComponent("scratch", isDirectory: true)
+
+        var fired = 0
+        let store = ScratchBufferStore(root: deadRoot, maxConsecutiveFailures: 2)
+        store.onPersistentFailure = { fired += 1 }
+
+        func attempt() {
+            store.record(id: UUID(), text: "data", originalPath: nil, title: "u",
+                         encoding: "utf8", lineEnding: "lf",
+                         diskMTime: nil, diskSize: nil)
+        }
+        attempt()
+        XCTAssertEqual(fired, 0, "one failure stays silent")
+        attempt()
+        XCTAssertEqual(fired, 1, "streak crossing threshold fires once")
+        attempt()
+        XCTAssertEqual(fired, 1, "callback fires at most once per session")
+        XCTAssertTrue(store.entries.isEmpty, "nothing persisted on a dead root")
+    }
+
+    func test_record_healthyWritesNeverWarn() throws {
+        let root = try makeStoreRoot()
+        var fired = 0
+        let store = ScratchBufferStore(root: root, maxConsecutiveFailures: 2)
+        store.onPersistentFailure = { fired += 1 }
+        for _ in 0..<5 {
+            store.record(id: UUID(), text: "ok", originalPath: nil, title: "u",
+                         encoding: "utf8", lineEnding: "lf",
+                         diskMTime: nil, diskSize: nil)
+        }
+        XCTAssertEqual(fired, 0, "healthy writes never trip the warning")
+    }
+
     // MARK: - Workspace capture / drop paths
 
     func test_workspace_capturesDirtyBufferAfterDebounce() async throws {
