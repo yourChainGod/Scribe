@@ -333,6 +333,7 @@ struct MainWindow: View {
                                      : appTheme.secondaryText)
             }
             .help(L10n.t("toolbar.toggleSidebar"))
+            .accessibilityLabel(Text("toolbar.toggleSidebar", bundle: .module))
         }
     }
 
@@ -343,11 +344,13 @@ struct MainWindow: View {
                 Image(systemName: "square.and.pencil")
             }
             .help(L10n.t("toolbar.newFile") + " (⌘N)")
+            .accessibilityLabel(Text("toolbar.newFile", bundle: .module))
 
             Button { workspace.openDocument() } label: {
                 Image(systemName: "folder")
             }
             .help(L10n.t("toolbar.openFile") + " (⌘O)")
+            .accessibilityLabel(Text("toolbar.openFile", bundle: .module))
 
             Button { workspace.saveCurrent() } label: {
                 // Phase 67c — Save icon saga:
@@ -370,6 +373,7 @@ struct MainWindow: View {
             }
             .disabled(workspace.current == nil)
             .help(L10n.t("toolbar.save") + " (⌘S)")
+            .accessibilityLabel(Text("toolbar.save", bundle: .module))
         }
     }
 
@@ -383,6 +387,7 @@ struct MainWindow: View {
             }
             .disabled(workspace.current == nil)
             .help(L10n.t("toolbar.find") + " (⌘F)")
+            .accessibilityLabel(Text("toolbar.find", bundle: .module))
 
             Button {
                 showFindInFiles()
@@ -391,6 +396,7 @@ struct MainWindow: View {
             }
             .disabled(workspace.folderRoot == nil)
             .help(L10n.t("toolbar.findInFiles") + " (⌘⇧F)")
+            .accessibilityLabel(Text("toolbar.findInFiles", bundle: .module))
 
             Button {
                 startCompare()
@@ -398,6 +404,7 @@ struct MainWindow: View {
                 Image(systemName: "rectangle.split.2x1")
             }
             .help(L10n.t("toolbar.compare") + " (⌥⌘D)")
+            .accessibilityLabel(Text("toolbar.compare", bundle: .module))
 
             if let doc = workspace.current {
                 Button {
@@ -409,6 +416,7 @@ struct MainWindow: View {
                 }
                 .disabled(!doc.isMarkdown)
                 .help(markdownHelp(for: doc))
+                .accessibilityLabel(markdownHelp(for: doc))
             }
         }
     }
@@ -435,6 +443,7 @@ struct MainWindow: View {
                 Image(systemName: "command")
             }
             .help(L10n.t("toolbar.commandPalette") + " (⌘⇧P)")
+            .accessibilityLabel(Text("toolbar.commandPalette", bundle: .module))
 
             // Clipboard History ⌥⌘V. Disabled when the FIFO is
             // empty so the toolbar reads truthful at first launch
@@ -446,6 +455,7 @@ struct MainWindow: View {
             }
             .disabled(clipboardHistory.entries.isEmpty)
             .help(L10n.t("toolbar.clipboardHistory") + " (⌥⌘V)")
+            .accessibilityLabel(Text("toolbar.clipboardHistory", bundle: .module))
 
             // Go to Symbol ⌘T. Disabled until a folder is open
             // because the workspace-wide index has nothing to scan
@@ -460,6 +470,7 @@ struct MainWindow: View {
             }
             .disabled(fileIndex.rootURL == nil)
             .help(L10n.t("toolbar.gotoSymbol") + " (⌘T)")
+            .accessibilityLabel(Text("toolbar.gotoSymbol", bundle: .module))
 
             // Source Control sidebar mode. The four sidebar-mode
             // buttons inside the sidebar header are still there;
@@ -472,6 +483,7 @@ struct MainWindow: View {
                 Image(systemName: "arrow.triangle.branch")
             }
             .help(L10n.t("toolbar.sourceControl"))
+            .accessibilityLabel(Text("toolbar.sourceControl", bundle: .module))
         }
     }
 
@@ -483,6 +495,7 @@ struct MainWindow: View {
             }
             .disabled(prefs.fontSize <= EditorPreferences.fontSizeMin)
             .help(L10n.t("toolbar.zoomOut") + " (⌘-)")
+            .accessibilityLabel(Text("toolbar.zoomOut", bundle: .module))
 
             Text("\(Int(prefs.fontSize))")
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
@@ -496,6 +509,7 @@ struct MainWindow: View {
             }
             .disabled(prefs.fontSize >= EditorPreferences.fontSizeMax)
             .help(L10n.t("toolbar.zoomIn") + " (⌘+)")
+            .accessibilityLabel(Text("toolbar.zoomIn", bundle: .module))
         }
     }
 

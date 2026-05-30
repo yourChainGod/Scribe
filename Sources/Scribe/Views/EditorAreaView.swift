@@ -152,6 +152,11 @@ private struct DocumentEditorPane: View {
                 DocumentMapPane(doc: doc, prefs: prefs, viewport: viewport)
                     .id(doc.id)
                     .frame(width: DocumentMapPane.preferredWidth)
+                    // Phase 77 — the minimap is a decorative overview
+                    // (hitTest returns nil; clicks pass through). Hide
+                    // it from VoiceOver so the cursor doesn't snag on a
+                    // meaningless element with no actionable content.
+                    .accessibilityHidden(true)
             }
         }
     }

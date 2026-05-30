@@ -113,6 +113,7 @@ private struct TabItem: View {
                     .buttonStyle(.plain)
                     .onHover { closeHover = $0 }
                     .opacity(hover || isSelected ? 1 : 0)
+                    .accessibilityLabel(L10n.t("tabContext.close"))
                 }
             }
             .frame(width: 16, height: 16)
