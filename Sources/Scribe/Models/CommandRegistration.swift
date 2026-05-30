@@ -582,6 +582,44 @@ enum CommandRegistration {
                 findState.commands.send(.jumpToMatchingBracket)
             }
         )
+
+        // Phase 82 — code folding palette entries. Mirror View ▸ Fold /
+        // Unfold / Fold All / Unfold All. Registered whenever a document
+        // is open; the Coordinator no-ops on buffers with no fold levels
+        // (plain text). Fold / Unfold carry their ⌥⌘[ / ⌥⌘] labels;
+        // Fold All / Unfold All are palette- / menu-only.
+        commands.append(contentsOf: [
+            ScribeCommand(id: "view.fold",
+                          title: localize("menu.view.fold"),
+                          subtitle: localize("menu.view"),
+                          keywords: ["fold", "collapse", "hide", "block",
+                                     "section", "折叠", "收起"],
+                          shortcutLabel: "⌥⌘[") {
+                findState.commands.send(.foldAtCaret)
+            },
+            ScribeCommand(id: "view.unfold",
+                          title: localize("menu.view.unfold"),
+                          subtitle: localize("menu.view"),
+                          keywords: ["unfold", "expand", "show", "block",
+                                     "section", "展开", "打开"],
+                          shortcutLabel: "⌥⌘]") {
+                findState.commands.send(.unfoldAtCaret)
+            },
+            ScribeCommand(id: "view.foldAll",
+                          title: localize("menu.view.foldAll"),
+                          subtitle: localize("menu.view"),
+                          keywords: ["fold", "all", "collapse", "everything",
+                                     "全部折叠", "折叠全部"]) {
+                findState.commands.send(.foldAll)
+            },
+            ScribeCommand(id: "view.unfoldAll",
+                          title: localize("menu.view.unfoldAll"),
+                          subtitle: localize("menu.view"),
+                          keywords: ["unfold", "all", "expand", "everything",
+                                     "全部展开", "展开全部"]) {
+                findState.commands.send(.unfoldAll)
+            },
+        ])
         return commands
     }
 

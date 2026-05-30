@@ -34,6 +34,11 @@ extension ScintillaCodeEditor.Coordinator {
         // Empty name ⇒ leave Scintilla on its default null lexer.
         if descriptor.lexillaName.isEmpty {
             view.setReferenceProperty(Int32(SCI.SETILEXER), parameter: 0, value: nil)
+            // Phase 82 — plain text emits no fold levels, so collapse
+            // the fold strip rather than leave a dead empty column.
+            view.message(SCI.SETMARGINWIDTHN,
+                         wParam: UInt(ScintillaCodeEditor.Coordinator.foldMarginIndex),
+                         lParam: Self.foldMarginWidth(forLexillaName: ""))
             return
         }
         if let lexerPtr = LexillaBridgeCreateLexer(descriptor.lexillaName) {
@@ -43,6 +48,16 @@ extension ScintillaCodeEditor.Coordinator {
                                        parameter: idx,
                                        value: words)
             }
+            // Phase 82 — turn on the lexer's fold-level computation so
+            // the fold margin has something to draw. `fold.compact = 0`
+            // keeps trailing blank lines out of the fold above them,
+            // matching the "fold to the last code line" feel of Xcode /
+            // VSCode. Then size the strip for a real lexer (14 px).
+            view.setLexerProperty("fold", value: "1")
+            view.setLexerProperty("fold.compact", value: "0")
+            view.message(SCI.SETMARGINWIDTHN,
+                         wParam: UInt(ScintillaCodeEditor.Coordinator.foldMarginIndex),
+                         lParam: Self.foldMarginWidth(forLexillaName: descriptor.lexillaName))
         }
     }
 
@@ -88,6 +103,11 @@ extension ScintillaCodeEditor.Coordinator {
         // Line-number margin.
         view.message(SCI.STYLESETBACK, wParam: UInt(SC.STYLE_LINENUMBER), lParam: sciColor(theme.marginBackground))
         view.message(SCI.STYLESETFORE, wParam: UInt(SC.STYLE_LINENUMBER), lParam: sciColor(theme.marginForeground))
+
+        // Phase 82 — fold markers + the fold strip track the same
+        // margin tokens so the fold gutter reads as one continuous
+        // strip with the line-number margin across every theme.
+        applyFoldMarkerColors(in: view, theme: theme)
 
         // Selection + caret.
         view.message(SCI.SETSELBACK, wParam: 1, lParam: sciColor(theme.selectionBackground))

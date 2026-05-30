@@ -840,6 +840,12 @@
 "palette.command.minimap.show" = "Show Minimap";
 "palette.command.minimap.hide" = "Hide Minimap";
 
+// Phase 82 — Code folding
+"menu.view.fold"      = "Fold";
+"menu.view.unfold"    = "Unfold";
+"menu.view.foldAll"   = "Fold All";
+"menu.view.unfoldAll" = "Unfold All";
+
 // Phase 57 — Clipboard History picker
 "menu.edit.clipboardHistory"          = "Clipboard History…";
 "palette.command.clipboardHistory"    = "Open Clipboard History";

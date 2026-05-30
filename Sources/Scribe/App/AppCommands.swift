@@ -224,6 +224,41 @@ struct ScribeCommands: Commands {
                 }
             }
             .keyboardShortcut("m", modifiers: [.command, .option])
+
+            // Phase 82 — code folding. Fold / Unfold collapse or expand
+            // the block enclosing the caret; Fold All / Unfold All sweep
+            // the whole document. ⌥⌘[ / ⌥⌘] mirror common editor
+            // bindings and are free on macOS (⌘[ / ⌘] are nav-history).
+            // All four disable without an open document.
+            Button {
+                findState.commands.send(.foldAtCaret)
+            } label: {
+                Text("menu.view.fold", bundle: .module)
+            }
+            .keyboardShortcut("[", modifiers: [.command, .option])
+            .disabled(workspace.current == nil)
+
+            Button {
+                findState.commands.send(.unfoldAtCaret)
+            } label: {
+                Text("menu.view.unfold", bundle: .module)
+            }
+            .keyboardShortcut("]", modifiers: [.command, .option])
+            .disabled(workspace.current == nil)
+
+            Button {
+                findState.commands.send(.foldAll)
+            } label: {
+                Text("menu.view.foldAll", bundle: .module)
+            }
+            .disabled(workspace.current == nil)
+
+            Button {
+                findState.commands.send(.unfoldAll)
+            } label: {
+                Text("menu.view.unfoldAll", bundle: .module)
+            }
+            .disabled(workspace.current == nil)
         }
 
         // — Tools menu —

@@ -837,6 +837,12 @@
 "palette.command.minimap.show" = "显示缩略图";
 "palette.command.minimap.hide" = "隐藏缩略图";
 
+// Phase 82 — Code folding
+"menu.view.fold"      = "折叠";
+"menu.view.unfold"    = "展开";
+"menu.view.foldAll"   = "全部折叠";
+"menu.view.unfoldAll" = "全部展开";
+
 // Phase 57 — Clipboard History picker
 "menu.edit.clipboardHistory"          = "剪贴板历史…";
 "palette.command.clipboardHistory"    = "打开剪贴板历史";

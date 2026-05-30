@@ -61,6 +61,7 @@ struct ScintillaCodeEditor: NSViewRepresentable {
         context.coordinator.applyTabs(prefs: prefs, to: view)
         context.coordinator.applyLineNumberMargin(to: view)
         context.coordinator.configureGitGutterMargin(in: view)
+        context.coordinator.configureFoldMargin(in: view)
         context.coordinator.applyTheme(to: view)
         context.coordinator.configureMatchIndicator(to: view)
         context.coordinator.configureColorSwatchIndicator(to: view)
@@ -445,6 +446,10 @@ struct ScintillaCodeEditor: NSViewRepresentable {
                     case .toggleMarkdownTaskCheckbox: self.toggleMarkdownTaskCheckbox(in: view)
                     case .toggleMarkdownTaskCheckboxAt(let line): self.toggleMarkdownTaskCheckbox(atLine: line, in: view)
                     case .jumpToMatchingBracket: self.jumpToMatchingBracket(in: view)
+                    case .foldAtCaret:   self.foldAtCaret(in: view)
+                    case .unfoldAtCaret: self.unfoldAtCaret(in: view)
+                    case .foldAll:       self.foldAll(in: view)
+                    case .unfoldAll:     self.unfoldAll(in: view)
                     case .insertAtCarets(let s): self.insertAtCarets(s, in: view)
                     case let .testRectSelectExtend(d, r):
                         self.testRectSelectExtend(linesDown: d, charsRight: r, in: view)

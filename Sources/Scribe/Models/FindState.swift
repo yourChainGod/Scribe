@@ -139,6 +139,18 @@ final class FindState: ObservableObject {
         /// isn't adjacent to a bracket character or when the
         /// bracket has no partner within Scintilla's styling budget.
         case jumpToMatchingBracket
+        /// Phase 82 — code folding. `foldAtCaret` / `unfoldAtCaret`
+        /// collapse or expand the fold enclosing the caret (each walks
+        /// up to the enclosing header first, so they fire from anywhere
+        /// inside a block, not just its header line). `foldAll` /
+        /// `unfoldAll` act on the whole document. Routed through
+        /// FindState.commands like every other editor action so the
+        /// menu / palette / shortcut drivers never touch the
+        /// Coordinator's Scintilla API directly.
+        case foldAtCaret
+        case unfoldAtCaret
+        case foldAll
+        case unfoldAll
         /// Phase 53b — same flip as `toggleMarkdownTaskCheckbox`
         /// but at an explicit 1-based source line, not the caret.
         /// Fired by the preview-side JS click handler when the

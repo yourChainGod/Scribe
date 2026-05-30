@@ -320,6 +320,21 @@ enum SCI {
     /// Style setter — italic / bold / size for the inline-blame
     /// chip's typography.
     static let STYLESETITALIC:          UInt32 = 2053
+
+    // Phase 82 — code folding. The lexer computes fold levels once the
+    // "fold" property is set; these messages drive the fold margin
+    // (index 2), the expand/collapse verbs, and automatic-fold
+    // behaviour. Verified against Vendor/scintilla/include/Scintilla.h.
+    static let SETMARGINSENSITIVEN:   UInt32 = 2246
+    static let SETFOLDFLAGS:          UInt32 = 2233
+    static let GETFOLDLEVEL:          UInt32 = 2223
+    static let GETFOLDPARENT:         UInt32 = 2225
+    static let TOGGLEFOLD:            UInt32 = 2231
+    static let FOLDLINE:              UInt32 = 2237
+    static let FOLDALL:               UInt32 = 2662
+    static let SETAUTOMATICFOLD:      UInt32 = 2663
+    static let SETFOLDMARGINCOLOUR:   UInt32 = 2290
+    static let SETFOLDMARGINHICOLOUR: UInt32 = 2291
 }
 
 // MARK: - Search flags
@@ -417,6 +432,41 @@ enum SC {
     /// for editor-controlled styling, so picking it can't collide
     /// with any lexer's per-language style indices.
     static let STYLE_INLINE_BLAME: Int = 40
+
+    // Phase 82 — code folding. Box-tree marker glyph types, the
+    // reserved fold marker numbers (25–31, called out in
+    // Coordinator+GitGutter's margin-layout note as off-limits to the
+    // git gutter), the folder mask, automatic-fold flags, fold actions,
+    // and fold-level flags. Verified against Scintilla.h (5.6.1).
+    static let MARK_VLINE:             Int = 9
+    static let MARK_LCORNER:           Int = 10
+    static let MARK_TCORNER:           Int = 11
+    static let MARK_BOXPLUS:           Int = 12
+    static let MARK_BOXPLUSCONNECTED:  Int = 13
+    static let MARK_BOXMINUS:          Int = 14
+    static let MARK_BOXMINUSCONNECTED: Int = 15
+    static let MARKNUM_FOLDEREND:      Int = 25
+    static let MARKNUM_FOLDEROPENMID:  Int = 26
+    static let MARKNUM_FOLDERMIDTAIL:  Int = 27
+    static let MARKNUM_FOLDERTAIL:     Int = 28
+    static let MARKNUM_FOLDERSUB:      Int = 29
+    static let MARKNUM_FOLDER:         Int = 30
+    static let MARKNUM_FOLDEROPEN:     Int = 31
+    /// Mask selecting only marker bits 25–31 for the fold margin
+    /// (`SETMARGINMASKN`) so the git-gutter markers (21–23) never
+    /// bleed into it and vice-versa.
+    static let MASK_FOLDERS:           Int = 0xFE000000
+    static let AUTOMATICFOLD_SHOW:     Int = 0x0001
+    static let AUTOMATICFOLD_CLICK:    Int = 0x0002
+    static let AUTOMATICFOLD_CHANGE:   Int = 0x0004
+    static let FOLDACTION_CONTRACT:    Int = 0
+    static let FOLDACTION_EXPAND:      Int = 1
+    static let FOLDACTION_TOGGLE:      Int = 2
+    /// Draw a horizontal rule under a contracted (folded) header —
+    /// the standard "this block is folded" cue.
+    static let FOLDFLAG_LINEAFTER_CONTRACTED: Int = 0x0010
+    static let FOLDLEVELHEADERFLAG:    Int = 0x2000
+    static let FOLDLEVELNUMBERMASK:    Int = 0x0FFF
 }
 
 // MARK: - Lexer style indices
