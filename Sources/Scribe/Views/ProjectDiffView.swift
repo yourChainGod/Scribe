@@ -111,6 +111,7 @@ struct ProjectDiffView: View {
             .buttonStyle(.borderless)
             .keyboardShortcut("f", modifiers: .command)
             .help(L10n.t("projectDiff.action.search"))
+            .accessibilityLabel(L10n.t("projectDiff.action.search"))
             Button {
                 Task { await reload() }
             } label: {
@@ -119,6 +120,7 @@ struct ProjectDiffView: View {
             }
             .buttonStyle(.borderless)
             .help(L10n.t("projectDiff.action.refresh"))
+            .accessibilityLabel(L10n.t("projectDiff.action.refresh"))
             Button {
                 workspace.projectDiffVisible = false
             } label: {
@@ -172,6 +174,7 @@ struct ProjectDiffView: View {
                 }
                 .buttonStyle(.borderless)
                 .help(L10n.t("projectDiff.action.clearSearch"))
+                .accessibilityLabel(L10n.t("projectDiff.action.clearSearch"))
             }
             // Phase 35b-4-f — prev / next chevrons. Disabled when
             // there's nothing to walk; the keyboard shortcuts on
@@ -188,6 +191,7 @@ struct ProjectDiffView: View {
             .keyboardShortcut("g", modifiers: [.command, .shift])
             .disabled(matches.isEmpty)
             .help(L10n.t("projectDiff.action.searchPrev"))
+            .accessibilityLabel(L10n.t("projectDiff.action.searchPrev"))
             Button {
                 matchNext()
             } label: {
@@ -198,6 +202,7 @@ struct ProjectDiffView: View {
             .keyboardShortcut("g", modifiers: .command)
             .disabled(matches.isEmpty)
             .help(L10n.t("projectDiff.action.searchNext"))
+            .accessibilityLabel(L10n.t("projectDiff.action.searchNext"))
             Text(searchCountLabel)
                 .font(.caption)
                 .foregroundStyle(appTheme.secondaryText)
@@ -526,6 +531,7 @@ struct ProjectDiffView: View {
                 .buttonStyle(.borderless)
                 .disabled(entry.workingHunks.isEmpty)
                 .help(L10n.t("projectDiff.action.stageAll.hint"))
+                .accessibilityLabel(L10n.t("projectDiff.action.stageAll.hint"))
                 // Unstage All — symmetric. Disabled when the
                 // staged column is empty so a stray click can't
                 // no-op into an alert.
@@ -541,6 +547,7 @@ struct ProjectDiffView: View {
                 .buttonStyle(.borderless)
                 .disabled(entry.stagedHunks.isEmpty)
                 .help(L10n.t("projectDiff.action.unstageAll.hint"))
+                .accessibilityLabel(L10n.t("projectDiff.action.unstageAll.hint"))
                 Button {
                     workspace.openFile(at: entry.url)
                     workspace.projectDiffVisible = false
@@ -550,6 +557,7 @@ struct ProjectDiffView: View {
                 }
                 .buttonStyle(.borderless)
                 .help(L10n.t("projectDiff.action.openFile"))
+                .accessibilityLabel(L10n.t("projectDiff.action.openFile"))
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -635,6 +643,7 @@ struct ProjectDiffView: View {
                     }
                     .buttonStyle(.borderless)
                     .help(L10n.t("projectDiff.action.revertHunk.hint"))
+                    .accessibilityLabel(L10n.t("projectDiff.action.revertHunk.hint"))
                 }
                 Button {
                     Task {

@@ -102,6 +102,7 @@ struct SourceControlSidebar: View {
             .menuIndicator(.hidden)
             .fixedSize()
             .help(L10n.t("sourceControl.branch.picker.hint"))
+            .accessibilityLabel(L10n.t("sourceControl.branch.picker.hint"))
             // Ahead/behind chip — only renders when `aheadBehind`
             // is non-nil and not 0/0. Up-to-date state is implicit
             // (no chip = "nothing to report") which keeps the row
@@ -245,6 +246,7 @@ struct SourceControlSidebar: View {
         }
         .buttonStyle(.borderless)
         .help(L10n.t(titleKey))
+        .accessibilityLabel(L10n.t(titleKey))
     }
 
     // MARK: - Commit panel (Phase 35b-2b)
@@ -733,6 +735,7 @@ private struct SourceControlRow: View {
         }
         .buttonStyle(.plain)
         .help(L10n.t(tooltipKey))
+        .accessibilityLabel(L10n.t(tooltipKey))
     }
 
     /// Discard is destructive — restoring an untracked file is
