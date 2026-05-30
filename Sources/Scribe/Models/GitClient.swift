@@ -277,7 +277,7 @@ enum GitClient {
     /// branch" which is exactly what the sidebar's Fetch button
     /// should do.
     nonisolated static func fetch(repo: URL) -> WriteResult {
-        switch run(["fetch", "--quiet"], cwd: repo) {
+        switch run(["fetch", "--quiet"], cwd: repo, timeout: networkTimeout) {
         case .success: return .ok
         case .failure(let err): return .error(err)
         }
@@ -290,7 +290,7 @@ enum GitClient {
     /// a clear "not possible to fast-forward" error and can decide
     /// from a terminal.
     nonisolated static func pull(repo: URL) -> WriteResult {
-        switch run(["pull", "--ff-only", "--quiet"], cwd: repo) {
+        switch run(["pull", "--ff-only", "--quiet"], cwd: repo, timeout: networkTimeout) {
         case .success: return .ok
         case .failure(let err): return .error(err)
         }
@@ -302,7 +302,7 @@ enum GitClient {
     /// the user sees the error verbatim and can sort it from a
     /// terminal where the recovery options are richer.
     nonisolated static func push(repo: URL) -> WriteResult {
-        switch run(["push", "--quiet"], cwd: repo) {
+        switch run(["push", "--quiet"], cwd: repo, timeout: networkTimeout) {
         case .success: return .ok
         case .failure(let err): return .error(err)
         }
@@ -316,7 +316,7 @@ enum GitClient {
     /// the UI — when force-with-lease itself rejects, the user can
     /// drop to a terminal and decide explicitly.
     nonisolated static func pushForceWithLease(repo: URL) -> WriteResult {
-        switch run(["push", "--force-with-lease", "--quiet"], cwd: repo) {
+        switch run(["push", "--force-with-lease", "--quiet"], cwd: repo, timeout: networkTimeout) {
         case .success: return .ok
         case .failure(let err): return .error(err)
         }
@@ -866,8 +866,25 @@ enum GitClient {
     /// Run `git <args>` with cwd `cwd`. Captures stdout on success and
     /// stderr on failure; both are stripped of the trailing newline that
     /// every git command appends.
+    /// Phase 79 — thread-safe one-shot flag. The timeout watchdog runs on
+    /// a global queue and sets it before terminating the process; the run
+    /// thread reads it after `waitUntilExit` to tell a timeout-kill apart
+    /// from a genuine git failure.
+    private final class GitTimeoutFlag: @unchecked Sendable {
+        private let lock = NSLock()
+        private var flag = false
+        func set() { lock.lock(); flag = true; lock.unlock() }
+        var value: Bool { lock.lock(); defer { lock.unlock() }; return flag }
+    }
+
+    /// Phase 79 — default ceiling for network git operations (fetch /
+    /// pull / push). 60s gives a slow network or a large first fetch room
+    /// to finish while still bounding an unreachable-remote hang.
+    private static let networkTimeout: TimeInterval = 60
+
     private nonisolated static func run(_ args: [String],
-                                        cwd: URL) -> RunResult {
+                                        cwd: URL,
+                                        timeout: TimeInterval? = nil) -> RunResult {
         let task = Process()
         task.currentDirectoryURL = cwd
         task.executableURL = URL(fileURLWithPath: "/usr/bin/git")
@@ -893,10 +910,33 @@ enum GitClient {
         }
         let outCapture = startPipeCapture(stdout)
         let errCapture = startPipeCapture(stderr)
+
+        // Phase 79 — optional watchdog. `waitUntilExit` has no timeout, so a
+        // network op (fetch / pull / push) against an unreachable remote
+        // would hang the calling thread forever. Read ops pass nil and keep
+        // the original unbounded blocking behaviour untouched.
+        let timedOut = GitTimeoutFlag()
+        var killer: DispatchWorkItem?
+        if let timeout {
+            let work = DispatchWorkItem {
+                if task.isRunning {
+                    timedOut.set()
+                    task.terminate()
+                }
+            }
+            killer = work
+            DispatchQueue.global().asyncAfter(deadline: .now() + timeout,
+                                              execute: work)
+        }
         task.waitUntilExit()
+        killer?.cancel()
         let outData = outCapture.waitAndRead()
         let errData = errCapture.waitAndRead()
 
+        if timedOut.value {
+            return .failure(
+                "git timed out after \(Int(timeout ?? 0))s — the remote may be unreachable")
+        }
         if task.terminationStatus == 0 {
             return .success(String(data: outData, encoding: .utf8) ?? "")
         }
